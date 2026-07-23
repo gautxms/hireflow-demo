@@ -1947,6 +1947,14 @@ export async function analyzeResumeWithConfiguredFallback(fileBufferBase64, mime
 
   let lastError = null
   const attemptHistory = []
+  let providerStartPromise = null
+  const notifyProviderAttemptStart = (metadata) => {
+    if (typeof options.onProviderAttemptStart !== 'function') return Promise.resolve()
+    if (!providerStartPromise) {
+      providerStartPromise = Promise.resolve().then(() => options.onProviderAttemptStart(metadata))
+    }
+    return providerStartPromise
+  }
   const compactByDefaultForEntry = (entry) => {
     if (String(entry?.provider || '').toLowerCase() !== 'openai') return false
     const providerSettings = credentials?.providers?.openai
@@ -2051,6 +2059,13 @@ export async function analyzeResumeWithConfiguredFallback(fileBufferBase64, mime
       : compactByDefaultForEntry(entry)
     try {
       const adapter = adapters[entry.provider] || analyzeWithAnthropic
+      await notifyProviderAttemptStart({
+        provider: entry.provider,
+        model: entry.model,
+        keyLabel: entry.keyLabel,
+        role,
+        attemptNumber: planIndex + 1,
+      })
       const response = await adapter(cleanedBase64, preparedMimeType, filename, {
         apiKey: entry.apiKey,
         model: entry.model,

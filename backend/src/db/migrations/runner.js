@@ -48,6 +48,7 @@ const migrationFiles = [
   '044-allow-keep-subscription-change-events',
   '045-add-resume-quota-anchor',
   '046-add-resume-quota-reservations',
+  '047-add-resume-quota-allocations',
 ]
 
 async function ensureMigrationsTable(client) {

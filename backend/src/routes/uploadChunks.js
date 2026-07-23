@@ -7,7 +7,8 @@ import {
   requireActiveSubscription,
 } from '../middleware/subscriptionCheck.js'
 import {
-  consumeResumeQuotaReservation,
+  allocateResumeQuotaUnit,
+  releaseResumeQuotaAllocation,
   releaseResumeQuotaReservation,
 } from '../services/resumeQuotaReservations.js'
 import {
@@ -140,6 +141,7 @@ router.post('/reservations/:reservationId/release', requireAuth, async (req, res
 router.post('/init', requireAuth, requireActiveSubscription, validateChunkInitRequest, enforceUploadLimit, async (req, res) => {
   const quotaReservationId = req.usageContext?.quotaReservation?.id || null
   let quotaSettled = false
+  let quotaAllocationId = null
   let sessionQuotaState = null
   try {
     const { filename, mimeType, jobDescriptionId, analysisId, analysisName, clientChunkSize, fileIdentity } = req.body || {}
@@ -162,38 +164,58 @@ router.post('/init', requireAuth, requireActiveSubscription, validateChunkInitRe
     })
     sessionQuotaState = getChunkUploadQuotaState(session)
 
-    if (sessionQuotaState.quotaRecorded !== true) {
-      if (quotaReservationId) {
-        await consumeResumeQuotaReservation({
+    if (quotaReservationId) {
+      if (sessionQuotaState.quotaAllocationId) {
+        if (sessionQuotaState.quotaReservationId !== quotaReservationId) {
+          await releaseResumeQuotaReservation({
+            userId: req.userId,
+            reservationId: quotaReservationId,
+            units: 1,
+          })
+        }
+      } else if (sessionQuotaState.quotaRecorded === true) {
+        if (shouldReleaseReservationForRecordedSession({
+          suppliedReservationId: quotaReservationId,
+          sessionQuotaState,
+        })) {
+          await releaseResumeQuotaReservation({
+            userId: req.userId,
+            reservationId: quotaReservationId,
+            units: 1,
+          })
+        }
+      } else {
+        const allocationResult = await allocateResumeQuotaUnit({
           userId: req.userId,
           reservationId: quotaReservationId,
-          units: 1,
-          monthStart: req.usageContext.monthStart,
-          ipAddress: req.usageContext.ipAddress,
+          allocationKey: `upload:${session.uploadId}`,
           uploadId: session.uploadId,
         })
-      } else {
-        await recordChunkUploadUsage({
-          userId: req.userId,
-          uploadId: session.uploadId,
-          monthStart: req.usageContext.monthStart,
-          ipAddress: req.usageContext.ipAddress,
-        })
+        quotaAllocationId = allocationResult.allocation.id
       }
-    } else if (shouldReleaseReservationForRecordedSession({
-      suppliedReservationId: quotaReservationId,
-      sessionQuotaState,
-    })) {
-      await releaseResumeQuotaReservation({
+    } else if (sessionQuotaState.quotaRecorded !== true) {
+      await recordChunkUploadUsage({
         userId: req.userId,
-        reservationId: quotaReservationId,
-        units: 1,
+        uploadId: session.uploadId,
+        monthStart: req.usageContext.monthStart,
+        ipAddress: req.usageContext.ipAddress,
       })
     }
     quotaSettled = true
 
     return res.json(session)
   } catch (error) {
+    if (!quotaSettled && quotaAllocationId) {
+      try {
+        await releaseResumeQuotaAllocation({
+          userId: req.userId,
+          allocationId: quotaAllocationId,
+          reason: 'upload_init_failed_after_allocation',
+        })
+      } catch (releaseError) {
+        console.error('[UploadChunks] failed to release quota allocation after init error:', releaseError)
+      }
+    }
     if (!quotaSettled && shouldReleaseReservationAfterInitError({
       suppliedReservationId: quotaReservationId,
       sessionQuotaState,

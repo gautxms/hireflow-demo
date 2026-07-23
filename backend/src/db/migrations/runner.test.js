@@ -367,6 +367,43 @@ test('resume quota reservation migration is additive and clears ambiguous month-
   assert.match(queries[5], /INTERVAL '1 month - 1 day'/)
 })
 
+test('migration runner adds provider-start quota allocations after reservations', async () => {
+  const source = await readRunnerSource()
+  assert.match(source, /'047-add-resume-quota-allocations'/)
+  assert.ok(
+    source.indexOf("'046-add-resume-quota-reservations'") <
+      source.indexOf("'047-add-resume-quota-allocations'"),
+  )
+})
+
+test('provider-start quota allocation migration is additive and backfills reservation sessions', async () => {
+  const queries = []
+  const { up } = await import('./047-add-resume-quota-allocations.js')
+
+  await up({
+    query(sql) {
+      queries.push(String(sql))
+      return Promise.resolve({ rows: [] })
+    },
+  })
+
+  assert.equal(queries.length, 7)
+  assert.match(queries[0], /CREATE TABLE IF NOT EXISTS resume_quota_allocations/)
+  assert.match(queries[0], /status IN \('reserved', 'consumed', 'released'\)/)
+  assert.match(queries[0], /UNIQUE \(user_id, allocation_key\)/)
+  assert.match(queries[1], /idx_resume_quota_allocations_reservation_status/)
+  assert.match(queries[1], /idx_resume_quota_allocations_upload/)
+  assert.match(queries[1], /idx_resume_quota_allocations_parse_job/)
+  assert.match(queries[2], /ALTER TABLE upload_chunks/)
+  assert.match(queries[2], /ALTER TABLE parse_jobs/)
+  assert.match(queries[2], /ALTER TABLE usage_log/)
+  assert.match(queries[3], /idx_usage_log_quota_allocation/)
+  assert.match(queries[4], /INSERT INTO resume_quota_allocations/)
+  assert.match(queries[4], /CASE WHEN quota_recorded THEN 'consumed' ELSE 'reserved' END/)
+  assert.match(queries[5], /UPDATE upload_chunks AS upload/)
+  assert.match(queries[6], /UPDATE parse_jobs AS job/)
+})
+
 test('shortlist batch-add safety migration is additive and preserves metadata columns', async () => {
   const queries = []
   const { up } = await import('./040-ensure-shortlist-batch-add-schema.js')

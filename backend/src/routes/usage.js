@@ -1,7 +1,15 @@
 import { Router } from 'express'
 import { resolveMonthlyResumeAnalysisLimit } from '../config/resumeAnalysisQuota.js'
 import { pool } from '../db/client.js'
-import { getMonthStart, getUsageCount, getUsageOverride } from '../middleware/subscriptionCheck.js'
+import {
+  getMonthStart,
+  getUsageCount,
+  getUsageCountForPeriod,
+  getUsageOverride,
+} from '../middleware/subscriptionCheck.js'
+import { isResumeQuotaReservationsEnabled } from '../services/resumeQuotaReservations.js'
+import { resolveResumeQuotaPeriod } from '../utils/resumeQuotaPeriod.js'
+import { hasScheduledCancellationAccess } from '../utils/subscriptionAccess.js'
 
 const router = Router()
 
@@ -17,7 +25,12 @@ export function resolveResumeAnalysisUsageWarningLevel(used, limit) {
   return 'none'
 }
 
-export function buildResumeAnalysisUsageResponse({ limit, used, periodStart }) {
+export function buildResumeAnalysisUsageResponse({
+  limit,
+  used,
+  periodStart,
+  periodEnd = getMonthEnd(periodStart),
+}) {
   const normalizedLimit = Number(limit || 0)
   const normalizedUsed = Number(used || 0)
   const remaining = Math.max(normalizedLimit - normalizedUsed, 0)
@@ -30,7 +43,7 @@ export function buildResumeAnalysisUsageResponse({ limit, used, periodStart }) {
     used: normalizedUsed,
     remaining,
     periodStart: periodStart.toISOString(),
-    periodEnd: getMonthEnd(periodStart).toISOString(),
+    periodEnd: periodEnd.toISOString(),
     percentageUsed,
     warningLevel: resolveResumeAnalysisUsageWarningLevel(normalizedUsed, normalizedLimit),
   }
@@ -39,7 +52,8 @@ export function buildResumeAnalysisUsageResponse({ limit, used, periodStart }) {
 router.get('/resume-analysis', async (req, res) => {
   try {
     const userResult = await pool.query(
-      `SELECT id, subscription_status
+      `SELECT id, subscription_status, subscription_plan, quota_anchor_at,
+              cancellation_effective_at, current_period_end
        FROM users
        WHERE id = $1`,
       [req.userId],
@@ -51,12 +65,34 @@ router.get('/resume-analysis', async (req, res) => {
       return res.status(404).json({ error: 'User not found' })
     }
 
-    const periodStart = getMonthStart()
-    const usageOverride = await getUsageOverride(req.userId, periodStart)
-    const limit = resolveMonthlyResumeAnalysisLimit(user.subscription_status, usageOverride)
-    const used = await getUsageCount(req.userId, periodStart, usageOverride?.reset_usage)
+    const legacyMonthStart = getMonthStart()
+    const usageOverride = await getUsageOverride(req.userId, legacyMonthStart)
+    const quotaSubscriptionStatus = hasScheduledCancellationAccess(user)
+      ? 'active'
+      : user.subscription_status
+    const limit = resolveMonthlyResumeAnalysisLimit(quotaSubscriptionStatus, usageOverride)
+    const reservationsEnabled = isResumeQuotaReservationsEnabled()
+    const period = reservationsEnabled
+      ? resolveResumeQuotaPeriod({
+        subscriptionStatus: quotaSubscriptionStatus,
+        quotaAnchorAt: user.quota_anchor_at,
+      })
+      : { start: legacyMonthStart, end: getMonthEnd(legacyMonthStart) }
+    const used = reservationsEnabled
+      ? await getUsageCountForPeriod(
+        req.userId,
+        period.start,
+        period.end,
+        usageOverride?.reset_usage,
+      )
+      : await getUsageCount(req.userId, legacyMonthStart, usageOverride?.reset_usage)
 
-    return res.json(buildResumeAnalysisUsageResponse({ limit, used, periodStart }))
+    return res.json(buildResumeAnalysisUsageResponse({
+      limit,
+      used,
+      periodStart: period.start,
+      periodEnd: period.end,
+    }))
   } catch (error) {
     console.error('[Usage] Failed to load resume analysis usage:', error)
     return res.status(500).json({ error: 'Unable to load resume analysis usage' })

@@ -143,3 +143,39 @@ test('GET /usage/resume-analysis preserves trial/free limit resolution', async (
   assert.equal(payload.percentageUsed, 100)
   assert.equal(payload.warningLevel, 'exceeded')
 })
+
+test('flagged usage response uses the billing-anniversary period and canonical ledger count', async (t) => {
+  const previousFlag = process.env.RESUME_QUOTA_RESERVATIONS_ENABLED
+  process.env.RESUME_QUOTA_RESERVATIONS_ENABLED = 'true'
+
+  try {
+    t.mock.method(pool, 'query', async (sql) => {
+      if (sql.includes('FROM users')) {
+        return {
+          rows: [{
+            id: 10,
+            subscription_status: 'active',
+            subscription_plan: 'annual',
+            quota_anchor_at: '2026-01-20T08:30:00.000Z',
+          }],
+        }
+      }
+      if (sql.includes('FROM usage_overrides')) return { rows: [] }
+      if (sql.includes('FROM usage_log')) return { rows: [{ usage_count: 123 }] }
+      return { rows: [] }
+    })
+
+    const { response, payload } = await requestUsage({ headers: authHeader(10) })
+
+    assert.equal(response.status, 200)
+    assert.equal(payload.used, 123)
+    assert.match(payload.periodStart, /-20T08:30:00\.000Z$/)
+    assert.match(payload.periodEnd, /-20T08:30:00\.000Z$/)
+    const now = Date.now()
+    assert.ok(new Date(payload.periodStart).getTime() <= now)
+    assert.ok(new Date(payload.periodEnd).getTime() > now)
+  } finally {
+    if (previousFlag === undefined) delete process.env.RESUME_QUOTA_RESERVATIONS_ENABLED
+    else process.env.RESUME_QUOTA_RESERVATIONS_ENABLED = previousFlag
+  }
+})

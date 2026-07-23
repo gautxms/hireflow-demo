@@ -4,6 +4,7 @@ import { requireAuth } from '../middleware/authMiddleware.js'
 import { requireActiveSubscription } from '../middleware/subscriptionCheck.js'
 import { cancelParseJobsByIds, parseQueue } from '../services/jobQueue.js'
 import { resolveCanonicalParseStatus } from '../services/parseStatusMapper.js'
+import { releaseResumeQuotaAllocationsForAnalysis } from '../services/resumeQuotaReservations.js'
 import { getDisplayFilename } from '../utils/resumeFileMetadata.js'
 
 const router = Router()
@@ -663,6 +664,12 @@ router.delete('/:id', requireAuth, requireActiveSubscription, async (req, res) =
       [req.params.id],
     )
     const parseJobIds = parseJobsResult.rows.map((row) => row.parse_job_id).filter(Boolean)
+
+    await releaseResumeQuotaAllocationsForAnalysis({
+      client,
+      userId: req.userId,
+      analysisId: req.params.id,
+    })
 
     await cancelParseJobsByIds(parseJobIds, { logger: console })
 

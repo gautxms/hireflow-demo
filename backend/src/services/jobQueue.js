@@ -37,6 +37,9 @@ export async function ensureParseJobsTable() {
     CREATE INDEX IF NOT EXISTS idx_parse_jobs_status ON parse_jobs(status);
     CREATE INDEX IF NOT EXISTS idx_parse_jobs_resume_id ON parse_jobs(resume_id);
     CREATE INDEX IF NOT EXISTS idx_parse_jobs_user_id ON parse_jobs(user_id);
+
+    ALTER TABLE parse_jobs
+      ADD COLUMN IF NOT EXISTS quota_allocation_id UUID;
   `)
 }
 
@@ -80,6 +83,7 @@ export async function enqueueParseJob({
   fileBuffer,
   analysisId = null,
   jobDescriptionId = null,
+  quotaAllocationId = null,
 }) {
   const resolvedMimeType = mimeType || mimetype || null
   const resolvedFileSize = fileSize !== null && fileSize !== undefined && fileSize !== '' && Number.isFinite(Number(fileSize))
@@ -118,6 +122,7 @@ export async function enqueueParseJob({
       fileBufferBase64: resolvedFileBufferBase64,
       analysisId,
       jobDescriptionId,
+      quotaAllocationId: quotaAllocationId || null,
     },
     {
       jobId: `resume:${resumeId}`,
@@ -136,15 +141,31 @@ export async function enqueueParseJob({
   )
 
   await pool.query(
-    `INSERT INTO parse_jobs (job_id, resume_id, user_id, status, progress, attempts, expires_at)
-     VALUES ($1, $2, $3, 'pending', 0, 0, NOW() + INTERVAL '7 days')
+    `INSERT INTO parse_jobs
+      (job_id, resume_id, user_id, status, progress, attempts, quota_allocation_id, expires_at)
+     VALUES ($1, $2, $3, 'pending', 0, 0, $4, NOW() + INTERVAL '7 days')
      ON CONFLICT (job_id)
      DO UPDATE SET
        resume_id = EXCLUDED.resume_id,
        user_id = EXCLUDED.user_id,
+       quota_allocation_id = COALESCE(parse_jobs.quota_allocation_id, EXCLUDED.quota_allocation_id),
        updated_at = NOW()`,
-    [String(job.id), resumeId, userId],
+    [String(job.id), resumeId, userId, quotaAllocationId || null],
   )
+
+  if (quotaAllocationId) {
+    await pool.query(
+      `UPDATE resume_quota_allocations
+       SET resume_id = COALESCE(resume_id, $3),
+           parse_job_id = COALESCE(parse_job_id, $4),
+           updated_at = NOW()
+       WHERE id = $1
+         AND user_id = $2
+         AND (resume_id IS NULL OR resume_id = $3)
+         AND (parse_job_id IS NULL OR parse_job_id = $4)`,
+      [quotaAllocationId, userId, resumeId, String(job.id)],
+    )
+  }
 
   return job
 }

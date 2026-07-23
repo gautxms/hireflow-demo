@@ -27,6 +27,14 @@ function normalizeIdempotencyKey(value) {
   return normalized
 }
 
+function normalizeAllocationKey(value) {
+  const normalized = String(value || '').trim()
+  if (!normalized || normalized.length > 200) {
+    throw new Error('quota allocation key must be between 1 and 200 characters')
+  }
+  return normalized
+}
+
 function normalizeReservation(row) {
   if (!row) return null
   const requestedUnits = Number(row.requested_units || 0)
@@ -44,6 +52,25 @@ function normalizeReservation(row) {
     remainingUnits: Math.max(requestedUnits - consumedUnits - releasedUnits, 0),
     status: row.status,
     expiresAt: row.expires_at,
+  }
+}
+
+function normalizeAllocation(row) {
+  if (!row) return null
+  return {
+    id: row.id,
+    reservationId: row.reservation_id,
+    userId: Number(row.user_id),
+    allocationKey: row.allocation_key,
+    uploadId: row.upload_id || null,
+    resumeId: row.resume_id || null,
+    parseJobId: row.parse_job_id || null,
+    status: row.status,
+    provider: row.provider || null,
+    model: row.model || null,
+    consumedAt: row.consumed_at || null,
+    releasedAt: row.released_at || null,
+    releaseReason: row.release_reason || null,
   }
 }
 
@@ -132,17 +159,45 @@ export async function reserveResumeQuotaUnits({
         `SELECT COUNT(*)::INT AS usage_count
          FROM usage_log
          WHERE user_id = $1
-           AND month_start = $2::date`,
-        [normalizedUserId, normalizedPeriodStart],
+           AND (
+             (quota_allocation_id IS NOT NULL AND month_start = $2::date)
+             OR (
+               quota_allocation_id IS NULL
+               AND created_at >= $2
+               AND created_at < $3
+             )
+           )`,
+        [normalizedUserId, normalizedPeriodStart, normalizedPeriodEnd],
       )
     const reservedResult = await client.query(
-      `SELECT COALESCE(SUM(requested_units - consumed_units - released_units), 0)::INT AS reserved_count
-       FROM resume_quota_reservations
-       WHERE user_id = $1
-         AND period_start = $2
-         AND period_end = $3
-         AND status = 'reserved'
-         AND expires_at > NOW()`,
+      `SELECT COALESCE(SUM(
+         CASE
+           WHEN reservation.expires_at > NOW()
+             THEN reservation.requested_units
+                  - reservation.consumed_units
+                  - reservation.released_units
+           ELSE (
+             SELECT COUNT(*)::INT
+             FROM resume_quota_allocations AS allocation
+             WHERE allocation.reservation_id = reservation.id
+               AND allocation.status = 'reserved'
+           )
+         END
+       ), 0)::INT AS reserved_count
+       FROM resume_quota_reservations AS reservation
+       WHERE reservation.user_id = $1
+         AND reservation.period_start = $2
+         AND reservation.period_end = $3
+         AND reservation.status = 'reserved'
+         AND (
+           reservation.expires_at > NOW()
+           OR EXISTS (
+             SELECT 1
+             FROM resume_quota_allocations AS active_allocation
+             WHERE active_allocation.reservation_id = reservation.id
+               AND active_allocation.status = 'reserved'
+           )
+         )`,
       [normalizedUserId, normalizedPeriodStart, normalizedPeriodEnd],
     )
 
@@ -193,6 +248,12 @@ export async function assertResumeQuotaReservationAvailable({
   const normalizedUnits = toPositiveInteger(requestedUnits, 'requestedUnits')
   const result = await pool.query(
     `SELECT reservation.*,
+            (
+              SELECT COUNT(*)::INT
+              FROM resume_quota_allocations
+              WHERE reservation_id = reservation.id
+                AND status = 'reserved'
+            ) AS allocated_reserved_units,
             EXISTS (
               SELECT 1
               FROM upload_chunks
@@ -208,17 +269,388 @@ export async function assertResumeQuotaReservationAvailable({
        AND reservation.period_start = $3
        AND reservation.period_end = $4
        AND reservation.status IN ('reserved', 'consumed')
-       AND reservation.expires_at > NOW()
+       AND (
+         reservation.expires_at > NOW()
+         OR EXISTS (
+           SELECT 1
+           FROM upload_chunks AS active_upload
+           WHERE active_upload.user_id = $2
+             AND active_upload.quota_reservation_id = $1
+             AND active_upload.file_identity = NULLIF($5, '')
+             AND active_upload.status = 'uploading'
+             AND active_upload.expires_at > NOW()
+         )
+       )
      LIMIT 1`,
     [reservationId, userId, periodStart, periodEnd, String(fileIdentity || '').trim()],
   )
   const row = result.rows[0]
   const reservation = normalizeReservation(row)
   const isExistingUploadRetry = row?.has_existing_upload === true
-  if (!reservation || (reservation.remainingUnits < normalizedUnits && !isExistingUploadRetry)) {
+  const allocatedReservedUnits = Number(row?.allocated_reserved_units || 0)
+  const availableUnits = Math.max(
+    Number(reservation?.remainingUnits || 0) - allocatedReservedUnits,
+    0,
+  )
+  if (!reservation || (availableUnits < normalizedUnits && !isExistingUploadRetry)) {
     throw new Error('Resume quota reservation is invalid, expired, or fully allocated')
   }
-  return reservation
+  return { ...reservation, availableUnits }
+}
+
+export async function allocateResumeQuotaUnit({
+  userId,
+  reservationId,
+  allocationKey,
+  uploadId = null,
+  resumeId = null,
+  parseJobId = null,
+}) {
+  const normalizedUserId = toPositiveInteger(userId, 'userId')
+  const normalizedKey = normalizeAllocationKey(allocationKey)
+
+  return withTransaction(async (client) => {
+    await lockUserQuota(client, normalizedUserId)
+
+    const existingResult = await client.query(
+      `SELECT *
+       FROM resume_quota_allocations
+       WHERE user_id = $1
+         AND allocation_key = $2
+       LIMIT 1
+       FOR UPDATE`,
+      [normalizedUserId, normalizedKey],
+    )
+    const existing = normalizeAllocation(existingResult.rows[0])
+    if (existing) {
+      if (existing.reservationId !== reservationId) {
+        throw new Error('quota allocation key was already used for a different reservation')
+      }
+      return { allocation: existing, duplicate: true }
+    }
+
+    const reservationResult = await client.query(
+      `SELECT *
+       FROM resume_quota_reservations
+       WHERE id = $1
+         AND user_id = $2
+       LIMIT 1
+       FOR UPDATE`,
+      [reservationId, normalizedUserId],
+    )
+    const reservation = normalizeReservation(reservationResult.rows[0])
+    if (
+      !reservation
+      || reservation.status !== 'reserved'
+      || new Date(reservation.expiresAt).getTime() <= Date.now()
+    ) {
+      throw new Error('Resume quota reservation is invalid or expired')
+    }
+
+    const allocatedResult = await client.query(
+      `SELECT COUNT(*)::INT AS allocated_count
+       FROM resume_quota_allocations
+       WHERE reservation_id = $1
+         AND status = 'reserved'`,
+      [reservationId],
+    )
+    const allocated = Number(allocatedResult.rows[0]?.allocated_count || 0)
+    if (reservation.remainingUnits - allocated < 1) {
+      throw new Error('Resume quota reservation does not have an unallocated unit')
+    }
+
+    const insertResult = await client.query(
+      `INSERT INTO resume_quota_allocations
+        (reservation_id, user_id, allocation_key, upload_id, resume_id, parse_job_id)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING *`,
+      [
+        reservationId,
+        normalizedUserId,
+        normalizedKey,
+        uploadId || null,
+        resumeId || null,
+        parseJobId ? String(parseJobId) : null,
+      ],
+    )
+    const allocation = normalizeAllocation(insertResult.rows[0])
+
+    if (uploadId) {
+      await client.query(
+        `UPDATE upload_chunks
+         SET quota_reservation_id = $3,
+             quota_allocation_id = $4,
+             quota_recorded = false,
+             updated_at = NOW()
+         WHERE upload_id = $1
+           AND user_id = $2`,
+        [uploadId, normalizedUserId, reservationId, allocation.id],
+      )
+    }
+    if (parseJobId) {
+      await client.query(
+        `UPDATE parse_jobs
+         SET quota_allocation_id = $2,
+             updated_at = NOW()
+         WHERE job_id = $1
+           AND user_id = $3`,
+        [String(parseJobId), allocation.id, normalizedUserId],
+      )
+    }
+
+    return { allocation, reservation, duplicate: false }
+  })
+}
+
+export async function consumeResumeQuotaAllocation({
+  userId,
+  allocationId,
+  ipAddress = 'unknown',
+  provider = null,
+  model = null,
+}) {
+  const normalizedUserId = toPositiveInteger(userId, 'userId')
+
+  return withTransaction(async (client) => {
+    await lockUserQuota(client, normalizedUserId)
+    const allocationResult = await client.query(
+      `SELECT *
+       FROM resume_quota_allocations
+       WHERE id = $1
+         AND user_id = $2
+       LIMIT 1
+       FOR UPDATE`,
+      [allocationId, normalizedUserId],
+    )
+    const allocation = normalizeAllocation(allocationResult.rows[0])
+    if (!allocation) {
+      throw new Error('Resume quota allocation was not found')
+    }
+    if (allocation.status === 'consumed') {
+      return { allocation, alreadyConsumed: true }
+    }
+    if (allocation.status !== 'reserved') {
+      throw new Error('Resume quota allocation was already released')
+    }
+
+    const reservationResult = await client.query(
+      `SELECT *
+       FROM resume_quota_reservations
+       WHERE id = $1
+         AND user_id = $2
+       LIMIT 1
+       FOR UPDATE`,
+      [allocation.reservationId, normalizedUserId],
+    )
+    const reservation = normalizeReservation(reservationResult.rows[0])
+    if (!reservation || reservation.remainingUnits < 1) {
+      throw new Error('Resume quota reservation cannot be consumed')
+    }
+
+    const usageResult = await client.query(
+      `INSERT INTO usage_log
+        (user_id, ip_address, month_start, quota_allocation_id)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (quota_allocation_id) WHERE quota_allocation_id IS NOT NULL
+       DO NOTHING
+       RETURNING id`,
+      [normalizedUserId, ipAddress, reservation.periodStart, allocation.id],
+    )
+    if (!usageResult.rows[0]) {
+      throw new Error('Resume quota usage was already recorded without allocation settlement')
+    }
+
+    const reservationUpdate = await client.query(
+      `UPDATE resume_quota_reservations
+       SET consumed_units = consumed_units + 1,
+           status = CASE
+             WHEN consumed_units + released_units + 1 = requested_units THEN 'consumed'
+             ELSE 'reserved'
+           END,
+           updated_at = NOW()
+       WHERE id = $1
+         AND user_id = $2
+       RETURNING *`,
+      [allocation.reservationId, normalizedUserId],
+    )
+    const allocationUpdate = await client.query(
+      `UPDATE resume_quota_allocations
+       SET status = 'consumed',
+           provider = NULLIF($3, ''),
+           model = NULLIF($4, ''),
+           consumed_at = NOW(),
+           updated_at = NOW()
+       WHERE id = $1
+         AND user_id = $2
+       RETURNING *`,
+      [
+        allocation.id,
+        normalizedUserId,
+        String(provider || '').trim(),
+        String(model || '').trim(),
+      ],
+    )
+    if (allocation.uploadId) {
+      await client.query(
+        `UPDATE upload_chunks
+         SET quota_recorded = true,
+             updated_at = NOW()
+         WHERE upload_id = $1
+           AND user_id = $2`,
+        [allocation.uploadId, normalizedUserId],
+      )
+    }
+
+    return {
+      allocation: normalizeAllocation(allocationUpdate.rows[0]),
+      reservation: normalizeReservation(reservationUpdate.rows[0]),
+      alreadyConsumed: false,
+    }
+  })
+}
+
+export async function releaseResumeQuotaAllocation({
+  userId,
+  allocationId,
+  reason = 'pre_provider_failure',
+}) {
+  const normalizedUserId = toPositiveInteger(userId, 'userId')
+
+  return withTransaction(async (client) => {
+    await lockUserQuota(client, normalizedUserId)
+    const allocationResult = await client.query(
+      `SELECT *
+       FROM resume_quota_allocations
+       WHERE id = $1
+         AND user_id = $2
+       LIMIT 1
+       FOR UPDATE`,
+      [allocationId, normalizedUserId],
+    )
+    const allocation = normalizeAllocation(allocationResult.rows[0])
+    if (!allocation || allocation.status !== 'reserved') {
+      return { allocation, released: false }
+    }
+
+    const reservationResult = await client.query(
+      `SELECT *
+       FROM resume_quota_reservations
+       WHERE id = $1
+         AND user_id = $2
+       LIMIT 1
+       FOR UPDATE`,
+      [allocation.reservationId, normalizedUserId],
+    )
+    const reservation = normalizeReservation(reservationResult.rows[0])
+    if (!reservation) {
+      throw new Error('Resume quota reservation was not found')
+    }
+
+    const reservationUpdate = await client.query(
+      `UPDATE resume_quota_reservations
+       SET released_units = released_units + 1,
+           status = CASE
+             WHEN consumed_units + released_units + 1 = requested_units
+               THEN CASE WHEN consumed_units > 0 THEN 'consumed' ELSE 'released' END
+             ELSE 'reserved'
+           END,
+           updated_at = NOW()
+       WHERE id = $1
+         AND user_id = $2
+       RETURNING *`,
+      [allocation.reservationId, normalizedUserId],
+    )
+    const allocationUpdate = await client.query(
+      `UPDATE resume_quota_allocations
+       SET status = 'released',
+           released_at = NOW(),
+           release_reason = $3,
+           updated_at = NOW()
+       WHERE id = $1
+         AND user_id = $2
+       RETURNING *`,
+      [allocation.id, normalizedUserId, String(reason || 'pre_provider_failure').slice(0, 160)],
+    )
+
+    return {
+      allocation: normalizeAllocation(allocationUpdate.rows[0]),
+      reservation: normalizeReservation(reservationUpdate.rows[0]),
+      released: true,
+    }
+  })
+}
+
+export async function releaseResumeQuotaAllocationsForAnalysis({
+  client,
+  userId,
+  analysisId,
+  reason = 'analysis_deleted_before_provider',
+}) {
+  if (!client || typeof client.query !== 'function') {
+    throw new Error('transaction client is required')
+  }
+  const normalizedUserId = toPositiveInteger(userId, 'userId')
+  const normalizedAnalysisId = String(analysisId || '').trim()
+  if (!normalizedAnalysisId) {
+    throw new Error('analysisId is required')
+  }
+
+  await lockUserQuota(client, normalizedUserId)
+  const result = await client.query(
+    `WITH released AS (
+       UPDATE resume_quota_allocations AS allocation
+       SET status = 'released',
+           released_at = NOW(),
+           release_reason = $3,
+           updated_at = NOW()
+       WHERE allocation.user_id = $1
+         AND allocation.status = 'reserved'
+         AND (
+           EXISTS (
+             SELECT 1
+             FROM upload_chunks AS upload
+             WHERE upload.quota_allocation_id = allocation.id
+               AND upload.analysis_id = $2
+           )
+           OR EXISTS (
+             SELECT 1
+             FROM analysis_items AS item
+             WHERE item.analysis_id = $2
+               AND (
+                 item.parse_job_id = allocation.parse_job_id
+                 OR item.resume_id = allocation.resume_id
+               )
+           )
+         )
+       RETURNING allocation.reservation_id
+     ),
+     release_counts AS (
+       SELECT reservation_id, COUNT(*)::INT AS unit_count
+       FROM released
+       GROUP BY reservation_id
+     )
+     UPDATE resume_quota_reservations AS reservation
+     SET released_units = reservation.released_units + release_counts.unit_count,
+         status = CASE
+           WHEN reservation.consumed_units
+                + reservation.released_units
+                + release_counts.unit_count = reservation.requested_units
+             THEN CASE WHEN reservation.consumed_units > 0 THEN 'consumed' ELSE 'released' END
+           ELSE 'reserved'
+         END,
+         updated_at = NOW()
+     FROM release_counts
+     WHERE reservation.id = release_counts.reservation_id
+       AND reservation.user_id = $1
+     RETURNING release_counts.unit_count`,
+    [
+      normalizedUserId,
+      normalizedAnalysisId,
+      String(reason || 'analysis_deleted_before_provider').slice(0, 160),
+    ],
+  )
+
+  return result.rows.reduce((total, row) => total + Number(row.unit_count || 0), 0)
 }
 
 export async function consumeResumeQuotaReservation({
@@ -309,14 +741,24 @@ export async function releaseResumeQuotaReservation({ userId, reservationId, uni
       return reservation
     }
 
-    const releasedUnits = Math.min(normalizedUnits, reservation.remainingUnits)
+    const allocatedResult = await client.query(
+      `SELECT COUNT(*)::INT AS allocated_count
+       FROM resume_quota_allocations
+       WHERE reservation_id = $1
+         AND status = 'reserved'`,
+      [reservationId],
+    )
+    const allocatedUnits = Number(allocatedResult.rows[0]?.allocated_count || 0)
+    const unallocatedUnits = Math.max(reservation.remainingUnits - allocatedUnits, 0)
+    const releasedUnits = Math.min(normalizedUnits, unallocatedUnits)
     if (releasedUnits === 0) return reservation
 
     const updateResult = await client.query(
       `UPDATE resume_quota_reservations
        SET released_units = released_units + $3,
            status = CASE
-             WHEN consumed_units + released_units + $3 = requested_units THEN 'released'
+             WHEN consumed_units + released_units + $3 = requested_units
+               THEN CASE WHEN consumed_units > 0 THEN 'consumed' ELSE 'released' END
              ELSE 'reserved'
            END,
            updated_at = NOW()
