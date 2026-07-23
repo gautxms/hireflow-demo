@@ -113,6 +113,7 @@ async function ensureUploadChunkTables() {
       job_description_id UUID REFERENCES job_descriptions(id) ON DELETE SET NULL,
       expires_at TIMESTAMP NOT NULL DEFAULT (NOW() + INTERVAL '24 hours'),
       analysis_id UUID REFERENCES analyses(id) ON DELETE SET NULL,
+      file_identity TEXT,
       created_at TIMESTAMP NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMP NOT NULL DEFAULT NOW()
     );
@@ -134,7 +135,13 @@ async function ensureUploadChunkTables() {
 
     ALTER TABLE upload_chunks
       ADD COLUMN IF NOT EXISTS job_description_id UUID,
-      ADD COLUMN IF NOT EXISTS analysis_id UUID REFERENCES analyses(id) ON DELETE SET NULL;
+      ADD COLUMN IF NOT EXISTS analysis_id UUID REFERENCES analyses(id) ON DELETE SET NULL,
+      ADD COLUMN IF NOT EXISTS file_identity TEXT;
+
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_upload_chunks_active_file_identity
+      ON upload_chunks (user_id, file_identity)
+      WHERE file_identity IS NOT NULL
+        AND status = 'uploading';
   `)
 
   uploadTablesReady = true
@@ -214,7 +221,7 @@ export function hasCompleteChunkSet(uploadedChunks, totalChunks) {
   return true
 }
 
-export async function initChunkUpload({ userId, filename, fileSize, mimeType, jobDescriptionId = null, analysisId = null, analysisName = null, clientChunkSize = undefined, quotaReservationId = null }) {
+export async function initChunkUpload({ userId, filename, fileSize, mimeType, jobDescriptionId = null, analysisId = null, analysisName = null, clientChunkSize = undefined, quotaReservationId = null, fileIdentity = null }) {
   ensureS3Configured()
   await ensureUploadChunkTables()
   await ensureAnalysisTables()
@@ -233,6 +240,11 @@ export async function initChunkUpload({ userId, filename, fileSize, mimeType, jo
   const originalFilename = fileMetadata.originalFilename
   const safeFilename = fileMetadata.storageFilename
   const normalizedMimeType = normalizeMimeType(originalFilename, fileMetadata.originalMimeType)
+  const normalizedFileIdentity = String(fileIdentity || '').trim()
+
+  if (normalizedFileIdentity.length > 160) {
+    throw new Error('fileIdentity must be 160 characters or fewer')
+  }
 
   if (!isAcceptedResumeUpload(normalizedMimeType, originalFilename)) {
     throw new Error('Only PDF, DOC, DOCX, and TXT files are allowed')
@@ -251,6 +263,35 @@ export async function initChunkUpload({ userId, filename, fileSize, mimeType, jo
 
     if (!jdResult.rows[0]) {
       throw new Error('Selected job description is invalid or archived')
+    }
+  }
+
+  if (normalizedFileIdentity) {
+    const identityResult = await pool.query(
+      `SELECT upload_id, uploaded_chunks, total_chunks, quota_recorded,
+              quota_reservation_id, analysis_id
+       FROM upload_chunks
+       WHERE user_id = $1
+         AND file_identity = $2
+         AND status = 'uploading'
+         AND expires_at > NOW()
+       ORDER BY created_at DESC
+       LIMIT 1`,
+      [userId, normalizedFileIdentity],
+    )
+
+    if (identityResult.rows[0]) {
+      const existing = identityResult.rows[0]
+      return withChunkUploadQuotaState({
+        uploadId: existing.upload_id,
+        totalChunks: Number(existing.total_chunks),
+        uploadedChunks: existing.uploaded_chunks || [],
+        resumed: true,
+        analysisId: existing.analysis_id || '',
+      }, {
+        quotaRecorded: existing.quota_recorded !== false,
+        quotaReservationId: existing.quota_reservation_id || null,
+      })
     }
   }
 
@@ -278,19 +319,21 @@ export async function initChunkUpload({ userId, filename, fileSize, mimeType, jo
     resolvedAnalysisId = createdAnalysis.rows[0]?.id || ''
   }
 
-  const existingResult = await pool.query(
-    `SELECT upload_id, uploaded_chunks, total_chunks, quota_recorded, quota_reservation_id
-     FROM upload_chunks
-     WHERE user_id = $1
-       AND filename = $2
-       AND file_size = $3
-       AND status = 'uploading'
-       AND expires_at > NOW()
-       AND analysis_id = $4
-     ORDER BY created_at DESC
-     LIMIT 1`,
-    [userId, safeFilename, fileSize, resolvedAnalysisId],
-  )
+  const existingResult = normalizedFileIdentity
+    ? { rows: [] }
+    : await pool.query(
+      `SELECT upload_id, uploaded_chunks, total_chunks, quota_recorded, quota_reservation_id
+       FROM upload_chunks
+       WHERE user_id = $1
+         AND filename = $2
+         AND file_size = $3
+         AND status = 'uploading'
+         AND expires_at > NOW()
+         AND analysis_id = $4
+       ORDER BY created_at DESC
+       LIMIT 1`,
+      [userId, safeFilename, fileSize, resolvedAnalysisId],
+    )
 
   if (existingResult.rows[0]) {
     return withChunkUploadQuotaState({
@@ -310,10 +353,10 @@ export async function initChunkUpload({ userId, filename, fileSize, mimeType, jo
 
   await pool.query(
     `INSERT INTO upload_chunks
-      (upload_id, user_id, filename, file_size, mime_type, total_chunks, uploaded_chunks, s3_prefix, status, job_description_id, analysis_id, quota_reservation_id, quota_recorded, expires_at)
+      (upload_id, user_id, filename, file_size, mime_type, total_chunks, uploaded_chunks, s3_prefix, status, job_description_id, analysis_id, quota_reservation_id, quota_recorded, file_identity, expires_at)
      VALUES
-      ($1, $2, $3, $4, $5, $6, $7::int[], $8, 'uploading', $9, $10, $11, false, NOW() + INTERVAL '24 hours')`,
-    [uploadId, userId, safeFilename, fileSize, normalizedMimeType, totalChunks, [], prefix, jobDescriptionId, resolvedAnalysisId, quotaReservationId],
+      ($1, $2, $3, $4, $5, $6, $7::int[], $8, 'uploading', $9, $10, $11, false, $12, NOW() + INTERVAL '24 hours')`,
+    [uploadId, userId, safeFilename, fileSize, normalizedMimeType, totalChunks, [], prefix, jobDescriptionId, resolvedAnalysisId, quotaReservationId, normalizedFileIdentity || null],
   )
 
   return withChunkUploadQuotaState({

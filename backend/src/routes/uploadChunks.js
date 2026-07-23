@@ -49,7 +49,7 @@ async function rejectInvalidChunkInit(req, res, statusCode, error) {
 }
 
 async function validateChunkInitRequest(req, res, next) {
-  const { filename, fileSize, clientChunkSize } = req.body || {}
+  const { filename, fileSize, clientChunkSize, quotaReservationId, fileIdentity } = req.body || {}
   if (!filename || fileSize === undefined || fileSize === null || fileSize === '') {
     return rejectInvalidChunkInit(req, res, 400, 'filename and fileSize are required')
   }
@@ -60,6 +60,14 @@ async function validateChunkInitRequest(req, res, next) {
   }
   if (parsedSize > MAX_FILE_SIZE_BYTES) {
     return rejectInvalidChunkInit(req, res, 400, 'Files above 25MB are not supported yet. Please compress the resume or upload a smaller PDF, DOC, or DOCX file.')
+  }
+
+  const normalizedFileIdentity = String(fileIdentity || '').trim()
+  if (quotaReservationId && !normalizedFileIdentity) {
+    return rejectInvalidChunkInit(req, res, 400, 'fileIdentity is required for reserved chunk uploads')
+  }
+  if (normalizedFileIdentity.length > 160) {
+    return rejectInvalidChunkInit(req, res, 400, 'fileIdentity must be 160 characters or fewer')
   }
 
   if (clientChunkSize !== undefined && clientChunkSize !== null && clientChunkSize !== '') {
@@ -94,11 +102,25 @@ router.post('/preflight', requireAuth, requireActiveSubscription, (req, res, nex
   remaining: req.usageContext?.remainingUploads || 0,
 }))
 
+router.post('/reservations/:reservationId/release', requireAuth, async (req, res) => {
+  try {
+    await releaseResumeQuotaReservation({
+      userId: req.userId,
+      reservationId: req.params.reservationId,
+      units: Number.MAX_SAFE_INTEGER,
+    })
+    return res.json({ ok: true })
+  } catch (error) {
+    console.error('[UploadChunks] failed to release unused quota reservation:', error)
+    return res.status(500).json({ error: 'Unable to release unused resume quota' })
+  }
+})
+
 router.post('/init', requireAuth, requireActiveSubscription, validateChunkInitRequest, enforceUploadLimit, async (req, res) => {
   const quotaReservationId = req.usageContext?.quotaReservation?.id || null
   let quotaSettled = false
   try {
-    const { filename, mimeType, jobDescriptionId, analysisId, analysisName, clientChunkSize } = req.body || {}
+    const { filename, mimeType, jobDescriptionId, analysisId, analysisName, clientChunkSize, fileIdentity } = req.body || {}
     console.log(
       '[HireFlow] JD received at endpoint:',
       jobDescriptionId ? `${String(jobDescriptionId).slice(0, 80)}...` : 'NONE',
@@ -114,6 +136,7 @@ router.post('/init', requireAuth, requireActiveSubscription, validateChunkInitRe
       analysisName: analysisName || null,
       clientChunkSize,
       quotaReservationId,
+      fileIdentity,
     })
     const sessionQuotaState = getChunkUploadQuotaState(session)
 

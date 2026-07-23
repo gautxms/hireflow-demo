@@ -149,6 +149,24 @@ test('POST /api/uploads/chunks/preflight validates the whole-batch file count', 
   assert.equal(queries.length, 1)
 })
 
+test('POST /api/uploads/chunks/reservations/:id/release clears unused units for the authenticated user', async (t) => {
+  const queries = mockChunkUploadQueries(t, (sql) => {
+    if (sql.includes('pg_advisory_xact_lock')) return { rows: [] }
+    if (sql.includes('FROM resume_quota_reservations')) return { rows: [] }
+    throw new Error(`Unexpected query: ${sql}`)
+  })
+
+  const { response, payload } = await requestJson(
+    '/api/uploads/chunks/reservations/00000000-0000-4000-8000-000000000701/release',
+    { headers: authHeader(7) },
+  )
+
+  assert.equal(response.status, 200)
+  assert.equal(payload.ok, true)
+  const reservationRead = queries.find(({ sql }) => sql.includes('FROM resume_quota_reservations'))
+  assert.deepEqual(reservationRead.params.slice(0, 2), ['00000000-0000-4000-8000-000000000701', 7])
+})
+
 test('POST /api/uploads/chunks/init records exactly one usage row for a new session', async (t) => {
   const queries = mockChunkUploadQueries(t, (sql) => {
     if (sql.includes('FROM users')) return { rows: [{ id: 1, subscription_status: 'active' }] }
@@ -226,6 +244,29 @@ test('POST /api/uploads/chunks/init rejects files above the 25 MiB resume limit'
   assert.equal(queries.some(({ sql }) => sql.includes('FROM usage_overrides')), false)
   assert.equal(queries.some(({ sql }) => sql.includes('FROM usage_log')), false)
   assert.equal(queries.some(({ sql }) => sql.includes('INSERT INTO upload_chunks')), false)
+})
+
+test('POST /api/uploads/chunks/init requires a stable file identity for reserved uploads', async (t) => {
+  const queries = mockChunkUploadQueries(t, (sql) => {
+    if (sql.includes('FROM users')) return { rows: [{ id: 1, subscription_status: 'active' }] }
+    if (sql.includes('pg_advisory_xact_lock')) return { rows: [] }
+    if (sql.includes('FROM resume_quota_reservations')) return { rows: [] }
+    throw new Error(`Unexpected query: ${sql}`)
+  })
+
+  const { response, payload } = await requestJson('/api/uploads/chunks/init', {
+    headers: authHeader(),
+    body: {
+      filename: 'resume.pdf',
+      fileSize: 1024,
+      mimeType: 'application/pdf',
+      quotaReservationId: '00000000-0000-4000-8000-000000000711',
+    },
+  })
+
+  assert.equal(response.status, 400)
+  assert.equal(payload.error, 'fileIdentity is required for reserved chunk uploads')
+  assert.equal(queries.some(({ sql }) => sql.includes('FROM usage_log')), false)
 })
 
 

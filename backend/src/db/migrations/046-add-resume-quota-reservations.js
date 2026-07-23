@@ -29,7 +29,15 @@ export async function up(client) {
     ALTER TABLE upload_chunks
       ADD COLUMN IF NOT EXISTS quota_reservation_id UUID
         REFERENCES resume_quota_reservations(id) ON DELETE SET NULL,
-      ADD COLUMN IF NOT EXISTS quota_recorded BOOLEAN NOT NULL DEFAULT false
+      ADD COLUMN IF NOT EXISTS quota_recorded BOOLEAN NOT NULL DEFAULT false,
+      ADD COLUMN IF NOT EXISTS file_identity TEXT
+  `)
+
+  await client.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_upload_chunks_active_file_identity
+      ON upload_chunks (user_id, file_identity)
+      WHERE file_identity IS NOT NULL
+        AND status = 'uploading'
   `)
 
   await client.query(`

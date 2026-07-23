@@ -23,7 +23,12 @@ import { buildFailedAnalysisState } from './resumeUploaderRecoveryState'
 import { shouldSkipStateUpdate, waitWithAbort } from './abortableAsync'
 import { mergeCandidatesByResumeId, summarizeJobStatus } from './resumeAnalysisAggregation'
 import '../styles/resume-uploader.css'
-import { preflightResumeQuota } from '../utils/resumeQuotaPreflight.js'
+import {
+  buildResumeQuotaBatchKey,
+  buildResumeQuotaFileIdentity,
+  preflightResumeQuota,
+  releaseResumeQuotaBatch,
+} from '../utils/resumeQuotaPreflight.js'
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 const RESUME_UPLOAD_STATE_KEY = 'hireflow_resume_upload_state_v1'
@@ -431,14 +436,19 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
       const skippedUploadFilenames = []
 
       try {
+        const quotaBatchKey = buildResumeQuotaBatchKey({
+          files: uploadedFiles.map((entry) => entry.file),
+          context: `${normalizedAnalysisName}:${selectedJobDescriptionId}`,
+        })
         const quotaPreflight = await preflightResumeQuota({
           apiBase: API_BASE,
           token,
           fileCount: uploadedFiles.length,
+          batchKey: quotaBatchKey,
         })
         quotaReservationId = quotaPreflight.reservationId
 
-        const initializeUpload = async (entry, existingAnalysisId) => {
+        const initializeUpload = async (entry, existingAnalysisId, fileIndex) => {
           const file = entry.file
           const totalChunks = Math.ceil(file.size / CHUNK_SIZE)
           const fingerprint = getFileFingerprint(file)
@@ -457,6 +467,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
                 selectedJobDescriptionId,
                 analysisId: existingAnalysisId,
               }),
+              fileIdentity: buildResumeQuotaFileIdentity(quotaBatchKey, fileIndex),
               ...(quotaReservationId ? { quotaReservationId } : {}),
             }),
           })
@@ -487,10 +498,24 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
         // Claim every unit in the batch reservation promptly. Uploading a large
         // first file must not allow the remaining reservation units to expire
         // before their sessions are initialized.
-        const firstUpload = await initializeUpload(uploadedFiles[0], analysisId)
+        let firstUpload
+        try {
+          firstUpload = await initializeUpload(uploadedFiles[0], analysisId, 0)
+        } catch (firstInitError) {
+          if (quotaReservationId) {
+            await releaseResumeQuotaBatch({
+              apiBase: API_BASE,
+              token,
+              reservationId: quotaReservationId,
+            }).catch((releaseError) => {
+              console.warn('[HireFlow] Failed to release unused quota after first init error:', releaseError)
+            })
+          }
+          throw firstInitError
+        }
         analysisId = analysisId || firstUpload.analysisId
         const remainingUploadResults = await Promise.allSettled(
-          uploadedFiles.slice(1).map((entry) => initializeUpload(entry, analysisId)),
+          uploadedFiles.slice(1).map((entry, index) => initializeUpload(entry, analysisId, index + 1)),
         )
         const remainingUploads = []
 
@@ -510,6 +535,15 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
             failedCount: skippedUploadFilenames.length,
             acceptedCount: 1 + remainingUploads.length,
           })
+          if (quotaReservationId) {
+            await releaseResumeQuotaBatch({
+              apiBase: API_BASE,
+              token,
+              reservationId: quotaReservationId,
+            }).catch((releaseError) => {
+              console.warn('[HireFlow] Failed to release unused quota after partial init:', releaseError)
+            })
+          }
         }
 
         for (const uploadSession of [firstUpload, ...remainingUploads]) {

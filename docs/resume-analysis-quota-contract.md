@@ -85,7 +85,14 @@ with this contract only after atomic reservations exist.
   applicable limit.
 - A caller-provided idempotency key returns the original reservation and cannot
   reserve the same batch twice.
+- The client retains that key across an unknown preflight outcome, so a lost
+  response can recover the original reservation instead of allocating another.
 - Reservations expire after two hours if a client abandons an upload.
+- Clients explicitly release every unused unit when initial session creation
+  fails; successful sibling sessions continue instead of being abandoned.
+- Each file receives a stable identity within its logical batch. This keeps
+  same-named, same-sized files in distinct sessions while making a lost init
+  response safely resumable.
 - A new upload session converts one reserved unit into the existing `usage_log`
   record; a resumed session releases that unit.
 - The current calendar-month limit, admin overrides, and pre-provider counting

@@ -188,22 +188,34 @@ export async function assertResumeQuotaReservationAvailable({
   requestedUnits = 1,
   periodStart,
   periodEnd,
+  fileIdentity = null,
 }) {
   const normalizedUnits = toPositiveInteger(requestedUnits, 'requestedUnits')
   const result = await pool.query(
-    `SELECT *
-     FROM resume_quota_reservations
-     WHERE id = $1
-       AND user_id = $2
-       AND period_start = $3
-       AND period_end = $4
-       AND status = 'reserved'
-       AND expires_at > NOW()
+    `SELECT reservation.*,
+            EXISTS (
+              SELECT 1
+              FROM upload_chunks
+              WHERE user_id = $2
+                AND quota_reservation_id = $1
+                AND file_identity = NULLIF($5, '')
+                AND status = 'uploading'
+                AND expires_at > NOW()
+            ) AS has_existing_upload
+     FROM resume_quota_reservations AS reservation
+     WHERE reservation.id = $1
+       AND reservation.user_id = $2
+       AND reservation.period_start = $3
+       AND reservation.period_end = $4
+       AND reservation.status IN ('reserved', 'consumed')
+       AND reservation.expires_at > NOW()
      LIMIT 1`,
-    [reservationId, userId, periodStart, periodEnd],
+    [reservationId, userId, periodStart, periodEnd, String(fileIdentity || '').trim()],
   )
-  const reservation = normalizeReservation(result.rows[0])
-  if (!reservation || reservation.remainingUnits < normalizedUnits) {
+  const row = result.rows[0]
+  const reservation = normalizeReservation(row)
+  const isExistingUploadRetry = row?.has_existing_upload === true
+  if (!reservation || (reservation.remainingUnits < normalizedUnits && !isExistingUploadRetry)) {
     throw new Error('Resume quota reservation is invalid, expired, or fully allocated')
   }
   return reservation

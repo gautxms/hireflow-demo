@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { pool } from '../db/client.js'
 import {
+  assertResumeQuotaReservationAvailable,
   consumeResumeQuotaReservation,
   isResumeQuotaReservationsEnabled,
   reserveResumeQuotaUnits,
@@ -120,6 +121,48 @@ test('replaying a batch idempotency key returns the original reservation', async
   assert.equal(replay.duplicate, true)
   assert.equal(replay.reservation.id, first.reservation.id)
   assert.equal(reservations.length, 1)
+})
+
+test('fully allocated reservation remains valid only for an identified session retry', async (t) => {
+  const periodStart = new Date('2026-07-01T00:00:00.000Z')
+  const periodEnd = new Date('2026-08-01T00:00:00.000Z')
+  t.mock.method(pool, 'query', async (_sql, params) => ({
+    rows: [{
+      ...reservationRow({
+        id: params[0],
+        userId: params[1],
+        key: 'retry-key',
+        requestedUnits: 1,
+        periodStart,
+        periodEnd,
+      }),
+      consumed_units: 1,
+      status: 'consumed',
+      has_existing_upload: params[4] === 'stable-batch:0',
+    }],
+  }))
+
+  const retry = await assertResumeQuotaReservationAvailable({
+    userId: 7,
+    reservationId: 'reservation-retry',
+    requestedUnits: 1,
+    periodStart,
+    periodEnd,
+    fileIdentity: 'stable-batch:0',
+  })
+  assert.equal(retry.remainingUnits, 0)
+
+  await assert.rejects(
+    assertResumeQuotaReservationAvailable({
+      userId: 7,
+      reservationId: 'reservation-retry',
+      requestedUnits: 1,
+      periodStart,
+      periodEnd,
+      fileIdentity: 'different-file',
+    }),
+    /invalid, expired, or fully allocated/,
+  )
 })
 
 test('a 795 plus 10 batch is rejected as one request', async (t) => {

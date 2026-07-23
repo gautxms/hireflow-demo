@@ -234,6 +234,7 @@ export async function enforceUploadLimit(req, res, next) {
           requestedUnits: requestedUploads,
           periodStart: monthStart,
           periodEnd: monthEnd,
+          fileIdentity: req.body?.fileIdentity,
         })
       } else {
         const idempotencyKey = String(

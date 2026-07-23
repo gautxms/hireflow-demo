@@ -7,7 +7,12 @@ import { ANALYSES_PAGE_SIZE, clampAnalysesPage, paginateAnalyses } from './analy
 import { deriveDisplayStatus, mergeInFlightAnalyses, shouldRemoveInFlightOverlay } from './analysesDisplayState.js'
 import '../styles/analyses.css'
 import { buildResumeFileIdentity } from '../utils/resumeFileIdentity.js'
-import { preflightResumeQuota } from '../utils/resumeQuotaPreflight.js'
+import {
+  buildResumeQuotaBatchKey,
+  buildResumeQuotaFileIdentity,
+  preflightResumeQuota,
+  releaseResumeQuotaBatch,
+} from '../utils/resumeQuotaPreflight.js'
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 const MAX_FILE_SIZE = 25 * 1024 * 1024
@@ -285,7 +290,7 @@ export default function AnalysesPage({ isReadOnly = false }) {
     setItems(mergeInFlightAnalyses(nextItems, activeOverlays))
   }
 
-  const initChunkUpload = async ({ file, token, analysisId, nameValue, jobDescriptionId, quotaReservationId }) => {
+  const initChunkUpload = async ({ file, token, analysisId, nameValue, jobDescriptionId, quotaReservationId, fileIdentity }) => {
     const initResponse = await fetch(`${API_BASE}/uploads/chunks/init`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
@@ -298,6 +303,7 @@ export default function AnalysesPage({ isReadOnly = false }) {
         ...(analysisId ? { analysisId } : {}),
         ...(nameValue ? { analysisName: nameValue } : {}),
         ...(quotaReservationId ? { quotaReservationId } : {}),
+        ...(fileIdentity ? { fileIdentity } : {}),
       }),
     })
     const initPayload = await initResponse.json().catch(() => ({}))
@@ -402,23 +408,39 @@ export default function AnalysesPage({ isReadOnly = false }) {
     setUploadFeedback({ type: '', message: '' })
 
     try {
+      const quotaBatchKey = buildResumeQuotaBatchKey({
+        files: filesSnapshot,
+        context: `${nameValue}:${jobDescriptionIdSnapshot}`,
+      })
       const quotaPreflight = await preflightResumeQuota({
         apiBase: API_BASE,
         token,
         fileCount: filesSnapshot.length,
+        batchKey: quotaBatchKey,
       })
       const firstFile = filesSnapshot[0]
-      const firstInit = await initChunkUpload({
-        file: firstFile,
-        token,
-        analysisId: '',
-        nameValue,
-        jobDescriptionId: jobDescriptionIdSnapshot,
-        quotaReservationId: quotaPreflight.reservationId,
-      })
+      let firstInit
+      try {
+        firstInit = await initChunkUpload({
+          file: firstFile,
+          token,
+          analysisId: '',
+          nameValue,
+          jobDescriptionId: jobDescriptionIdSnapshot,
+          quotaReservationId: quotaPreflight.reservationId,
+          fileIdentity: buildResumeQuotaFileIdentity(quotaBatchKey, 0),
+        })
+      } catch (firstInitError) {
+        await releaseResumeQuotaBatch({
+          apiBase: API_BASE,
+          token,
+          reservationId: quotaPreflight.reservationId,
+        }).catch(() => {})
+        throw firstInitError
+      }
       if (!firstInit.analysisId) throw new Error('Upload started but no analysis ID was returned.')
 
-      const remainingUploadSessions = await Promise.all(filesSnapshot.slice(1).map((file) => (
+      const remainingUploadResults = await Promise.allSettled(filesSnapshot.slice(1).map((file, index) => (
         initChunkUpload({
           file,
           token,
@@ -426,9 +448,20 @@ export default function AnalysesPage({ isReadOnly = false }) {
           nameValue,
           jobDescriptionId: jobDescriptionIdSnapshot,
           quotaReservationId: quotaPreflight.reservationId,
+          fileIdentity: buildResumeQuotaFileIdentity(quotaBatchKey, index + 1),
         })
       )))
-      const uploadSessions = [firstInit, ...remainingUploadSessions]
+      const uploadSessions = [
+        firstInit,
+        ...remainingUploadResults.map((result) => (result.status === 'fulfilled' ? result.value : null)),
+      ]
+      if (remainingUploadResults.some((result) => result.status === 'rejected')) {
+        await releaseResumeQuotaBatch({
+          apiBase: API_BASE,
+          token,
+          reservationId: quotaPreflight.reservationId,
+        }).catch(() => {})
+      }
 
       const overlay = {
         analysisId: firstInit.analysisId,

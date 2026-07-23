@@ -350,7 +350,7 @@ test('resume quota reservation migration is additive and clears ambiguous month-
     },
   })
 
-  assert.equal(queries.length, 5)
+  assert.equal(queries.length, 6)
   assert.match(queries[0], /CREATE TABLE IF NOT EXISTS resume_quota_reservations/)
   assert.match(queries[0], /UNIQUE \(user_id, idempotency_key\)/)
   assert.match(queries[0], /consumed_units \+ released_units <= requested_units/)
@@ -358,10 +358,13 @@ test('resume quota reservation migration is additive and clears ambiguous month-
   assert.match(queries[2], /ALTER TABLE upload_chunks/)
   assert.match(queries[2], /quota_reservation_id UUID/)
   assert.match(queries[2], /quota_recorded BOOLEAN NOT NULL DEFAULT false/)
-  assert.match(queries[3], /SET quota_recorded = true/)
-  assert.match(queries[4], /SET quota_anchor_at = NULL/)
-  assert.match(queries[4], /quota_anchor_at = current_period_end/)
-  assert.match(queries[4], /INTERVAL '1 month - 1 day'/)
+  assert.match(queries[2], /file_identity TEXT/)
+  assert.match(queries[3], /idx_upload_chunks_active_file_identity/)
+  assert.match(queries[3], /status = 'uploading'/)
+  assert.match(queries[4], /SET quota_recorded = true/)
+  assert.match(queries[5], /SET quota_anchor_at = NULL/)
+  assert.match(queries[5], /quota_anchor_at = current_period_end/)
+  assert.match(queries[5], /INTERVAL '1 month - 1 day'/)
 })
 
 test('shortlist batch-add safety migration is additive and preserves metadata columns', async () => {
