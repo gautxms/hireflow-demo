@@ -232,6 +232,8 @@ export async function enforceUploadLimit(req, res, next) {
           userId: req.userId,
           reservationId: suppliedReservationId,
           requestedUnits: requestedUploads,
+          periodStart: monthStart,
+          periodEnd: monthEnd,
         })
       } else {
         const idempotencyKey = String(
@@ -302,23 +304,27 @@ export async function recordChunkUploadUsage({ userId, uploadId, monthStart, ipA
   const client = await pool.connect()
   try {
     await client.query('BEGIN')
+    const uploadUpdate = await client.query(
+      `UPDATE upload_chunks
+       SET quota_recorded = true,
+           updated_at = NOW()
+       WHERE upload_id = $1
+         AND user_id = $2
+         AND quota_recorded = false
+       RETURNING upload_id`,
+      [uploadId, userId],
+    )
+    if (!uploadUpdate.rows[0]) {
+      await client.query('COMMIT')
+      return false
+    }
     await client.query(
       `INSERT INTO usage_log (user_id, ip_address, month_start)
        VALUES ($1, $2, $3)`,
       [userId, ipAddress, monthStart],
     )
-    const uploadUpdate = await client.query(
-      `UPDATE upload_chunks
-       SET quota_recorded = true,
-           updated_at = NOW()
-       WHERE upload_id = $1 AND user_id = $2
-       RETURNING upload_id`,
-      [uploadId, userId],
-    )
-    if (!uploadUpdate.rows[0]) {
-      throw new Error('Chunk upload session was not found while recording usage')
-    }
     await client.query('COMMIT')
+    return true
   } catch (error) {
     await client.query('ROLLBACK')
     throw error

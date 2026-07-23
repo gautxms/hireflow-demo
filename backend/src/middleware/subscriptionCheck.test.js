@@ -5,6 +5,7 @@ import { pool } from '../db/client.js'
 import {
   enforceUploadLimit,
   observeBillingPeriodQuota,
+  recordChunkUploadUsage,
   requireActiveSubscription,
   trackUploadUsage,
 } from './subscriptionCheck.js'
@@ -528,4 +529,30 @@ test('trackUploadUsage skips counting when quota context is absent', async () =>
   } finally {
     pool.query = originalQuery
   }
+})
+
+test('legacy chunk usage claim is idempotent when another request already recorded the session', async (t) => {
+  const queries = []
+  const client = {
+    async query(sql) {
+      const text = String(sql)
+      queries.push(text)
+      if (['BEGIN', 'COMMIT'].includes(text)) return { rows: [] }
+      if (text.includes('UPDATE upload_chunks')) return { rows: [] }
+      throw new Error(`Unexpected query: ${text}`)
+    },
+    release() {},
+  }
+  t.mock.method(pool, 'connect', async () => client)
+
+  const recorded = await recordChunkUploadUsage({
+    userId: 1,
+    uploadId: 'upload-already-recorded',
+    monthStart: new Date('2026-07-01T00:00:00.000Z'),
+    ipAddress: '127.0.0.1',
+  })
+
+  assert.equal(recorded, false)
+  assert.equal(queries.some((sql) => sql.includes('INSERT INTO usage_log')), false)
+  assert.equal(queries.at(-1), 'COMMIT')
 })

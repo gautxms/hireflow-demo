@@ -223,6 +223,8 @@ test('POST /api/uploads/chunks/init rejects files above the 25 MiB resume limit'
 
   assert.equal(response.status, 400)
   assert.match(payload.error, /Files above 25MB are not supported yet/)
+  assert.equal(queries.some(({ sql }) => sql.includes('FROM usage_overrides')), false)
+  assert.equal(queries.some(({ sql }) => sql.includes('FROM usage_log')), false)
   assert.equal(queries.some(({ sql }) => sql.includes('INSERT INTO upload_chunks')), false)
 })
 

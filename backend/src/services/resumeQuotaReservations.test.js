@@ -188,3 +188,71 @@ test('chunk allocation records usage, session state, and reservation consumption
   assert.equal(calls.some(({ sql }) => sql.includes('quota_recorded = true')), true)
   assert.equal(calls.at(-1).sql, 'COMMIT')
 })
+
+test('chunk allocation does not double-count a session already claimed by another request', async (t) => {
+  const calls = []
+  const stored = reservationRow({
+    id: 'reservation-duplicate',
+    userId: 12,
+    key: 'duplicate-session',
+    requestedUnits: 2,
+    periodStart: new Date('2026-07-01T00:00:00.000Z'),
+    periodEnd: new Date('2026-08-01T00:00:00.000Z'),
+  })
+  const client = {
+    async query(sql) {
+      const text = String(sql)
+      calls.push(text)
+      if (['BEGIN', 'COMMIT', 'ROLLBACK'].includes(text)) return { rows: [] }
+      if (text.includes('pg_advisory_xact_lock')) return { rows: [] }
+      if (text.includes('FROM resume_quota_reservations') && text.includes('FOR UPDATE')) return { rows: [stored] }
+      if (text.includes('UPDATE upload_chunks')) return { rows: [] }
+      throw new Error(`Unexpected query: ${text}`)
+    },
+    release() {},
+  }
+  t.mock.method(pool, 'connect', async () => client)
+
+  const result = await consumeResumeQuotaReservation({
+    userId: 12,
+    reservationId: 'reservation-duplicate',
+    monthStart: new Date('2026-07-01T00:00:00.000Z'),
+    uploadId: 'upload-already-claimed',
+  })
+
+  assert.equal(result.alreadyRecorded, true)
+  assert.equal(calls.some((sql) => sql.includes('INSERT INTO usage_log')), false)
+  assert.equal(calls.some((sql) => sql.includes('UPDATE resume_quota_reservations')), false)
+  assert.equal(calls.at(-1), 'COMMIT')
+})
+
+test('reservation consumption rejects units from a previous quota period', async (t) => {
+  const stored = reservationRow({
+    id: 'reservation-june',
+    userId: 13,
+    key: 'june-batch',
+    requestedUnits: 1,
+    periodStart: new Date('2026-06-01T00:00:00.000Z'),
+    periodEnd: new Date('2026-07-01T00:00:00.000Z'),
+  })
+  const client = {
+    async query(sql) {
+      const text = String(sql)
+      if (['BEGIN', 'ROLLBACK'].includes(text)) return { rows: [] }
+      if (text.includes('pg_advisory_xact_lock')) return { rows: [] }
+      if (text.includes('FROM resume_quota_reservations') && text.includes('FOR UPDATE')) return { rows: [stored] }
+      throw new Error(`Unexpected query: ${text}`)
+    },
+    release() {},
+  }
+  t.mock.method(pool, 'connect', async () => client)
+
+  await assert.rejects(
+    consumeResumeQuotaReservation({
+      userId: 13,
+      reservationId: 'reservation-june',
+      monthStart: new Date('2026-07-01T00:00:00.000Z'),
+    }),
+    /different quota period/,
+  )
+})

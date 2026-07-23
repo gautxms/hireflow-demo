@@ -182,17 +182,25 @@ export async function reserveResumeQuotaUnits({
   })
 }
 
-export async function assertResumeQuotaReservationAvailable({ userId, reservationId, requestedUnits = 1 }) {
+export async function assertResumeQuotaReservationAvailable({
+  userId,
+  reservationId,
+  requestedUnits = 1,
+  periodStart,
+  periodEnd,
+}) {
   const normalizedUnits = toPositiveInteger(requestedUnits, 'requestedUnits')
   const result = await pool.query(
     `SELECT *
      FROM resume_quota_reservations
      WHERE id = $1
        AND user_id = $2
+       AND period_start = $3
+       AND period_end = $4
        AND status = 'reserved'
        AND expires_at > NOW()
      LIMIT 1`,
-    [reservationId, userId],
+    [reservationId, userId, periodStart, periodEnd],
   )
   const reservation = normalizeReservation(result.rows[0])
   if (!reservation || reservation.remainingUnits < normalizedUnits) {
@@ -210,6 +218,7 @@ export async function consumeResumeQuotaReservation({
   uploadId = null,
 }) {
   const normalizedUnits = toPositiveInteger(units, 'units')
+  const normalizedMonthStart = toValidDate(monthStart, 'monthStart')
 
   return withTransaction(async (client) => {
     await lockUserQuota(client, userId)
@@ -228,27 +237,32 @@ export async function consumeResumeQuotaReservation({
     if (reservation.remainingUnits < normalizedUnits) {
       throw new Error('Resume quota reservation does not have enough remaining units')
     }
+    if (new Date(reservation.periodStart).getTime() !== normalizedMonthStart.getTime()) {
+      throw new Error('Resume quota reservation belongs to a different quota period')
+    }
 
-    await client.query(
-      `INSERT INTO usage_log (user_id, ip_address, month_start)
-       SELECT $1, $2, $3
-       FROM generate_series(1, $4)`,
-      [userId, ipAddress, monthStart, normalizedUnits],
-    )
     if (uploadId) {
       const uploadUpdate = await client.query(
         `UPDATE upload_chunks
          SET quota_recorded = true,
              quota_reservation_id = COALESCE(quota_reservation_id, $3),
              updated_at = NOW()
-         WHERE upload_id = $1 AND user_id = $2
+         WHERE upload_id = $1
+           AND user_id = $2
+           AND quota_recorded = false
          RETURNING upload_id`,
         [uploadId, userId, reservationId],
       )
       if (!uploadUpdate.rows[0]) {
-        throw new Error('Chunk upload session was not found while allocating quota')
+        return { ...reservation, alreadyRecorded: true }
       }
     }
+    await client.query(
+      `INSERT INTO usage_log (user_id, ip_address, month_start)
+       SELECT $1, $2, $3
+       FROM generate_series(1, $4)`,
+      [userId, ipAddress, normalizedMonthStart, normalizedUnits],
+    )
     const updateResult = await client.query(
       `UPDATE resume_quota_reservations
        SET consumed_units = consumed_units + $3,

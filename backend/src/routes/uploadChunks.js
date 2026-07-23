@@ -12,6 +12,7 @@ import {
 } from '../services/resumeQuotaReservations.js'
 import {
   CHUNK_SIZE_BYTES,
+  CLIENT_CHUNK_SIZE_BYTES,
   MAX_FILE_SIZE_BYTES,
   completeChunkUpload,
   getChunkUploadQuotaState,
@@ -31,6 +32,50 @@ const chunkUpload = multer({
   },
 })
 
+async function rejectInvalidChunkInit(req, res, statusCode, error) {
+  const reservationId = String(req.body?.quotaReservationId || '').trim()
+  if (reservationId) {
+    try {
+      await releaseResumeQuotaReservation({
+        userId: req.userId,
+        reservationId,
+        units: 1,
+      })
+    } catch (releaseError) {
+      console.error('[UploadChunks] failed to release quota after init validation:', releaseError)
+    }
+  }
+  return res.status(statusCode).json({ error })
+}
+
+async function validateChunkInitRequest(req, res, next) {
+  const { filename, fileSize, clientChunkSize } = req.body || {}
+  if (!filename || fileSize === undefined || fileSize === null || fileSize === '') {
+    return rejectInvalidChunkInit(req, res, 400, 'filename and fileSize are required')
+  }
+
+  const parsedSize = Number(fileSize)
+  if (!Number.isFinite(parsedSize) || parsedSize <= 0) {
+    return rejectInvalidChunkInit(req, res, 400, 'fileSize must be a positive number')
+  }
+  if (parsedSize > MAX_FILE_SIZE_BYTES) {
+    return rejectInvalidChunkInit(req, res, 400, 'Files above 25MB are not supported yet. Please compress the resume or upload a smaller PDF, DOC, or DOCX file.')
+  }
+
+  if (clientChunkSize !== undefined && clientChunkSize !== null && clientChunkSize !== '') {
+    const parsedChunkSize = Number(clientChunkSize)
+    if (!Number.isInteger(parsedChunkSize) || parsedChunkSize <= 0) {
+      return rejectInvalidChunkInit(req, res, 400, 'clientChunkSize must be a positive integer')
+    }
+    if (parsedChunkSize !== CLIENT_CHUNK_SIZE_BYTES && parsedChunkSize !== CHUNK_SIZE_BYTES) {
+      return rejectInvalidChunkInit(req, res, 400, 'clientChunkSize must be 4MB or 5MB')
+    }
+  }
+
+  req.chunkInitFileSize = parsedSize
+  return next()
+}
+
 router.post('/preflight', requireAuth, requireActiveSubscription, (req, res, next) => {
   const fileCount = Number(req.body?.fileCount)
   if (!Number.isInteger(fileCount) || fileCount <= 0 || fileCount > MAX_BATCH_FILE_COUNT) {
@@ -49,34 +94,20 @@ router.post('/preflight', requireAuth, requireActiveSubscription, (req, res, nex
   remaining: req.usageContext?.remainingUploads || 0,
 }))
 
-router.post('/init', requireAuth, requireActiveSubscription, enforceUploadLimit, async (req, res) => {
+router.post('/init', requireAuth, requireActiveSubscription, validateChunkInitRequest, enforceUploadLimit, async (req, res) => {
   const quotaReservationId = req.usageContext?.quotaReservation?.id || null
   let quotaSettled = false
   try {
-    const { filename, fileSize, mimeType, jobDescriptionId, analysisId, analysisName, clientChunkSize } = req.body || {}
+    const { filename, mimeType, jobDescriptionId, analysisId, analysisName, clientChunkSize } = req.body || {}
     console.log(
       '[HireFlow] JD received at endpoint:',
       jobDescriptionId ? `${String(jobDescriptionId).slice(0, 80)}...` : 'NONE',
     )
 
-    if (!filename || !fileSize) {
-      return res.status(400).json({ error: 'filename and fileSize are required' })
-    }
-
-    const parsedSize = Number(fileSize)
-
-    if (Number.isNaN(parsedSize) || parsedSize <= 0) {
-      return res.status(400).json({ error: 'fileSize must be a positive number' })
-    }
-
-    if (parsedSize > MAX_FILE_SIZE_BYTES) {
-      return res.status(400).json({ error: 'Files above 25MB are not supported yet. Please compress the resume or upload a smaller PDF, DOC, or DOCX file.' })
-    }
-
     const session = await initChunkUpload({
       userId: req.userId,
       filename,
-      fileSize: parsedSize,
+      fileSize: req.chunkInitFileSize,
       mimeType,
       jobDescriptionId: jobDescriptionId || null,
       analysisId: analysisId || null,
