@@ -49,12 +49,41 @@ test('canceled subscription with future cancellationEffectiveAt has scheduled ca
   assert.equal(resolved.accessEndsAt, '2027-01-07T00:00:00.000Z')
 })
 
-test('cancelled subscription with future currentPeriodEnd uses it only as access end date', () => {
-  const resolved = state({ status: 'cancelled', plan: 'annual', currentPeriodEnd: FUTURE })
+test('explicit scheduled cancellation status can use a future currentPeriodEnd', () => {
+  const resolved = state({ status: 'cancellation_scheduled', plan: 'annual', currentPeriodEnd: FUTURE })
 
   assert.equal(resolved.isCancellationScheduled, true)
   assert.equal(resolved.hasActivePaidAccess, true)
   assert.equal(resolved.paidThroughDate, '2027-01-07T00:00:00.000Z')
+})
+
+test('terminal cancelled subscription does not use a stale future currentPeriodEnd', () => {
+  const resolved = state({
+    status: 'cancelled',
+    plan: 'annual',
+    cancellationEffectiveAt: PAST,
+    currentPeriodEnd: FUTURE,
+    hasHistoricalData: true,
+  })
+
+  assert.equal(resolved.statusLabel, 'Canceled')
+  assert.equal(resolved.isCancellationScheduled, false)
+  assert.equal(resolved.hasActivePaidAccess, false)
+  assert.equal(resolved.canUsePaidMutation, false)
+  assert.equal(resolved.isReadOnlyWorkspace, true)
+  assert.equal(resolved.accessEndsAt, null)
+})
+
+test('terminal canceled subscription without an effective date fails closed', () => {
+  const resolved = state({
+    status: 'canceled',
+    currentPeriodEnd: FUTURE,
+    hasHistoricalData: true,
+  })
+
+  assert.equal(resolved.hasActivePaidAccess, false)
+  assert.equal(resolved.canUsePaidMutation, false)
+  assert.equal(resolved.isReadOnlyWorkspace, true)
 })
 
 test('active subscription with cancelAtPeriodEnd and future cancellationEffectiveAt is scheduled', () => {
