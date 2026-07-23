@@ -351,13 +351,32 @@ export async function initChunkUpload({ userId, filename, fileSize, mimeType, jo
   const uploadId = crypto.randomUUID()
   const prefix = buildPrefix(userId, uploadId)
 
-  await pool.query(
+  const insertedUpload = await pool.query(
     `INSERT INTO upload_chunks
       (upload_id, user_id, filename, file_size, mime_type, total_chunks, uploaded_chunks, s3_prefix, status, job_description_id, analysis_id, quota_reservation_id, quota_recorded, file_identity, expires_at)
      VALUES
-      ($1, $2, $3, $4, $5, $6, $7::int[], $8, 'uploading', $9, $10, $11, false, $12, NOW() + INTERVAL '24 hours')`,
+      ($1, $2, $3, $4, $5, $6, $7::int[], $8, 'uploading', $9, $10, $11, false, $12, NOW() + INTERVAL '24 hours')
+     ON CONFLICT (user_id, file_identity)
+       WHERE file_identity IS NOT NULL AND status = 'uploading'
+     DO UPDATE SET file_identity = EXCLUDED.file_identity
+     RETURNING upload_id, total_chunks, uploaded_chunks, analysis_id,
+               quota_recorded, quota_reservation_id`,
     [uploadId, userId, safeFilename, fileSize, normalizedMimeType, totalChunks, [], prefix, jobDescriptionId, resolvedAnalysisId, quotaReservationId, normalizedFileIdentity || null],
   )
+
+  const storedUpload = insertedUpload.rows[0]
+  if (storedUpload && storedUpload.upload_id !== uploadId) {
+    return withChunkUploadQuotaState({
+      uploadId: storedUpload.upload_id,
+      totalChunks: Number(storedUpload.total_chunks),
+      uploadedChunks: storedUpload.uploaded_chunks || [],
+      resumed: true,
+      analysisId: storedUpload.analysis_id || '',
+    }, {
+      quotaRecorded: storedUpload.quota_recorded !== false,
+      quotaReservationId: storedUpload.quota_reservation_id || null,
+    })
+  }
 
   return withChunkUploadQuotaState({
     uploadId,

@@ -48,6 +48,24 @@ test('preflight reuses its idempotency key after a lost response', async (t) => 
   assert.equal(result.quotaIdempotencyKey, requestKeys[0])
 })
 
+test('preflight retains its idempotency key after success for reload recovery', async (t) => {
+  const requestKeys = []
+  t.mock.method(globalThis, 'fetch', async (_url, options) => {
+    requestKeys.push(JSON.parse(options.body).quotaIdempotencyKey)
+    return {
+      ok: true,
+      json: async () => ({ reservationId: '00000000-0000-4000-8000-000000000802' }),
+    }
+  })
+
+  const batchKey = `successful-batch-${Date.now()}`
+  await preflightResumeQuota({ apiBase: '/api', token: 'token', fileCount: 1, batchKey })
+  await preflightResumeQuota({ apiBase: '/api', token: 'token', fileCount: 1, batchKey })
+
+  assert.equal(requestKeys.length, 2)
+  assert.equal(requestKeys[0], requestKeys[1])
+})
+
 test('file identities distinguish same-named files within a stable batch', () => {
   const batchKey = buildResumeQuotaBatchKey({
     files: [

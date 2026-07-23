@@ -64,16 +64,6 @@ function retainPendingQuotaKey(batchKey, quotaIdempotencyKey) {
   }
 }
 
-function clearPendingQuotaKey(batchKey) {
-  const storageKey = quotaStorageKey(batchKey)
-  pendingQuotaKeys.delete(storageKey)
-  try {
-    globalThis.sessionStorage?.removeItem(storageKey)
-  } catch {
-    // Nothing else is required when session storage is unavailable.
-  }
-}
-
 export function buildResumeQuotaBatchKey({ files, context = '' }) {
   const fileSignature = (Array.isArray(files) ? files : []).map((file, index) => [
     index,
@@ -97,8 +87,10 @@ export async function preflightResumeQuota({ apiBase, token, fileCount, batchKey
     retainPendingQuotaKey(logicalBatchKey, quotaIdempotencyKey)
   }
 
-  // If fetch rejects, execution stops before clearPendingQuotaKey so a retry
-  // can recover a reservation whose response was lost.
+  // Keep the key after a successful response as well as after a lost one. A
+  // reload can happen after quota was reserved but before (or while) upload
+  // sessions are initialized, and the stable key is what lets that batch
+  // recover its already-counted reservation instead of requesting more quota.
   const response = await fetch(`${apiBase}/uploads/chunks/preflight`, {
     method: 'POST',
     headers: {
@@ -110,7 +102,6 @@ export async function preflightResumeQuota({ apiBase, token, fileCount, batchKey
   })
 
   const payload = await response.json().catch(() => ({}))
-  clearPendingQuotaKey(logicalBatchKey)
   if (!response.ok) {
     const error = new Error(payload.message || payload.error || 'Unable to reserve resume analysis quota')
     error.status = response.status
