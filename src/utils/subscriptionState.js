@@ -64,13 +64,30 @@ export function hasExplicitScheduledCancellationSignal(subscriptionStateOrSubscr
   )
 }
 
+function parseFutureDate(rawDate, comparisonDate) {
+  if (rawDate === undefined || rawDate === null || rawDate === '') return null
+
+  const endDate = new Date(rawDate)
+  if (Number.isNaN(endDate.getTime()) || endDate <= comparisonDate) return null
+  return endDate
+}
+
 export function getFutureSubscriptionEndDate(subscriptionStateOrSubscription, now = new Date()) {
   const comparisonDate = now instanceof Date ? now : new Date(now)
   if (Number.isNaN(comparisonDate.getTime())) return null
 
+  const status = getSubscriptionStatus(subscriptionStateOrSubscription)
+  const cancellationEffectiveAt = subscriptionStateOrSubscription?.cancellationEffectiveAt
+    ?? subscriptionStateOrSubscription?.cancellation_effective_at
+
+  // A terminal Paddle cancellation must not inherit access from a stale billing
+  // period. Only its explicit effective timestamp can prove paid-through access.
+  if (CANCELED_STATUSES.has(status)) {
+    return parseFutureDate(cancellationEffectiveAt, comparisonDate)
+  }
+
   const dateCandidates = [
-    subscriptionStateOrSubscription?.cancellationEffectiveAt,
-    subscriptionStateOrSubscription?.cancellation_effective_at,
+    cancellationEffectiveAt,
     subscriptionStateOrSubscription?.accessEndsAt,
     subscriptionStateOrSubscription?.access_ends_at,
     subscriptionStateOrSubscription?.paidThroughDate,
@@ -80,13 +97,8 @@ export function getFutureSubscriptionEndDate(subscriptionStateOrSubscription, no
   ]
 
   for (const rawDate of dateCandidates) {
-    if (rawDate === undefined || rawDate === null || rawDate === '') continue
-
-    const endDate = new Date(rawDate)
-    if (Number.isNaN(endDate.getTime())) continue
-    if (endDate <= comparisonDate) continue
-
-    return endDate
+    const endDate = parseFutureDate(rawDate, comparisonDate)
+    if (endDate) return endDate
   }
 
   return null
