@@ -226,9 +226,43 @@ test('requireActiveSubscription allows scheduled cancellation before effective d
   }
 })
 
-test('requireActiveSubscription blocks expired canceled subscribers from paid mutations', async () => {
+test('requireActiveSubscription blocks final cancellation despite a stale future current period', async () => {
   const originalQuery = pool.query
-  pool.query = async () => ({ rows: [{ id: 1, subscription_status: 'cancelled', cancellation_effective_at: '2025-01-01T00:00:00Z' }] })
+  pool.query = async () => ({
+    rows: [{
+      id: 1,
+      subscription_status: 'cancelled',
+      cancellation_effective_at: '2025-01-01T00:00:00Z',
+      current_period_end: '2099-01-01T00:00:00Z',
+    }],
+  })
+
+  try {
+    const req = { userId: 1 }
+    const res = createRes()
+    let nextCalled = false
+
+    await requireActiveSubscription(req, res, () => {
+      nextCalled = true
+    })
+
+    assert.equal(nextCalled, false)
+    assert.equal(res.statusCode, 403)
+    assert.equal(res.body.error, 'Subscription inactive')
+  } finally {
+    pool.query = originalQuery
+  }
+})
+
+test('requireActiveSubscription fails closed for terminal cancellation missing its effective date', async () => {
+  const originalQuery = pool.query
+  pool.query = async () => ({
+    rows: [{
+      id: 1,
+      subscription_status: 'canceled',
+      current_period_end: '2099-01-01T00:00:00Z',
+    }],
+  })
 
   try {
     const req = { userId: 1 }
