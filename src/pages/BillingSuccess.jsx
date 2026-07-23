@@ -5,6 +5,7 @@ import '../styles/checkout.css'
 import BillingStatusLayout from '../components/BillingStatusLayout'
 import API_BASE from '../config/api'
 import { hasActiveSubscription } from '../utils/routeGuards'
+import { syncCompletedCheckout } from '../utils/paddleSubscriptionSync'
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 const USER_STORAGE_KEY = 'hireflow_user_profile'
@@ -58,6 +59,8 @@ export default function BillingSuccess() {
       }
 
       try {
+        await syncCompletedCheckout({ apiBase: API_BASE, token, transactionId: transactionId || null })
+
         const response = await fetch(`${API_BASE}/auth/me`, {
           headers: { Authorization: `Bearer ${token}` },
         })
@@ -96,7 +99,7 @@ export default function BillingSuccess() {
       window.clearTimeout(pollTimer)
       window.clearTimeout(timeoutTimer)
     }
-  }, [retryCount])
+  }, [retryCount, transactionId])
 
   useEffect(() => {
     if (finalizingStatus !== 'active') {
