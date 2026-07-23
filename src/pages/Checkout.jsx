@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import usePageSeo from '../hooks/usePageSeo'
 import { resolveCheckoutCloseState } from './checkoutState'
 import API_BASE from '../config/api'
+import { syncCompletedCheckout } from '../utils/paddleSubscriptionSync'
 import '../styles/checkout.css'
 
 
@@ -168,9 +169,13 @@ export default function Checkout({ onAuthSuccess }) {
       }
     }
 
-    const syncSubscriptionAfterPayment = async (token, attempts = 8, delayMs = 1200) => {
+    const syncSubscriptionAfterPayment = async (token, completedTransactionId, attempts = 8, delayMs = 1200) => {
       for (let attempt = 1; attempt <= attempts; attempt += 1) {
         try {
+          if (completedTransactionId) {
+            await syncCompletedCheckout({ apiBase: API_BASE, token, transactionId: completedTransactionId })
+          }
+
           const result = await verifySubscriptionStatus(token)
 
           if (result.isActive) {
@@ -178,6 +183,7 @@ export default function Checkout({ onAuthSuccess }) {
               attempt,
               status: result.subscriptionStatus,
             })
+            sessionStorage.removeItem(PADDLE_LAST_TRANSACTION_STORAGE_KEY)
             return result
           }
 
@@ -419,7 +425,10 @@ export default function Checkout({ onAuthSuccess }) {
           }
 
           try {
-            const { user, isActive } = await verifySubscriptionStatus(token)
+            const syncResult = closedTransactionId
+              ? await syncSubscriptionAfterPayment(token, closedTransactionId)
+              : await verifySubscriptionStatus(token)
+            const { user, isActive } = syncResult || {}
             const outcome = resolveCheckoutCloseState({ isActiveSubscription: isActive, verificationFailed: false })
 
             if (outcome.nextStatus === 'success') {
@@ -503,7 +512,7 @@ export default function Checkout({ onAuthSuccess }) {
               }
 
               closePaddleCheckout()
-              const synced = await syncSubscriptionAfterPayment(token)
+              const synced = await syncSubscriptionAfterPayment(token, completionTransactionId)
 
               if (synced?.isActive) {
                 persistActiveSubscription(token, synced.user, '/billing/success')
@@ -534,7 +543,6 @@ export default function Checkout({ onAuthSuccess }) {
 
     return () => {
       isUnmounted = true
-      sessionStorage.removeItem(PADDLE_LAST_TRANSACTION_STORAGE_KEY)
 
       if (typeof paddleRef?.Checkout?.removeEventListener === 'function') {
         try {
@@ -560,6 +568,11 @@ export default function Checkout({ onAuthSuccess }) {
 
     const pollInterval = setInterval(async () => {
       try {
+        const pendingTransactionId = transactionId || sessionStorage.getItem(PADDLE_LAST_TRANSACTION_STORAGE_KEY)
+        if (pendingTransactionId) {
+          await syncCompletedCheckout({ apiBase: API_BASE, token, transactionId: pendingTransactionId })
+        }
+
         const response = await fetch(`${API_BASE}/auth/me`, {
           headers: { Authorization: `Bearer ${token}` },
         })

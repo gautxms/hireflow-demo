@@ -1424,3 +1424,188 @@ test('POST /api/paddle/webhook transaction.completed keeps setting user active',
   assert.match(activeUpdate.sql, /quota_anchor_at = COALESCE/)
   assert.equal(activeUpdate.params[7], '2026-07-24T00:00:00.000Z')
 })
+
+test('POST /api/paddle/webhook lets a completed new Monthly checkout replace a terminally cancelled Annual lifecycle', async (t) => {
+  const payload = {
+    event_id: 'evt_returning_monthly_completed',
+    event_type: 'transaction.completed',
+    data: {
+      id: 'txn_returning_monthly',
+      subscription_id: 'sub_new_monthly',
+      customer_id: 'ctm_test_123',
+      custom_data: { userId: 42, plan: 'monthly', paddleEnvironment: 'sandbox', trialEligible: false, checkoutMode: 'paid_returning' },
+      billing_period: {
+        starts_at: '2026-07-23T00:00:00.000Z',
+        ends_at: '2026-08-23T00:00:00.000Z',
+      },
+      items: [{ price: { id: 'pri_monthly' }, quantity: 1 }],
+    },
+  }
+  const rawBody = JSON.stringify(payload)
+  const calls = []
+
+  t.mock.method(pool, 'query', async (sql, params) => {
+    calls.push({ sql: String(sql), params })
+    if (String(sql).includes('FROM paddle_webhook_events')) return { rowCount: 0, rows: [] }
+    if (String(sql).includes('FROM users')) {
+      return {
+        rowCount: 1,
+        rows: [{
+          id: 42,
+          paddle_customer_id: 'ctm_test_123',
+          paddle_subscription_id: 'sub_old_annual',
+          subscription_status: 'cancelled',
+          subscription_plan: 'annual',
+          cancellation_effective_at: '2026-07-23T00:00:00.000Z',
+          current_period_end: '2027-07-21T00:00:00.000Z',
+        }],
+      }
+    }
+    return { rowCount: 1, rows: [] }
+  })
+
+  const { response } = await postWebhook({ body: rawBody, signature: signBody(rawBody) })
+
+  assert.equal(response.status, 200)
+  const activeUpdate = calls.find(({ sql }) => /UPDATE users[\s\S]+subscription_status = 'active'/.test(sql))
+  assert.equal(activeUpdate.params[1], 'sub_new_monthly')
+  assert.equal(activeUpdate.params[3], 'monthly')
+  assert.equal(activeUpdate.params[4], '2026-08-23T00:00:00.000Z')
+  assert.match(activeUpdate.sql, /\$2 IS DISTINCT FROM paddle_subscription_id/)
+  assert.match(activeUpdate.sql, /\$4 IS NOT NULL/)
+  assert.match(activeUpdate.sql, /\$5::timestamp IS NOT NULL/)
+  assert.match(activeUpdate.sql, /LOWER\(COALESCE\(subscription_status, ''\)\) IN \('canceled', 'cancelled'\)/)
+  assert.match(activeUpdate.sql, /cancellation_effective_at = CASE/)
+  assert.match(activeUpdate.sql, /cancellation_reason = CASE/)
+})
+
+test('POST /api/paddle/webhook returns retryable failure if a completed returning checkout cannot replace final cancellation', async (t) => {
+  const payload = {
+    event_id: 'evt_returning_monthly_zero_rows',
+    event_type: 'transaction.completed',
+    data: {
+      id: 'txn_returning_zero_rows',
+      subscription_id: 'sub_new_monthly',
+      customer_id: 'ctm_test_123',
+      custom_data: { userId: 42, plan: 'monthly', paddleEnvironment: 'sandbox', trialEligible: false, checkoutMode: 'paid_returning' },
+      billing_period: { ends_at: '2026-08-23T00:00:00.000Z' },
+      items: [{ price: { id: 'pri_monthly' }, quantity: 1 }],
+    },
+  }
+  const rawBody = JSON.stringify(payload)
+
+  t.mock.method(pool, 'query', async (sql) => {
+    if (String(sql).includes('FROM paddle_webhook_events')) return { rowCount: 0, rows: [] }
+    if (String(sql).includes('FROM users')) {
+      return {
+        rowCount: 1,
+        rows: [{
+          id: 42,
+          paddle_customer_id: 'ctm_test_123',
+          paddle_subscription_id: 'sub_old_annual',
+          subscription_status: 'cancelled',
+          cancellation_effective_at: '2026-07-23T00:00:00.000Z',
+        }],
+      }
+    }
+    if (/UPDATE users[\s\S]+subscription_status = 'active'/.test(String(sql))) {
+      return { rowCount: 0, rows: [] }
+    }
+    return { rowCount: 1, rows: [] }
+  })
+
+  const { response, payload: responsePayload } = await postWebhook({ body: rawBody, signature: signBody(rawBody) })
+
+  assert.equal(response.status, 500)
+  assert.equal(responsePayload.error, 'Webhook processing failed')
+})
+
+test('POST /api/paddle/webhook prevents an old cancellation event from cancelling a newer active subscription', async (t) => {
+  const payload = {
+    event_id: 'evt_old_annual_cancelled_late',
+    event_type: 'subscription.canceled',
+    data: {
+      id: 'sub_old_annual',
+      status: 'canceled',
+      customer_id: 'ctm_test_123',
+      custom_data: { userId: 42, paddleEnvironment: 'sandbox' },
+      canceled_at: '2026-07-23T00:00:00.000Z',
+      current_billing_period: { ends_at: '2027-07-21T00:00:00.000Z' },
+    },
+  }
+  const rawBody = JSON.stringify(payload)
+  const calls = []
+
+  t.mock.method(pool, 'query', async (sql, params) => {
+    calls.push({ sql: String(sql), params })
+    if (String(sql).includes('FROM paddle_webhook_events')) return { rowCount: 0, rows: [] }
+    if (String(sql).includes('FROM users')) {
+      return {
+        rowCount: 1,
+        rows: [{
+          id: 42,
+          paddle_customer_id: 'ctm_test_123',
+          paddle_subscription_id: 'sub_new_monthly',
+          subscription_status: 'active',
+        }],
+      }
+    }
+    if (/UPDATE users[\s\S]+subscription_status = 'cancelled'/.test(String(sql))) {
+      return { rowCount: 0, rows: [] }
+    }
+    return { rowCount: 1, rows: [] }
+  })
+
+  const { response } = await postWebhook({ body: rawBody, signature: signBody(rawBody) })
+
+  assert.equal(response.status, 200)
+  const cancellationUpdate = calls.find(({ sql }) => /UPDATE users[\s\S]+subscription_status = 'cancelled'/.test(sql))
+  assert.equal(cancellationUpdate.params[1], 'sub_old_annual')
+  assert.match(cancellationUpdate.sql, /paddle_subscription_id = \$2/)
+})
+
+test('POST /api/paddle/webhook prevents a delayed active update from reviving the same finally cancelled lifecycle', async (t) => {
+  const payload = buildSubscriptionUpdatedPayload({
+    event_id: 'evt_old_active_update_after_final_cancel',
+    data: {
+      ...buildSubscriptionUpdatedPayload().data,
+      id: 'sub_old_annual',
+      custom_data: { userId: 42, plan: 'annual', paddleEnvironment: 'sandbox' },
+      items: [{ price: { id: 'pri_annual' }, quantity: 1 }],
+      current_billing_period: {
+        starts_at: '2026-07-21T00:00:00.000Z',
+        ends_at: '2027-07-21T00:00:00.000Z',
+      },
+      next_billed_at: '2027-07-21T00:00:00.000Z',
+    },
+  })
+  const rawBody = JSON.stringify(payload)
+  const calls = []
+
+  t.mock.method(pool, 'query', async (sql, params) => {
+    calls.push({ sql: String(sql), params })
+    if (String(sql).includes('FROM paddle_webhook_events')) return { rowCount: 0, rows: [] }
+    if (String(sql).includes('FROM users')) {
+      return {
+        rowCount: 1,
+        rows: [{
+          id: 42,
+          paddle_customer_id: 'ctm_test_123',
+          paddle_subscription_id: 'sub_old_annual',
+          subscription_status: 'cancelled',
+          subscription_plan: 'annual',
+          cancellation_effective_at: '2026-07-23T00:00:00.000Z',
+        }],
+      }
+    }
+    if (/UPDATE users/.test(String(sql))) return { rowCount: 0, rows: [] }
+    return { rowCount: 1, rows: [] }
+  })
+
+  const { response } = await postWebhook({ body: rawBody, signature: signBody(rawBody) })
+
+  assert.equal(response.status, 200)
+  const update = userUpdateCalls(calls)[0]
+  assert.match(update.sql, /AND NOT \(\s+LOWER\(COALESCE\(subscription_status, ''\)\) IN \('canceled', 'cancelled'\)/)
+  assert.equal(update.params[1], 'sub_old_annual')
+})
