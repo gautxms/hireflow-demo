@@ -4,6 +4,7 @@ import BackButton from '../components/BackButton'
 import StatePattern from '../components/state/StatePattern'
 import API_BASE from '../config/api'
 import { canRenderBillingPage, resolveSubscriptionState } from '../utils/subscriptionState'
+import { syncCompletedCheckout } from '../utils/paddleSubscriptionSync'
 import { canShowCancelAction, getBillingMetadataRows, getBillingPlanAction, getBillingStatusLabel, getCancelActionLabel, getCancellationAccessMessage, getCancellationSuccessMessage, getPastDueBillingNotice, shouldRenderBillingHistory } from './billingPageActions'
 import '../styles/billing.css'
 import '../styles/checkout.css'
@@ -100,6 +101,11 @@ export default function BillingPage() {
     try {
       setLoading(true)
       setError('')
+      try {
+        await syncCompletedCheckout({ apiBase: API_BASE, token })
+      } catch (syncError) {
+        console.warn('[BillingPage] Completed checkout reconciliation is not available yet', syncError)
+      }
       const subRes = await fetch(`${API_BASE}/subscriptions/current`, { headers: { Authorization: `Bearer ${token}` } })
       const subPayload = await subRes.json().catch(() => ({}))
 
