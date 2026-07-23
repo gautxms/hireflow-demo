@@ -64,13 +64,37 @@ export function hasExplicitScheduledCancellationSignal(subscriptionStateOrSubscr
   )
 }
 
+function parseFutureDate(rawDate, comparisonDate) {
+  if (rawDate === undefined || rawDate === null || rawDate === '') return null
+
+  const endDate = new Date(rawDate)
+  if (Number.isNaN(endDate.getTime()) || endDate <= comparisonDate) return null
+  return endDate
+}
+
 export function getFutureSubscriptionEndDate(subscriptionStateOrSubscription, now = new Date()) {
   const comparisonDate = now instanceof Date ? now : new Date(now)
   if (Number.isNaN(comparisonDate.getTime())) return null
 
+  const status = getSubscriptionStatus(subscriptionStateOrSubscription)
+  const cancellationEffectiveAt = subscriptionStateOrSubscription?.cancellationEffectiveAt
+    ?? subscriptionStateOrSubscription?.cancellation_effective_at
+
+  const hasCancellationEffectiveAt = cancellationEffectiveAt !== undefined
+    && cancellationEffectiveAt !== null
+    && cancellationEffectiveAt !== ''
+
+  // An explicit cancellation-effective timestamp is authoritative for every
+  // cancellation signal. A terminal canceled status without one fails closed.
+  if (
+    CANCELED_STATUSES.has(status)
+    || (hasCancellationEffectiveAt && hasExplicitScheduledCancellationSignal(subscriptionStateOrSubscription))
+  ) {
+    return parseFutureDate(cancellationEffectiveAt, comparisonDate)
+  }
+
   const dateCandidates = [
-    subscriptionStateOrSubscription?.cancellationEffectiveAt,
-    subscriptionStateOrSubscription?.cancellation_effective_at,
+    cancellationEffectiveAt,
     subscriptionStateOrSubscription?.accessEndsAt,
     subscriptionStateOrSubscription?.access_ends_at,
     subscriptionStateOrSubscription?.paidThroughDate,
@@ -80,13 +104,8 @@ export function getFutureSubscriptionEndDate(subscriptionStateOrSubscription, no
   ]
 
   for (const rawDate of dateCandidates) {
-    if (rawDate === undefined || rawDate === null || rawDate === '') continue
-
-    const endDate = new Date(rawDate)
-    if (Number.isNaN(endDate.getTime())) continue
-    if (endDate <= comparisonDate) continue
-
-    return endDate
+    const endDate = parseFutureDate(rawDate, comparisonDate)
+    if (endDate) return endDate
   }
 
   return null

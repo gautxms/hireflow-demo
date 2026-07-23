@@ -38,14 +38,47 @@ test('read-only access helper keeps future scheduled cancellation full access', 
   assert.equal(isReadOnlyWorkspaceAccess(user, { hasHistoricalData: true, now: NOW }), false)
 })
 
-test('read-only access helper requires historical data after cancellation access ends', () => {
+test('read-only access helper treats final cancellation as terminal despite a stale future period', () => {
   for (const status of ['canceled', 'cancelled']) {
-    const user = { subscription_status: status, cancellation_effective_at: PAST }
+    const user = {
+      subscription_status: status,
+      cancellation_effective_at: PAST,
+      current_period_end: FUTURE,
+    }
 
     assert.equal(hasActivePaidAccess(user, NOW), false)
     assert.equal(canUsePaidMutation(user, NOW), false)
     assert.equal(isReadOnlyWorkspaceAccess(user, { hasHistoricalData: false, now: NOW }), false)
     assert.equal(isReadOnlyWorkspaceAccess(user, { hasHistoricalData: true, now: NOW }), true)
+  }
+})
+
+test('expired authoritative cancellation date is not replaced by a later period end', () => {
+  const user = {
+    subscription_status: 'cancellation_scheduled',
+    cancellation_effective_at: PAST,
+    current_period_end: FUTURE,
+  }
+
+  assert.equal(hasScheduledCancellationAccess(user, NOW), false)
+  assert.equal(canUsePaidMutation(user, NOW), false)
+})
+
+test('terminal cancellation without an effective date fails closed', () => {
+  for (const status of ['canceled', 'cancelled']) {
+    const user = { subscription_status: status, current_period_end: FUTURE }
+
+    assert.equal(hasActivePaidAccess(user, NOW), false)
+    assert.equal(canUsePaidMutation(user, NOW), false)
+  }
+})
+
+test('explicit scheduled cancellation statuses can use a future current period', () => {
+  for (const status of ['cancel_scheduled', 'cancellation_scheduled', 'pending_cancellation', 'scheduled_cancellation']) {
+    const user = { subscription_status: status, current_period_end: FUTURE }
+
+    assert.equal(hasScheduledCancellationAccess(user, NOW), true)
+    assert.equal(canUsePaidMutation(user, NOW), true)
   }
 })
 
