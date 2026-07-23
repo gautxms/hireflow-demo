@@ -9,7 +9,11 @@ process.env.JWT_SECRET = 'test-secret'
 process.env.AWS_S3_BUCKET = process.env.AWS_S3_BUCKET || 'test-bucket'
 process.env.AWS_REGION = process.env.AWS_REGION || 'us-east-1'
 
-const { default: uploadChunksRouter } = await import('./uploadChunks.js')
+const {
+  default: uploadChunksRouter,
+  shouldReleaseReservationAfterInitError,
+  shouldReleaseReservationForRecordedSession,
+} = await import('./uploadChunks.js')
 const { parseQueue } = await import('../services/jobQueue.js')
 
 after(async () => {
@@ -66,6 +70,39 @@ function mockChunkUploadQueries(t, handler) {
   t.mock.method(pool, 'connect', async () => ({ query: execute, release() {} }))
   return queries
 }
+
+test('same-reservation init retries preserve sibling units', () => {
+  assert.equal(shouldReleaseReservationForRecordedSession({
+    suppliedReservationId: 'reservation-batch',
+    sessionQuotaState: {
+      quotaRecorded: true,
+      quotaReservationId: 'reservation-batch',
+    },
+  }), false)
+
+  assert.equal(shouldReleaseReservationForRecordedSession({
+    suppliedReservationId: 'reservation-retry',
+    sessionQuotaState: {
+      quotaRecorded: true,
+      quotaReservationId: 'reservation-original',
+    },
+  }), true)
+})
+
+test('quota allocation failures retain the reserved unit for an idempotent retry', () => {
+  assert.equal(shouldReleaseReservationAfterInitError({
+    suppliedReservationId: 'reservation-batch',
+    sessionQuotaState: {
+      quotaRecorded: false,
+      quotaReservationId: 'reservation-batch',
+    },
+  }), false)
+
+  assert.equal(shouldReleaseReservationAfterInitError({
+    suppliedReservationId: 'reservation-batch',
+    sessionQuotaState: null,
+  }), true)
+})
 
 test('POST /api/uploads/chunks/init requires authentication', async (t) => {
   const queries = mockChunkUploadQueries(t, () => ({ rows: [] }))

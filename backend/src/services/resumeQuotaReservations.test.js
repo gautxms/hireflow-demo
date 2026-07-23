@@ -228,7 +228,9 @@ test('chunk allocation records usage, session state, and reservation consumption
 
   assert.equal(result.status, 'consumed')
   assert.equal(calls.some(({ sql }) => sql.includes('INSERT INTO usage_log')), true)
-  assert.equal(calls.some(({ sql }) => sql.includes('quota_recorded = true')), true)
+  const uploadClaim = calls.find(({ sql }) => sql.includes('quota_recorded = true'))
+  assert.ok(uploadClaim)
+  assert.match(uploadClaim.sql, /quota_reservation_id = \$3/)
   assert.equal(calls.at(-1).sql, 'COMMIT')
 })
 

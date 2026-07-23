@@ -257,7 +257,7 @@ export async function consumeResumeQuotaReservation({
       const uploadUpdate = await client.query(
         `UPDATE upload_chunks
          SET quota_recorded = true,
-             quota_reservation_id = COALESCE(quota_reservation_id, $3),
+             quota_reservation_id = $3,
              updated_at = NOW()
          WHERE upload_id = $1
            AND user_id = $2

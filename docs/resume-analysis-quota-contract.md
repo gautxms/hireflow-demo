@@ -94,7 +94,10 @@ with this contract only after atomic reservations exist.
   same-named, same-sized files in distinct sessions while making a lost init
   response safely resumable.
 - A new upload session converts one reserved unit into the existing `usage_log`
-  record; a resumed session releases that unit.
+  record. Retrying that session with the same reservation is a no-op, while a
+  retry carrying a different reservation releases only the newly supplied unit.
+- If quota allocation fails after the upload session is created, its reserved
+  unit remains attached so the stable file identity can retry idempotently.
 - The current calendar-month limit, admin overrides, and pre-provider counting
   semantics remain authoritative. Billing-period enforcement and provider-start
   accounting remain PR 3 work.

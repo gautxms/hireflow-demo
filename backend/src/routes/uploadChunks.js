@@ -24,6 +24,27 @@ import {
 const router = Router()
 const MAX_BATCH_FILE_COUNT = 20
 
+export function shouldReleaseReservationForRecordedSession({
+  suppliedReservationId,
+  sessionQuotaState,
+}) {
+  return Boolean(
+    suppliedReservationId
+    && sessionQuotaState?.quotaRecorded === true
+    && sessionQuotaState.quotaReservationId !== suppliedReservationId
+  )
+}
+
+export function shouldReleaseReservationAfterInitError({
+  suppliedReservationId,
+  sessionQuotaState,
+}) {
+  return Boolean(
+    suppliedReservationId
+    && sessionQuotaState?.quotaRecorded !== false
+  )
+}
+
 const chunkUpload = multer({
   storage: multer.memoryStorage(),
   limits: {
@@ -119,6 +140,7 @@ router.post('/reservations/:reservationId/release', requireAuth, async (req, res
 router.post('/init', requireAuth, requireActiveSubscription, validateChunkInitRequest, enforceUploadLimit, async (req, res) => {
   const quotaReservationId = req.usageContext?.quotaReservation?.id || null
   let quotaSettled = false
+  let sessionQuotaState = null
   try {
     const { filename, mimeType, jobDescriptionId, analysisId, analysisName, clientChunkSize, fileIdentity } = req.body || {}
     console.log(
@@ -138,7 +160,7 @@ router.post('/init', requireAuth, requireActiveSubscription, validateChunkInitRe
       quotaReservationId,
       fileIdentity,
     })
-    const sessionQuotaState = getChunkUploadQuotaState(session)
+    sessionQuotaState = getChunkUploadQuotaState(session)
 
     if (sessionQuotaState.quotaRecorded !== true) {
       if (quotaReservationId) {
@@ -158,7 +180,10 @@ router.post('/init', requireAuth, requireActiveSubscription, validateChunkInitRe
           ipAddress: req.usageContext.ipAddress,
         })
       }
-    } else if (quotaReservationId) {
+    } else if (shouldReleaseReservationForRecordedSession({
+      suppliedReservationId: quotaReservationId,
+      sessionQuotaState,
+    })) {
       await releaseResumeQuotaReservation({
         userId: req.userId,
         reservationId: quotaReservationId,
@@ -169,7 +194,10 @@ router.post('/init', requireAuth, requireActiveSubscription, validateChunkInitRe
 
     return res.json(session)
   } catch (error) {
-    if (quotaReservationId && !quotaSettled) {
+    if (!quotaSettled && shouldReleaseReservationAfterInitError({
+      suppliedReservationId: quotaReservationId,
+      sessionQuotaState,
+    })) {
       try {
         await releaseResumeQuotaReservation({
           userId: req.userId,
