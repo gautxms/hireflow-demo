@@ -29,24 +29,35 @@ test('past_due billing state shows payment-required support notice without a pri
   assert.equal(getPastDueBillingNotice(), 'Payment is required to continue. Your workspace is read-only until the overdue payment is completed securely through Paddle.')
 })
 
-test('past_due metadata replaces renewal language with payment labels without workspace access duplication', () => {
+test('past_due metadata shows the authoritative retry timestamp without workspace access duplication', () => {
   const rows = getBillingMetadataRows(
     { isPastDue: true, canManageBilling: true },
-    { status: 'past_due', nextBillingDate: '2026-07-15T00:00:00Z', renewalDate: '2026-08-15T00:00:00Z', paymentMethod: 'Card on file' },
-    () => '7/15/2026',
+    {
+      status: 'past_due',
+      nextBillingDate: '2026-08-15T00:00:00Z',
+      nextRetryAt: '2026-07-03T01:00:00Z',
+      renewalDate: '2026-08-15T00:00:00Z',
+      paymentMethod: 'Card on file',
+    },
+    () => 'date only',
     NOW,
+    () => '7/3/2026, 6:30 AM',
   )
 
   assert.deepEqual(rows.map((row) => row.label), ['Retry date', 'Payment method'])
+  assert.equal(rows[0].value, '7/3/2026, 6:30 AM')
   assert.equal(rows[1].value, 'Card on file')
   assert.equal(rows.some((row) => row.label === 'Workspace access'), false)
 })
 
-
-test('past_due metadata uses payment due when retry date is missing', () => {
+test('past_due metadata does not relabel the next billing cycle as a retry date', () => {
   const rows = getBillingMetadataRows(
     { isPastDue: true, canManageBilling: true },
-    { status: 'past_due', paymentMethod: 'Visa ending in 4242' },
+    {
+      status: 'past_due',
+      nextBillingDate: '2026-08-15T00:00:00Z',
+      paymentMethod: 'Visa ending in 4242',
+    },
     () => 'formatted date',
     NOW,
   )
@@ -56,15 +67,36 @@ test('past_due metadata uses payment due when retry date is missing', () => {
   assert.equal(rows[1].value, 'Visa ending in 4242')
 })
 
+test('past_due metadata treats a malformed or elapsed retry timestamp as due now', () => {
+  for (const nextRetryAt of ['not-a-date', '2026-07-02T23:59:59Z']) {
+    const rows = getBillingMetadataRows(
+      { isPastDue: true, canManageBilling: true },
+      { status: 'past_due', nextRetryAt, paymentMethod: 'Card on file' },
+      () => 'date only',
+      NOW,
+      () => 'formatted retry',
+    )
+
+    assert.deepEqual(rows[0], { label: 'Payment due', value: 'Now' })
+  }
+})
+
 test('payment_failed metadata matches past_due compact payment rows', () => {
   const rows = getBillingMetadataRows(
     { rawStatus: 'payment_failed', canManageBilling: true },
-    { status: 'payment_failed', nextBillingDate: '2026-07-15T00:00:00Z', paymentMethod: 'Mastercard ending in 5555' },
-    () => '7/15/2026',
+    {
+      status: 'payment_failed',
+      nextBillingDate: '2026-08-15T00:00:00Z',
+      nextRetryAt: '2026-07-03T01:00:00Z',
+      paymentMethod: 'Mastercard ending in 5555',
+    },
+    () => 'date only',
     NOW,
+    () => '7/3/2026, 6:30 AM',
   )
 
   assert.deepEqual(rows.map((row) => row.label), ['Retry date', 'Payment method'])
+  assert.equal(rows[0].value, '7/3/2026, 6:30 AM')
   assert.equal(rows.some((row) => row.label === 'Workspace access'), false)
 })
 
