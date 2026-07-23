@@ -428,6 +428,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
       const queuedJobs = []
       let analysisId = ''
       let quotaReservationId = null
+      const skippedUploadFilenames = []
 
       try {
         const quotaPreflight = await preflightResumeQuota({
@@ -488,9 +489,28 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
         // before their sessions are initialized.
         const firstUpload = await initializeUpload(uploadedFiles[0], analysisId)
         analysisId = analysisId || firstUpload.analysisId
-        const remainingUploads = await Promise.all(
+        const remainingUploadResults = await Promise.allSettled(
           uploadedFiles.slice(1).map((entry) => initializeUpload(entry, analysisId)),
         )
+        const remainingUploads = []
+
+        remainingUploadResults.forEach((result, index) => {
+          if (result.status === 'fulfilled') {
+            remainingUploads.push(result.value)
+            return
+          }
+
+          const filename = uploadedFiles[index + 1]?.file?.name || 'Unknown file'
+          skippedUploadFilenames.push(filename)
+          console.warn(`[HireFlow] Skipping upload after session initialization failed: ${filename}`, result.reason)
+        })
+
+        if (skippedUploadFilenames.length > 0) {
+          emitTelemetry('analysis_upload_init_partial_failure', {
+            failedCount: skippedUploadFilenames.length,
+            acceptedCount: 1 + remainingUploads.length,
+          })
+        }
 
         for (const uploadSession of [firstUpload, ...remainingUploads]) {
           const {
@@ -602,6 +622,13 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
       } else {
         emitTelemetry('analysis_enqueue_success', { analysisId, fileCount: validQueuedJobs.length })
         await trackParseStatus({ token, jobs: validQueuedJobs, analysisId })
+      }
+
+      if (mountedRef.current && skippedUploadFilenames.length > 0) {
+        const visibleNames = skippedUploadFilenames.slice(0, 3).join(', ')
+        const remainingCount = skippedUploadFilenames.length - Math.min(skippedUploadFilenames.length, 3)
+        const remainingLabel = remainingCount > 0 ? ` and ${remainingCount} more` : ''
+        setError(`Analysis completed, but ${visibleNames}${remainingLabel} could not be uploaded. Please retry those files.`)
       }
     } catch (err) {
       if (err?.name === 'AbortError') {
