@@ -85,6 +85,38 @@ test('different normalized reasons triggers one final primary retry', async () =
   assert.equal(primaryCalls, 2)
 })
 
+test('provider-start hook runs once across fallback and retry attempts', async () => {
+  const providerStarts = []
+
+  await assert.rejects(async () => analyzeResumeWithConfiguredFallback(
+    FIXTURE_B64,
+    'application/pdf',
+    'r.txt',
+    {
+      credentials: buildCredentials(),
+      systemPromptConfig: { promptVersion: 1, isDefaultFallback: false },
+      onProviderAttemptStart: async (metadata) => {
+        providerStarts.push(metadata)
+      },
+      analyzeWithAnthropic: async () => {
+        throw new Error('response_truncated_error::truncated')
+      },
+      analyzeWithOpenAI: async () => {
+        throw new Error('timeout_error::provider timeout')
+      },
+    },
+  ))
+
+  assert.equal(providerStarts.length, 1)
+  assert.deepEqual(providerStarts[0], {
+    provider: 'anthropic',
+    model: 'm1',
+    keyLabel: 'primary',
+    role: 'primary',
+    attemptNumber: 1,
+  })
+})
+
 
 test('AI_MAX_PROVIDER_ATTEMPTS_PER_FILE=1 does not invoke fallback', async () => {
   const prev = process.env.AI_MAX_PROVIDER_ATTEMPTS_PER_FILE

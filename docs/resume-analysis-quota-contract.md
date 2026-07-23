@@ -16,6 +16,11 @@ controlled verification, classic multipart uploads reserve their full batch in
 one transaction. Chunked uploads call a batch preflight endpoint before any
 session is initialized and allocate one reserved unit per new session.
 
+PR 3 completes provider-start accounting behind that same disabled-by-default
+flag. On the flagged path, billing-anniversary periods are authoritative,
+reserved files receive idempotent allocation records, and usage is consumed
+immediately before the first external AI-provider attempt.
+
 ## Period contract
 
 - Quota periods use UTC timestamps with an inclusive start and exclusive end.
@@ -72,9 +77,8 @@ The target accounting contract for the reservation and enforcement phases is:
   has started.
 - Admin overrides remain supported and must be auditable.
 
-The current production counter records accepted uploads before scanning and AI
-processing. That behavior is intentionally unchanged in PR 1 and will be aligned
-with this contract only after atomic reservations exist.
+The legacy path continues to record accepted uploads before scanning. It remains
+the immediate rollback path while `RESUME_QUOTA_RESERVATIONS_ENABLED=false`.
 
 ## PR 2 reservation behavior
 
@@ -93,14 +97,34 @@ with this contract only after atomic reservations exist.
 - Each file receives a stable identity within its logical batch. This keeps
   same-named, same-sized files in distinct sessions while making a lost init
   response safely resumable.
-- A new upload session converts one reserved unit into the existing `usage_log`
-  record. Retrying that session with the same reservation is a no-op, while a
-  retry carrying a different reservation releases only the newly supplied unit.
+- A new upload session allocates one reserved unit without writing `usage_log`.
+  Retrying that session with the same reservation is a no-op, while a retry
+  carrying a different reservation releases only the newly supplied unit.
 - If quota allocation fails after the upload session is created, its reserved
   unit remains attached so the stable file identity can retry idempotently.
-- The current calendar-month limit, admin overrides, and pre-provider counting
-  semantics remain authoritative. Billing-period enforcement and provider-start
-  accounting remain PR 3 work.
+- While the rollout flag is off, the current calendar-month limit and
+  pre-provider counting semantics remain authoritative.
+
+## PR 3 provider-start behavior
+
+- The rollout remains disabled by default and uses
+  `RESUME_QUOTA_RESERVATIONS_ENABLED` as the kill switch.
+- Paid monthly and annual users with a trustworthy billing anchor are enforced
+  against monthly anniversary periods. Trials and legacy accounts without an
+  anchor retain the UTC calendar fallback.
+- Each accepted file has one durable allocation shared by worker retries and
+  provider fallbacks.
+- Validation, malware scanning, abandoned upload sessions, enqueue failures,
+  analysis cancellation, and terminal local extraction failures release an
+  unconsumed allocation.
+- The provider orchestration hook consumes the allocation once, immediately
+  before its first external provider adapter call.
+- Provider fallback, token-budget retries, queue retries, and worker restarts
+  reuse the consumed allocation and cannot write a second usage row.
+- Once the provider-start transaction commits, a later provider or persistence
+  failure remains one consumed unit.
+- The usage API reads the same period and ledger-backed count as enforcement
+  whenever the rollout flag is enabled.
 
 ## PR 1 shadow-mode behavior
 

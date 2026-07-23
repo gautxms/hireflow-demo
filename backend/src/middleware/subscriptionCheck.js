@@ -12,7 +12,6 @@ import {
 } from '../utils/resumeQuotaPeriod.js'
 import {
   assertResumeQuotaReservationAvailable,
-  consumeResumeQuotaReservation,
   isResumeQuotaReservationsEnabled,
   reserveResumeQuotaUnits,
   ResumeQuotaExceededError,
@@ -59,8 +58,14 @@ export async function getUsageCountForPeriod(userId, periodStart, periodEnd, sho
     `SELECT COUNT(*)::INT AS usage_count
      FROM usage_log
      WHERE user_id = $1
-       AND created_at >= $2
-       AND created_at < $3`,
+       AND (
+         (quota_allocation_id IS NOT NULL AND month_start = $2::date)
+         OR (
+           quota_allocation_id IS NULL
+           AND created_at >= $2
+           AND created_at < $3
+         )
+       )`,
     [userId, periodStart, periodEnd],
   )
 
@@ -191,27 +196,68 @@ export async function requireActiveSubscription(req, res, next) {
 
 export async function enforceUploadLimit(req, res, next) {
   try {
-    const monthStart = getMonthStart()
-    const monthEnd = new Date(Date.UTC(monthStart.getUTCFullYear(), monthStart.getUTCMonth() + 1, 1))
+    const legacyMonthStart = getMonthStart()
+    const legacyMonthEnd = new Date(Date.UTC(
+      legacyMonthStart.getUTCFullYear(),
+      legacyMonthStart.getUTCMonth() + 1,
+      1,
+    ))
     const ipAddress = req.ip || req.headers['x-forwarded-for'] || 'unknown'
-    const usageOverride = await getUsageOverride(req.userId, monthStart)
+    const usageOverride = await getUsageOverride(req.userId, legacyMonthStart)
     const quotaSubscriptionStatus = req.subscriptionStatusForQuota || req.subscriptionStatus
     const uploadLimit = resolveMonthlyResumeAnalysisLimit(quotaSubscriptionStatus, usageOverride)
-    const currentUsage = await getUsageCount(req.userId, monthStart, usageOverride?.reset_usage)
+    const reservationsEnabled = isResumeQuotaReservationsEnabled()
+    const enforcementPeriod = reservationsEnabled
+      ? resolveResumeQuotaPeriod({
+        subscriptionStatus: req.subscriptionQuotaContext?.status || quotaSubscriptionStatus,
+        quotaAnchorAt: req.subscriptionQuotaContext?.quotaAnchorAt || null,
+      })
+      : {
+        start: legacyMonthStart,
+        end: legacyMonthEnd,
+        source: RESUME_QUOTA_PERIOD_SOURCES.CALENDAR_FALLBACK,
+        fallbackReason: 'reservation_rollout_disabled',
+      }
+    const periodStart = enforcementPeriod.start
+    const periodEnd = enforcementPeriod.end
+    const legacyUsage = await getUsageCount(
+      req.userId,
+      legacyMonthStart,
+      usageOverride?.reset_usage,
+    )
+    const currentUsage = reservationsEnabled
+      ? await getUsageCountForPeriod(
+        req.userId,
+        periodStart,
+        periodEnd,
+        usageOverride?.reset_usage,
+      )
+      : legacyUsage
     const requestedUploads = Math.max(Number(req.quotaRequestedUploads) || req.files?.length || 1, 1)
     const projectedUsage = currentUsage + requestedUploads
     const remainingUploads = Math.max(uploadLimit - currentUsage, 0)
-    const quotaPeriodShadow = await observeBillingPeriodQuota({
-      userId: req.userId,
-      subscriptionContext: req.subscriptionQuotaContext || {
-        status: quotaSubscriptionStatus,
-      },
-      legacyPeriodStart: monthStart,
-      legacyUsage: currentUsage,
-      uploadLimit,
-      requestedUploads,
-      shouldResetUsage: usageOverride?.reset_usage,
-    })
+    const quotaPeriodShadow = reservationsEnabled
+      ? {
+        mode: 'enforcing',
+        source: enforcementPeriod.source,
+        fallbackReason: enforcementPeriod.fallbackReason || null,
+        legacyPeriodStart: legacyMonthStart,
+        proposedPeriodStart: periodStart,
+        proposedPeriodEnd: periodEnd,
+        legacyUsage,
+        proposedUsage: currentUsage,
+      }
+      : await observeBillingPeriodQuota({
+        userId: req.userId,
+        subscriptionContext: req.subscriptionQuotaContext || {
+          status: quotaSubscriptionStatus,
+        },
+        legacyPeriodStart: legacyMonthStart,
+        legacyUsage,
+        uploadLimit,
+        requestedUploads,
+        shouldResetUsage: usageOverride?.reset_usage,
+      })
 
     if (projectedUsage > uploadLimit) {
       return res.status(429).json({
@@ -232,8 +278,8 @@ export async function enforceUploadLimit(req, res, next) {
           userId: req.userId,
           reservationId: suppliedReservationId,
           requestedUnits: requestedUploads,
-          periodStart: monthStart,
-          periodEnd: monthEnd,
+          periodStart,
+          periodEnd,
           fileIdentity: req.body?.fileIdentity,
         })
       } else {
@@ -244,8 +290,8 @@ export async function enforceUploadLimit(req, res, next) {
         ).trim()
         const reservationResult = await reserveResumeQuotaUnits({
           userId: req.userId,
-          periodStart: monthStart,
-          periodEnd: monthEnd,
+          periodStart,
+          periodEnd,
           uploadLimit,
           requestedUnits: requestedUploads,
           idempotencyKey,
@@ -261,7 +307,10 @@ export async function enforceUploadLimit(req, res, next) {
     }
 
     req.usageContext = {
-      monthStart,
+      monthStart: periodStart,
+      periodStart,
+      periodEnd,
+      periodSource: enforcementPeriod.source,
       ipAddress,
       uploadLimit,
       currentUsage,
@@ -341,13 +390,10 @@ export async function trackUploadUsage(req, res, next) {
 
   try {
     if (req.usageContext.quotaReservation?.id) {
-      await consumeResumeQuotaReservation({
-        userId: req.userId,
-        reservationId: req.usageContext.quotaReservation.id,
-        units: req.usageContext.requestedUploads,
-        monthStart: req.usageContext.monthStart,
-        ipAddress: req.usageContext.ipAddress,
-      })
+      // The provider-start accounting path allocates units inside the upload
+      // handler and consumes them from the parse worker immediately before the
+      // first external AI request. Do not charge here.
+      return next()
     } else {
       await recordUploadUsage({
         userId: req.userId,

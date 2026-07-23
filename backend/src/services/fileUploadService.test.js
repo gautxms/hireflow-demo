@@ -402,6 +402,7 @@ test('completeChunkUpload uses persisted s3_prefix for reading chunks, assemblin
     'mimeType',
     'originalFilename',
     'originalMimeType',
+    'quotaAllocationId',
     'resumeId',
     'userId',
   ].sort())
@@ -415,7 +416,17 @@ test('cleanupExpiredChunkUploads deletes objects using stored prefixes without a
   const prefix = `uploads/${uploadId}`
   mockServiceQueries(t, (sql) => {
     if (sql.includes('CREATE TABLE IF NOT EXISTS') || sql.includes('ALTER TABLE')) return { rows: [] }
-    if (sql.includes('SELECT upload_id, s3_prefix')) return { rows: [{ upload_id: uploadId, s3_prefix: prefix }], rowCount: 1 }
+    if (sql.includes('SELECT upload_id, user_id, s3_prefix, quota_allocation_id')) {
+      return {
+        rows: [{
+          upload_id: uploadId,
+          user_id: 7,
+          s3_prefix: prefix,
+          quota_allocation_id: null,
+        }],
+        rowCount: 1,
+      }
+    }
     if (sql.includes('UPDATE upload_chunks')) return { rows: [] }
     throw new Error(`Unexpected query: ${sql}`)
   })

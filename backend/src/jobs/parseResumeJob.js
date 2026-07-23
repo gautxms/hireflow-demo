@@ -38,6 +38,10 @@ import {
 import { evaluateExperienceRange } from '../utils/experienceRange.js'
 import { buildRequirementSemantics, reconcileCandidateRequirementSemantics } from '../utils/requirementSemantics.js'
 import { reconcileCandidateLocationAlignment } from '../utils/locationAlignment.js'
+import {
+  consumeResumeQuotaAllocation,
+  releaseResumeQuotaAllocation,
+} from '../services/resumeQuotaReservations.js'
 
 let analyzeResumeWithConfiguredFallbackOverrideForTests = null
 let cacheJobResultOverrideForTests = null
@@ -1907,6 +1911,16 @@ async function cancelJobForDeletedAnalysis(job, reason) {
     attempts: job.attemptsMade + 1,
   })
 
+  if (job?.data?.quotaAllocationId && job?.data?.userId) {
+    await releaseResumeQuotaAllocation({
+      userId: job.data.userId,
+      allocationId: job.data.quotaAllocationId,
+      reason: 'analysis_cancelled_before_provider',
+    }).catch((error) => {
+      console.warn('[Parse] Failed to release quota for cancelled analysis:', error.message)
+    })
+  }
+
   await job.progress(100)
   return cancellationPayload
 }
@@ -2003,6 +2017,7 @@ export async function runParse(job) {
   let analysisResult
   let aiResponse
   let parseMethod = 'anthropic-primary'
+  let quotaConsumptionPromise = null
   let scoreContractShadowMetadata = { provider: null, model: null, promptVersion: null, mode: null }
   const jobDescriptionContext = await fetchJobDescriptionContext({
     userId: job.data.userId,
@@ -2041,6 +2056,18 @@ export async function runParse(job) {
           fileExtension: fileExtension || preparedResumePayload.sourceFormat || null,
           extractionMethod: preparedResumePayload.diagnostics?.extractionMethod || null,
           inputKind: preparedResumePayload.inputKind || null,
+        },
+        onProviderAttemptStart: async ({ provider, model }) => {
+          if (!job.data.quotaAllocationId) return null
+          if (!quotaConsumptionPromise) {
+            quotaConsumptionPromise = consumeResumeQuotaAllocation({
+              userId: job.data.userId,
+              allocationId: job.data.quotaAllocationId,
+              provider,
+              model,
+            })
+          }
+          return quotaConsumptionPromise
         },
       },
     ), { stage: 'ai_analysis', timeoutMs: AI_ANALYSIS_TIMEOUT_MS })
@@ -2365,6 +2392,16 @@ export async function handleParseJobFailure(job, error, { cacheFailureResult = c
        WHERE id = $1`,
       [job.data.resumeId, normalizedError.normalizedMessage],
     )
+
+    if (job?.data?.quotaAllocationId && job?.data?.userId) {
+      await releaseResumeQuotaAllocation({
+        userId: job.data.userId,
+        allocationId: job.data.quotaAllocationId,
+        reason: 'terminal_pre_provider_failure',
+      }).catch((releaseError) => {
+        logger.warn?.('[Parse] Failed to release quota after terminal pre-provider failure:', releaseError)
+      })
+    }
   }
 
   await setJobState(job.id, {

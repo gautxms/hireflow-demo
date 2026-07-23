@@ -12,6 +12,7 @@ import {
 import { pool } from '../db/client.js'
 import { normalizeResumeFileMetadata } from '../utils/resumeFileMetadata.js'
 import { enqueueParseJob } from './jobQueue.js'
+import { releaseResumeQuotaAllocation } from './resumeQuotaReservations.js'
 import { isScanResultSafe, scanFileBuffer } from './virusScanService.js'
 import { isAcceptedResumeUpload, resolveEffectiveMimeType } from '../utils/fileMime.js'
 
@@ -41,6 +42,7 @@ export function getChunkUploadQuotaState(session) {
   return chunkUploadQuotaState.get(session) || {
     quotaRecorded: true,
     quotaReservationId: null,
+    quotaAllocationId: null,
   }
 }
 
@@ -61,6 +63,19 @@ function toBuffer(streamOrBuffer) {
 function ensureS3Configured() {
   if (!s3Bucket) {
     throw new Error('AWS_S3_BUCKET is required for chunk uploads')
+  }
+}
+
+async function releaseQuotaAllocationSafely({ userId, allocationId, reason }) {
+  if (!allocationId) return
+  try {
+    await releaseResumeQuotaAllocation({ userId, allocationId, reason })
+  } catch (error) {
+    console.error('[ChunkUpload] Failed to release pre-provider quota allocation:', {
+      allocationId,
+      reason,
+      message: error?.message || String(error),
+    })
   }
 }
 
@@ -136,7 +151,8 @@ async function ensureUploadChunkTables() {
     ALTER TABLE upload_chunks
       ADD COLUMN IF NOT EXISTS job_description_id UUID,
       ADD COLUMN IF NOT EXISTS analysis_id UUID REFERENCES analyses(id) ON DELETE SET NULL,
-      ADD COLUMN IF NOT EXISTS file_identity TEXT;
+      ADD COLUMN IF NOT EXISTS file_identity TEXT,
+      ADD COLUMN IF NOT EXISTS quota_allocation_id UUID;
 
     CREATE UNIQUE INDEX IF NOT EXISTS idx_upload_chunks_active_file_identity
       ON upload_chunks (user_id, file_identity)
@@ -269,7 +285,7 @@ export async function initChunkUpload({ userId, filename, fileSize, mimeType, jo
   if (normalizedFileIdentity) {
     const identityResult = await pool.query(
       `SELECT upload_id, uploaded_chunks, total_chunks, quota_recorded,
-              quota_reservation_id, analysis_id
+              quota_reservation_id, quota_allocation_id, analysis_id
        FROM upload_chunks
        WHERE user_id = $1
          AND file_identity = $2
@@ -291,6 +307,7 @@ export async function initChunkUpload({ userId, filename, fileSize, mimeType, jo
       }, {
         quotaRecorded: existing.quota_recorded !== false,
         quotaReservationId: existing.quota_reservation_id || null,
+        quotaAllocationId: existing.quota_allocation_id || null,
       })
     }
   }
@@ -322,7 +339,8 @@ export async function initChunkUpload({ userId, filename, fileSize, mimeType, jo
   const existingResult = normalizedFileIdentity
     ? { rows: [] }
     : await pool.query(
-      `SELECT upload_id, uploaded_chunks, total_chunks, quota_recorded, quota_reservation_id
+      `SELECT upload_id, uploaded_chunks, total_chunks, quota_recorded,
+              quota_reservation_id, quota_allocation_id
        FROM upload_chunks
        WHERE user_id = $1
          AND filename = $2
@@ -345,6 +363,7 @@ export async function initChunkUpload({ userId, filename, fileSize, mimeType, jo
     }, {
       quotaRecorded: existingResult.rows[0].quota_recorded !== false,
       quotaReservationId: existingResult.rows[0].quota_reservation_id || null,
+      quotaAllocationId: existingResult.rows[0].quota_allocation_id || null,
     })
   }
 
@@ -360,7 +379,7 @@ export async function initChunkUpload({ userId, filename, fileSize, mimeType, jo
        WHERE file_identity IS NOT NULL AND status = 'uploading'
      DO UPDATE SET file_identity = EXCLUDED.file_identity
      RETURNING upload_id, total_chunks, uploaded_chunks, analysis_id,
-               quota_recorded, quota_reservation_id`,
+               quota_recorded, quota_reservation_id, quota_allocation_id`,
     [uploadId, userId, safeFilename, fileSize, normalizedMimeType, totalChunks, [], prefix, jobDescriptionId, resolvedAnalysisId, quotaReservationId, normalizedFileIdentity || null],
   )
 
@@ -375,6 +394,7 @@ export async function initChunkUpload({ userId, filename, fileSize, mimeType, jo
     }, {
       quotaRecorded: storedUpload.quota_recorded !== false,
       quotaReservationId: storedUpload.quota_reservation_id || null,
+      quotaAllocationId: storedUpload.quota_allocation_id || null,
     })
   }
 
@@ -387,6 +407,7 @@ export async function initChunkUpload({ userId, filename, fileSize, mimeType, jo
   }, {
     quotaRecorded: false,
     quotaReservationId: quotaReservationId || null,
+    quotaAllocationId: null,
   })
 }
 
@@ -468,7 +489,8 @@ export async function completeChunkUpload({ userId, uploadId }) {
   ensureS3Configured()
 
   const result = await pool.query(
-    `SELECT upload_id, user_id, filename, mime_type, file_size, total_chunks, uploaded_chunks, status, job_description_id, resume_id, analysis_id, s3_prefix
+    `SELECT upload_id, user_id, filename, mime_type, file_size, total_chunks, uploaded_chunks, status,
+            job_description_id, resume_id, analysis_id, s3_prefix, quota_allocation_id
      FROM upload_chunks
      WHERE upload_id = $1 AND user_id = $2
      LIMIT 1`,
@@ -512,6 +534,13 @@ export async function completeChunkUpload({ userId, uploadId }) {
        WHERE upload_id = $1`,
       [uploadId],
     )
+    if (row.quota_allocation_id) {
+      await releaseQuotaAllocationSafely({
+        userId,
+        allocationId: row.quota_allocation_id,
+        reason: 'upload_assembly_size_mismatch',
+      })
+    }
     throw new Error('Upload assembly failed: reconstructed file size mismatch')
   }
 
@@ -541,6 +570,13 @@ export async function completeChunkUpload({ userId, uploadId }) {
        WHERE upload_id = $1`,
       [uploadId, scanResult.status || 'error', JSON.stringify(scanResult), assembledHash],
     )
+    if (row.quota_allocation_id) {
+      await releaseQuotaAllocationSafely({
+        userId,
+        allocationId: row.quota_allocation_id,
+        reason: scanResult.malicious ? 'malware_rejected' : 'file_scan_rejected',
+      })
+    }
 
     const reason = scanResult.malicious
       ? 'malware detected in file scan'
@@ -617,20 +653,40 @@ export async function completeChunkUpload({ userId, uploadId }) {
     client.release()
   }
 
-  const parseJob = await enqueueParseJob({
-    resumeId: finalizedUpload.resumeId,
-    userId,
-    filename: row.filename,
-    originalFilename: row.filename,
-    originalMimeType: row.mime_type || null,
-    fileExtension: fileMetadata.fileExtension || null,
-    mimeType: normalizedMimeType,
-    fileSize: row.file_size,
-    assembledS3Key: assembledKey,
-    assembledSha256: assembledHash,
-    analysisId: row.analysis_id || null,
-    jobDescriptionId: row.job_description_id,
-  })
+  let parseJob
+  try {
+    parseJob = await enqueueParseJob({
+      resumeId: finalizedUpload.resumeId,
+      userId,
+      filename: row.filename,
+      originalFilename: row.filename,
+      originalMimeType: row.mime_type || null,
+      fileExtension: fileMetadata.fileExtension || null,
+      mimeType: normalizedMimeType,
+      fileSize: row.file_size,
+      assembledS3Key: assembledKey,
+      assembledSha256: assembledHash,
+      analysisId: row.analysis_id || null,
+      jobDescriptionId: row.job_description_id,
+      quotaAllocationId: row.quota_allocation_id || null,
+    })
+  } catch (error) {
+    await pool.query(
+      `UPDATE upload_chunks
+       SET status = 'failed',
+           updated_at = NOW()
+       WHERE upload_id = $1`,
+      [uploadId],
+    )
+    if (row.quota_allocation_id) {
+      await releaseQuotaAllocationSafely({
+        userId,
+        allocationId: row.quota_allocation_id,
+        reason: 'parse_enqueue_failed',
+      })
+    }
+    throw error
+  }
 
   await pool.query(
     `UPDATE upload_chunks
@@ -719,7 +775,7 @@ export async function cleanupExpiredChunkUploads() {
   await ensureAnalysisTables()
 
   const result = await pool.query(
-    `SELECT upload_id, s3_prefix
+    `SELECT upload_id, user_id, s3_prefix, quota_allocation_id
      FROM upload_chunks
      WHERE status = 'uploading'
        AND expires_at < NOW()
@@ -731,6 +787,13 @@ export async function cleanupExpiredChunkUploads() {
   for (const row of result.rows) {
     try {
       await deletePrefix(resolveUploadPrefix(row))
+      if (row.quota_allocation_id) {
+        await releaseQuotaAllocationSafely({
+          userId: row.user_id,
+          allocationId: row.quota_allocation_id,
+          reason: 'upload_session_expired',
+        })
+      }
       expiredUploadIds.push(row.upload_id)
     } catch (error) {
       console.error('[ChunkUpload] Cleanup failed for upload', row.upload_id, error)

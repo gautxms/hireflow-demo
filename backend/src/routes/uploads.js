@@ -6,6 +6,11 @@ import { normalizeResumeFileMetadata } from '../utils/resumeFileMetadata.js'
 import { enqueueParseJob } from '../services/jobQueue.js'
 import { scanFileBuffer } from '../services/virusScanService.js'
 import {
+  allocateResumeQuotaUnit,
+  releaseResumeQuotaAllocation,
+  releaseResumeQuotaReservation,
+} from '../services/resumeQuotaReservations.js'
+import {
   enforceUploadLimit,
   requireActiveSubscription,
   trackUploadUsage,
@@ -138,6 +143,7 @@ router.post(
       await ensureAnalysisTables()
 
       const userId = req.user.id
+      const quotaReservationId = req.usageContext?.quotaReservation?.id || null
       const requestedJobDescriptionId = req.body?.jobDescriptionId ? String(req.body.jobDescriptionId) : null
 
       if (requestedJobDescriptionId) {
@@ -215,18 +221,42 @@ router.post(
         )
 
         const resumeId = resumeInsert.rows[0].id
-        const parseJob = await enqueueParseJob({
-          resumeId,
-          userId,
-          filename: safeName,
-          originalFilename: fileMetadata.originalFilename,
-          originalMimeType: fileMetadata.originalMimeType,
-          fileExtension: fileMetadata.fileExtension || null,
-          mimetype: effectiveMimeType,
-          fileBuffer: file.buffer,
-          analysisId,
-          jobDescriptionId: requestedJobDescriptionId,
-        })
+        let quotaAllocationId = null
+        if (quotaReservationId) {
+          const allocationResult = await allocateResumeQuotaUnit({
+            userId,
+            reservationId: quotaReservationId,
+            allocationKey: `resume:${resumeId}`,
+            resumeId,
+          })
+          quotaAllocationId = allocationResult.allocation.id
+        }
+
+        let parseJob
+        try {
+          parseJob = await enqueueParseJob({
+            resumeId,
+            userId,
+            filename: safeName,
+            originalFilename: fileMetadata.originalFilename,
+            originalMimeType: fileMetadata.originalMimeType,
+            fileExtension: fileMetadata.fileExtension || null,
+            mimetype: effectiveMimeType,
+            fileBuffer: file.buffer,
+            analysisId,
+            jobDescriptionId: requestedJobDescriptionId,
+            quotaAllocationId,
+          })
+        } catch (enqueueError) {
+          if (quotaAllocationId) {
+            await releaseResumeQuotaAllocation({
+              userId,
+              allocationId: quotaAllocationId,
+              reason: 'parse_enqueue_failed',
+            })
+          }
+          throw enqueueError
+        }
 
         await pool.query(
           `INSERT INTO analysis_items (analysis_id, resume_id, parse_job_id)
@@ -264,6 +294,13 @@ router.post(
           [analysisId, nextStatus, errorSummary],
         )
       }
+      if (quotaReservationId) {
+        await releaseResumeQuotaReservation({
+          userId,
+          reservationId: quotaReservationId,
+          units: Number.MAX_SAFE_INTEGER,
+        })
+      }
 
       return res.status(202).json({
         analysisId,
@@ -273,6 +310,17 @@ router.post(
       })
     } catch (error) {
       console.error('[Uploads] Failed to enqueue upload batch', error)
+
+      const quotaReservationId = req.usageContext?.quotaReservation?.id || null
+      if (quotaReservationId && req.user?.id) {
+        await releaseResumeQuotaReservation({
+          userId: req.user.id,
+          reservationId: quotaReservationId,
+          units: Number.MAX_SAFE_INTEGER,
+        }).catch((releaseError) => {
+          console.error('[Uploads] Failed to release unused quota after batch failure', releaseError)
+        })
+      }
 
       if (analysisId) {
         await pool.query(
