@@ -115,8 +115,8 @@ the immediate rollback path while `RESUME_QUOTA_RESERVATIONS_ENABLED=false`.
 - Each accepted file has one durable allocation shared by worker retries and
   provider fallbacks.
 - Validation, malware scanning, abandoned upload sessions, enqueue failures,
-  analysis cancellation, and terminal local extraction failures release an
-  unconsumed allocation.
+  invalid job-description references, analysis deletion/cancellation, and
+  terminal local extraction failures release an unconsumed allocation.
 - The provider orchestration hook consumes the allocation once, immediately
   before its first external provider adapter call.
 - Provider fallback, token-budget retries, queue retries, and worker restarts
@@ -125,6 +125,8 @@ the immediate rollback path while `RESUME_QUOTA_RESERVATIONS_ENABLED=false`.
   failure remains one consumed unit.
 - The usage API reads the same period and ledger-backed count as enforcement
   whenever the rollout flag is enabled.
+- If the kill switch is turned off mid-period, calendar-month enforcement still
+  includes allocation-backed usage written during the flagged rollout.
 
 ## PR 1 shadow-mode behavior
 

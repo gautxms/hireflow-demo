@@ -487,6 +487,14 @@ test('DELETE /analyses/:id attempts queued parse job cancellation and tolerates 
     client.query.mock.calls.some((call) => String(call.arguments[0]).includes("SET status = 'cancelled'")),
     true,
   )
+  const quotaReleaseCallIndex = client.query.mock.calls.findIndex((call) => (
+    String(call.arguments[0]).includes('UPDATE resume_quota_allocations AS allocation')
+  ))
+  const analysisDeleteCallIndex = client.query.mock.calls.findIndex((call) => (
+    String(call.arguments[0]).includes('DELETE FROM analyses')
+  ))
+  assert.ok(quotaReleaseCallIndex >= 0)
+  assert.ok(quotaReleaseCallIndex < analysisDeleteCallIndex)
   assert.equal(client.query.mock.calls.at(-1).arguments[0], 'COMMIT')
 })
 

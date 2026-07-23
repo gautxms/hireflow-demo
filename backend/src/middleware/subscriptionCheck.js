@@ -38,12 +38,25 @@ export async function getUsageCount(userId, monthStart, shouldResetUsage = false
     return 0
   }
 
+  const normalizedMonthStart = new Date(monthStart)
+  const monthEnd = new Date(Date.UTC(
+    normalizedMonthStart.getUTCFullYear(),
+    normalizedMonthStart.getUTCMonth() + 1,
+    1,
+  ))
   const usageResult = await pool.query(
     `SELECT COUNT(*)::INT AS usage_count
      FROM usage_log
      WHERE user_id = $1
-       AND month_start = $2`,
-    [userId, monthStart],
+       AND (
+         (quota_allocation_id IS NULL AND month_start = $2::date)
+         OR (
+           quota_allocation_id IS NOT NULL
+           AND created_at >= $2::timestamp
+           AND created_at < $3::timestamp
+         )
+       )`,
+    [userId, normalizedMonthStart, monthEnd],
   )
 
   return usageResult.rows[0]?.usage_count ?? 0

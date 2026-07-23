@@ -142,7 +142,7 @@ router.post(
       await ensureResumeParseColumns()
       await ensureAnalysisTables()
 
-      const userId = req.user.id
+      const userId = req.userId
       const quotaReservationId = req.usageContext?.quotaReservation?.id || null
       const requestedJobDescriptionId = req.body?.jobDescriptionId ? String(req.body.jobDescriptionId) : null
 
@@ -155,6 +155,13 @@ router.post(
         )
 
         if (ownershipCheck.rowCount === 0) {
+          if (quotaReservationId) {
+            await releaseResumeQuotaReservation({
+              userId,
+              reservationId: quotaReservationId,
+              units: Number.MAX_SAFE_INTEGER,
+            })
+          }
           return res.status(404).json({ error: 'Job description not found' })
         }
       }
@@ -312,9 +319,9 @@ router.post(
       console.error('[Uploads] Failed to enqueue upload batch', error)
 
       const quotaReservationId = req.usageContext?.quotaReservation?.id || null
-      if (quotaReservationId && req.user?.id) {
+      if (quotaReservationId && req.userId) {
         await releaseResumeQuotaReservation({
-          userId: req.user.id,
+          userId: req.userId,
           reservationId: quotaReservationId,
           units: Number.MAX_SAFE_INTEGER,
         }).catch((releaseError) => {

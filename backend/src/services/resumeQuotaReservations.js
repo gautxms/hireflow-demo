@@ -580,6 +580,79 @@ export async function releaseResumeQuotaAllocation({
   })
 }
 
+export async function releaseResumeQuotaAllocationsForAnalysis({
+  client,
+  userId,
+  analysisId,
+  reason = 'analysis_deleted_before_provider',
+}) {
+  if (!client || typeof client.query !== 'function') {
+    throw new Error('transaction client is required')
+  }
+  const normalizedUserId = toPositiveInteger(userId, 'userId')
+  const normalizedAnalysisId = String(analysisId || '').trim()
+  if (!normalizedAnalysisId) {
+    throw new Error('analysisId is required')
+  }
+
+  await lockUserQuota(client, normalizedUserId)
+  const result = await client.query(
+    `WITH released AS (
+       UPDATE resume_quota_allocations AS allocation
+       SET status = 'released',
+           released_at = NOW(),
+           release_reason = $3,
+           updated_at = NOW()
+       WHERE allocation.user_id = $1
+         AND allocation.status = 'reserved'
+         AND (
+           EXISTS (
+             SELECT 1
+             FROM upload_chunks AS upload
+             WHERE upload.quota_allocation_id = allocation.id
+               AND upload.analysis_id = $2
+           )
+           OR EXISTS (
+             SELECT 1
+             FROM analysis_items AS item
+             WHERE item.analysis_id = $2
+               AND (
+                 item.parse_job_id = allocation.parse_job_id
+                 OR item.resume_id = allocation.resume_id
+               )
+           )
+         )
+       RETURNING allocation.reservation_id
+     ),
+     release_counts AS (
+       SELECT reservation_id, COUNT(*)::INT AS unit_count
+       FROM released
+       GROUP BY reservation_id
+     )
+     UPDATE resume_quota_reservations AS reservation
+     SET released_units = reservation.released_units + release_counts.unit_count,
+         status = CASE
+           WHEN reservation.consumed_units
+                + reservation.released_units
+                + release_counts.unit_count = reservation.requested_units
+             THEN CASE WHEN reservation.consumed_units > 0 THEN 'consumed' ELSE 'released' END
+           ELSE 'reserved'
+         END,
+         updated_at = NOW()
+     FROM release_counts
+     WHERE reservation.id = release_counts.reservation_id
+       AND reservation.user_id = $1
+     RETURNING release_counts.unit_count`,
+    [
+      normalizedUserId,
+      normalizedAnalysisId,
+      String(reason || 'analysis_deleted_before_provider').slice(0, 160),
+    ],
+  )
+
+  return result.rows.reduce((total, row) => total + Number(row.unit_count || 0), 0)
+}
+
 export async function consumeResumeQuotaReservation({
   userId,
   reservationId,

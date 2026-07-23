@@ -8,6 +8,7 @@ import {
   consumeResumeQuotaReservation,
   isResumeQuotaReservationsEnabled,
   releaseResumeQuotaAllocation,
+  releaseResumeQuotaAllocationsForAnalysis,
   reserveResumeQuotaUnits,
   ResumeQuotaExceededError,
 } from './resumeQuotaReservations.js'
@@ -366,6 +367,35 @@ test('terminal pre-provider failure releases an allocation without recording usa
   assert.equal(result.released, true)
   assert.equal(result.allocation.status, 'released')
   assert.equal(calls.some((sql) => sql.includes('INSERT INTO usage_log')), false)
+})
+
+test('analysis deletion releases every associated pre-provider allocation atomically', async () => {
+  const calls = []
+  const client = {
+    async query(sql, params) {
+      const text = String(sql)
+      calls.push({ sql: text, params })
+      if (text.includes('pg_advisory_xact_lock')) return { rows: [] }
+      if (text.includes('WITH released AS')) {
+        return { rows: [{ unit_count: 2 }, { unit_count: 1 }] }
+      }
+      throw new Error(`Unexpected query: ${text}`)
+    },
+  }
+
+  const released = await releaseResumeQuotaAllocationsForAnalysis({
+    client,
+    userId: 7,
+    analysisId: 'analysis-delete',
+  })
+
+  assert.equal(released, 3)
+  const releaseQuery = calls.find(({ sql }) => sql.includes('WITH released AS'))
+  assert.match(releaseQuery.sql, /upload\.analysis_id = \$2/)
+  assert.match(releaseQuery.sql, /item\.analysis_id = \$2/)
+  assert.match(releaseQuery.sql, /allocation\.status = 'reserved'/)
+  assert.match(releaseQuery.sql, /released_units = reservation\.released_units/)
+  assert.deepEqual(releaseQuery.params.slice(0, 2), [7, 'analysis-delete'])
 })
 
 test('chunk allocation records usage, session state, and reservation consumption in one transaction', async (t) => {

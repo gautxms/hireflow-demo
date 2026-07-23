@@ -4,6 +4,7 @@ import { PAID_MONTHLY_RESUME_ANALYSIS_LIMIT, TRIAL_MONTHLY_RESUME_ANALYSIS_LIMIT
 import { pool } from '../db/client.js'
 import {
   enforceUploadLimit,
+  getUsageCount,
   observeBillingPeriodQuota,
   recordChunkUploadUsage,
   requireActiveSubscription,
@@ -64,6 +65,23 @@ test('requireActiveSubscription allows active subscribers', async () => {
   } finally {
     pool.query = originalQuery
   }
+})
+
+test('legacy usage counting keeps provider-start rows visible after kill-switch rollback', async (t) => {
+  let usageQuery = null
+  t.mock.method(pool, 'query', async (sql, params) => {
+    usageQuery = { sql: String(sql), params }
+    return { rows: [{ usage_count: 37 }] }
+  })
+
+  const used = await getUsageCount(7, new Date('2026-07-01T00:00:00.000Z'))
+
+  assert.equal(used, 37)
+  assert.match(usageQuery.sql, /quota_allocation_id IS NULL AND month_start = \$2/)
+  assert.match(usageQuery.sql, /quota_allocation_id IS NOT NULL/)
+  assert.match(usageQuery.sql, /created_at >= \$2/)
+  assert.match(usageQuery.sql, /created_at < \$3/)
+  assert.equal(usageQuery.params[2].toISOString(), '2026-08-01T00:00:00.000Z')
 })
 
 test('billing-period quota observation compares counts without changing the legacy decision', async () => {
@@ -504,7 +522,7 @@ test('enforceUploadLimit honors admin overrides when checking batch usage', asyn
     assert.equal(res.body.used, 1)
     assert.equal(res.body.requested, 2)
     assert.equal(res.body.remaining, 1)
-    assert.equal(queries.find((query) => query.sql.includes('FROM usage_log')).params.length, 2)
+    assert.equal(queries.find((query) => query.sql.includes('FROM usage_log')).params.length, 3)
   } finally {
     pool.query = originalQuery
   }
