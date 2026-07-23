@@ -427,6 +427,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
 
       const queuedJobs = []
       let analysisId = ''
+      let quotaReservationId = null
 
       try {
         const quotaPreflight = await preflightResumeQuota({
@@ -434,6 +435,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
           token,
           fileCount: uploadedFiles.length,
         })
+        quotaReservationId = quotaPreflight.reservationId
         for (const entry of uploadedFiles) {
           const file = entry.file
           const totalChunks = Math.ceil(file.size / CHUNK_SIZE)
@@ -453,7 +455,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
                 selectedJobDescriptionId,
                 analysisId,
               }),
-              ...(quotaPreflight.reservationId ? { quotaReservationId: quotaPreflight.reservationId } : {}),
+              ...(quotaReservationId ? { quotaReservationId } : {}),
             }),
           })
 
@@ -533,7 +535,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
 
       } catch (uploadError) {
         const fallbackMessage = sanitizeForDisplay(uploadError.message || '')
-        if (!isStorageInfrastructureError(fallbackMessage)) {
+        if (quotaReservationId || !isStorageInfrastructureError(fallbackMessage)) {
           throw uploadError
         }
 
