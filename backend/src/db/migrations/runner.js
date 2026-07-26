@@ -49,6 +49,7 @@ const migrationFiles = [
   '045-add-resume-quota-anchor',
   '046-add-resume-quota-reservations',
   '047-add-resume-quota-allocations',
+  '048-add-paddle-event-ordering-timestamp',
 ]
 
 async function ensureMigrationsTable(client) {

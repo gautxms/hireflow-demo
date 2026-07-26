@@ -404,6 +404,31 @@ test('provider-start quota allocation migration is additive and backfills reserv
   assert.match(queries[6], /UPDATE parse_jobs AS job/)
 })
 
+test('migration runner adds Paddle event ordering after quota allocations', async () => {
+  const source = await readRunnerSource()
+  assert.match(source, /'048-add-paddle-event-ordering-timestamp'/)
+  assert.ok(
+    source.indexOf("'047-add-resume-quota-allocations'") <
+      source.indexOf("'048-add-paddle-event-ordering-timestamp'"),
+  )
+})
+
+test('Paddle event ordering migration adds an idempotent provider timestamp', async () => {
+  const queries = []
+  const { up } = await import('./048-add-paddle-event-ordering-timestamp.js')
+
+  await up({
+    query(sql) {
+      queries.push(String(sql))
+      return Promise.resolve({ rows: [] })
+    },
+  })
+
+  assert.equal(queries.length, 1)
+  assert.match(queries[0], /ALTER TABLE users/)
+  assert.match(queries[0], /ADD COLUMN IF NOT EXISTS last_paddle_event_at TIMESTAMPTZ/)
+})
+
 test('shortlist batch-add safety migration is additive and preserves metadata columns', async () => {
   const queries = []
   const { up } = await import('./040-ensure-shortlist-batch-add-schema.js')

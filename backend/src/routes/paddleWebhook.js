@@ -525,6 +525,10 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment) {
                    ELSE cancellation_reason
                  END,
                  paddle_environment = $7,
+                 last_paddle_event_at = CASE
+                   WHEN $9::timestamptz IS NULL THEN last_paddle_event_at
+                   ELSE GREATEST(COALESCE(last_paddle_event_at, $9::timestamptz), $9::timestamptz)
+                 END,
                  updated_at = NOW()
              WHERE id = $1
                AND (
@@ -555,6 +559,7 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment) {
               payload?.data?.billing_period?.ends_at || null,
               paddle.environment,
               payload?.data?.billing_period?.starts_at || null,
+              payload?.occurred_at || payload?.notification?.occurred_at || null,
             ],
           )
 
@@ -614,12 +619,17 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment) {
                current_period_end = COALESCE($6, current_period_end),
                next_billing_date = COALESCE($7, next_billing_date),
                paddle_environment = $8,
+               last_paddle_event_at = CASE
+                 WHEN $9::timestamptz IS NULL THEN last_paddle_event_at
+                 ELSE GREATEST(COALESCE(last_paddle_event_at, $9::timestamptz), $9::timestamptz)
+               END,
                updated_at = NOW()
            WHERE id = $1
              AND (
                LOWER(COALESCE(subscription_status, '')) NOT IN ('active', 'trialing')
                OR $9::timestamptz IS NULL
-               OR $9::timestamptz >= updated_at
+               OR last_paddle_event_at IS NULL
+               OR $9::timestamptz >= last_paddle_event_at
              )`,
           [
             user.id,
@@ -700,13 +710,18 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment) {
                  ELSE quota_anchor_at
                END,
                trial_consumed_at = CASE WHEN $3 IN ('active', 'trialing') THEN COALESCE(trial_consumed_at, NOW()) ELSE trial_consumed_at END,
+               last_paddle_event_at = CASE
+                 WHEN $11::timestamptz IS NULL THEN last_paddle_event_at
+                 ELSE GREATEST(COALESCE(last_paddle_event_at, $11::timestamptz), $11::timestamptz)
+               END,
                updated_at = NOW()
            WHERE id = $1
              AND (
                $3 NOT IN ('past_due', 'payment_failed')
                OR LOWER(COALESCE(subscription_status, '')) NOT IN ('active', 'trialing')
                OR $11::timestamptz IS NULL
-               OR $11::timestamptz >= updated_at
+               OR last_paddle_event_at IS NULL
+               OR $11::timestamptz >= last_paddle_event_at
              )
              AND (
                (
