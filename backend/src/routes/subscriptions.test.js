@@ -612,6 +612,104 @@ test('GET /api/subscriptions/current does not reconcile non-current Paddle statu
   }
 })
 
+function recoverableMonthlyUser(overrides = {}) {
+  return {
+    ...activeMonthlyUser(),
+    subscription_status: 'past_due',
+    paddle_customer_id: 'ctm_123',
+    paddle_environment: 'production',
+    cancellation_effective_at: null,
+    last_paddle_event_at: '2026-07-20T10:00:00.000Z',
+    next_payment_retry_at: '2026-07-21T10:00:00.000Z',
+    ...overrides,
+  }
+}
+
+function authoritativeMonthlyRecovery() {
+  return { data: {
+    id: 'sub_123',
+    status: 'active',
+    customer_id: 'ctm_123',
+    items: [{ price: { id: 'pri_monthly', billing_cycle: { interval: 'month' }, unit_price: { amount: '9900', currency_code: 'USD' } } }],
+    current_billing_period: { starts_at: '2026-07-01T00:00:00.000Z', ends_at: '2026-08-01T00:00:00.000Z' },
+    next_billed_at: '2026-08-01T00:00:00.000Z',
+  } }
+}
+
+test('GET /api/subscriptions/current atomically recovers the same Past Due lifecycle and resolves retries', async () => {
+  resetPaddleEnv()
+  const user = recoverableMonthlyUser()
+  const { calls } = installDbMock(user)
+  mockPaddleResponse({ payload: authoritativeMonthlyRecovery() })
+
+  const res = await invokeRoute('/current')
+  const recovery = calls.find(({ sql }) => String(sql).includes('WITH reconciled_user AS'))
+
+  assert.equal(res.statusCode, 200)
+  assert.equal(res.payload.subscription.status, 'active')
+  assert.equal(res.payload.subscription.nextRetryAt, null)
+  assert.match(recovery.sql, /subscription_status IN \('past_due', 'payment_failed'\)/)
+  assert.match(recovery.sql, /last_paddle_event_at IS NOT DISTINCT FROM \$12::timestamptz/)
+  assert.match(recovery.sql, /EXISTS \(SELECT 1 FROM reconciled_user\)/)
+})
+
+test('GET /api/subscriptions/current does not revive a cancellation committed during Paddle refresh', async () => {
+  resetPaddleEnv()
+  const initial = recoverableMonthlyUser()
+  const cancelled = recoverableMonthlyUser({
+    subscription_status: 'cancelled',
+    cancellation_effective_at: '2026-07-20T10:05:00.000Z',
+    last_paddle_event_at: '2026-07-20T10:05:00.000Z',
+  })
+  let userReads = 0
+  pool.connect = async () => { throw new Error('pool.connect should not be called') }
+  pool.query = async (sql) => {
+    if (String(sql).includes('WITH reconciled_user AS')) return { rowCount: 0, rows: [] }
+    if (String(sql).includes('FROM subscriptions')) return { rowCount: 0, rows: [] }
+    if (String(sql).includes('FROM users')) {
+      userReads += 1
+      return { rowCount: 1, rows: [{ ...(userReads === 1 ? initial : cancelled) }] }
+    }
+    return { rowCount: 1, rows: [] }
+  }
+  mockPaddleResponse({ payload: authoritativeMonthlyRecovery() })
+
+  const res = await invokeRoute('/current')
+
+  assert.equal(res.statusCode, 200)
+  assert.equal(res.payload.subscription.status, 'cancelled')
+  assert.equal(res.payload.subscription.nextRetryAt, null)
+  assert.equal(res.payload.subscription.cancelAtPeriodEnd, false)
+})
+
+test('GET /api/subscriptions/current preserves a newer failure committed during Paddle refresh', async () => {
+  resetPaddleEnv()
+  const initial = recoverableMonthlyUser()
+  const newerFailure = recoverableMonthlyUser({
+    subscription_status: 'payment_failed',
+    last_paddle_event_at: '2026-07-20T10:06:00.000Z',
+    next_payment_retry_at: '2026-07-22T10:00:00.000Z',
+  })
+  let userReads = 0
+  pool.connect = async () => { throw new Error('pool.connect should not be called') }
+  pool.query = async (sql) => {
+    if (String(sql).includes('WITH reconciled_user AS')) return { rowCount: 0, rows: [] }
+    if (String(sql).includes('FROM subscriptions')) return { rowCount: 0, rows: [] }
+    if (String(sql).includes('FROM users')) {
+      userReads += 1
+      return { rowCount: 1, rows: [{ ...(userReads === 1 ? initial : newerFailure) }] }
+    }
+    return { rowCount: 1, rows: [] }
+  }
+  mockPaddleResponse({ payload: authoritativeMonthlyRecovery() })
+
+  const res = await invokeRoute('/current')
+
+  assert.equal(res.statusCode, 200)
+  assert.equal(res.payload.subscription.status, 'payment_failed')
+  assert.equal(res.payload.subscription.nextRetryAt, '2026-07-22T10:00:00.000Z')
+})
+
 test('POST /api/subscriptions/change-plan-preview uses gated test annual price for valid upgradeTestKey', async () => {
   resetPaddleEnv()
   enableTestUpgrade()

@@ -457,7 +457,7 @@ router.get('/current', requireAuth, async (req, res) => {
               next_billing_date, cancellation_effective_at, current_period_end, subscription_started_at,
               trial_ends_at, trial_consumed_at,
               payment_method_brand, payment_method_last4, paddle_customer_id, paddle_subscription_id,
-              paddle_environment,
+              paddle_environment, last_paddle_event_at,
               EXISTS (SELECT 1 FROM payment_attempts attempt WHERE attempt.user_id = users.id) AS has_payment_attempts,
               (
                 SELECT attempt.next_retry_at
@@ -524,7 +524,7 @@ router.get('/current', requireAuth, async (req, res) => {
       paddleSubscription.id === user.paddle_subscription_id
       && (!isPastDueRecovery || paddleSubscription.customer_id === user.paddle_customer_id)
       && paddlePlan === planKey
-      && ['active', 'trialing'].includes(paddleStatus)
+      && (isPastDueRecovery ? paddleStatus === 'active' : ['active', 'trialing'].includes(paddleStatus))
       && (isPastDueRecovery ? hasValidPaddleDates : Boolean(paddleCurrentPeriodEnd && paddleNextBillingDate))
       && (
         isPastDueRecovery
@@ -547,12 +547,24 @@ router.get('/current', requireAuth, async (req, res) => {
            WHERE id = $1
              AND paddle_subscription_id = $4
              AND subscription_plan = $5
+             AND COALESCE(NULLIF(LOWER(paddle_environment), ''), 'production') = $8
+             AND paddle_customer_id = $13
+             AND (
+               NOT $9
+               OR (
+                 LOWER(COALESCE(subscription_status, '')) = $10
+                 AND subscription_status IN ('past_due', 'payment_failed')
+                 AND cancellation_effective_at IS NOT DISTINCT FROM $11::timestamp
+                 AND last_paddle_event_at IS NOT DISTINCT FROM $12::timestamptz
+               )
+             )
            RETURNING id
          ), resolved_attempts AS (
            UPDATE payment_attempts
            SET status = 'succeeded', next_retry_at = NULL, updated_at = NOW(),
                metadata = COALESCE(metadata, '{}'::jsonb) || '{"resolved_by":"subscription_get_reconciliation"}'::jsonb
            WHERE $9
+             AND EXISTS (SELECT 1 FROM reconciled_user)
              AND user_id = $1
              AND COALESCE(NULLIF(LOWER(paddle_environment), ''), 'production') = $8
              AND status IN ('pending', 'failed', 'retrying')
@@ -573,7 +585,21 @@ router.get('/current', requireAuth, async (req, res) => {
            latest_event_payload = EXCLUDED.latest_event_payload,
            paddle_environment = EXCLUDED.paddle_environment,
            updated_at = NOW()`,
-        [user.id, paddleCurrentPeriodEnd, paddleNextBillingDate, user.paddle_subscription_id, planKey, paddleStatus, JSON.stringify(planCost.paddleSubscriptionPayload), paddle.environment, isPastDueRecovery],
+        [
+          user.id,
+          paddleCurrentPeriodEnd,
+          paddleNextBillingDate,
+          user.paddle_subscription_id,
+          planKey,
+          paddleStatus,
+          JSON.stringify(planCost.paddleSubscriptionPayload),
+          paddle.environment,
+          isPastDueRecovery,
+          normalizeStatus(user.subscription_status),
+          user.cancellation_effective_at || null,
+          user.last_paddle_event_at || null,
+          user.paddle_customer_id,
+        ],
       )
 
       if (reconciliation.rowCount > 0) {
@@ -585,6 +611,34 @@ router.get('/current', requireAuth, async (req, res) => {
           user.next_payment_retry_at = null
           user.cancellation_effective_at = null
         }
+      } else if (isPastDueRecovery) {
+        const currentResult = await pool.query(
+          `SELECT subscription_status, subscription_plan, paddle_subscription_id, paddle_customer_id,
+                  paddle_environment, cancellation_effective_at, current_period_end,
+                  subscription_renewal_date, next_billing_date, last_paddle_event_at,
+                  (
+                    SELECT attempt.next_retry_at
+                    FROM payment_attempts attempt
+                    WHERE attempt.user_id = users.id
+                      AND attempt.status IN ('failed', 'retrying')
+                      AND attempt.next_retry_at IS NOT NULL
+                      AND COALESCE(NULLIF(LOWER(attempt.paddle_environment), ''), 'production')
+                        = COALESCE(NULLIF(LOWER(users.paddle_environment), ''), 'production')
+                      AND COALESCE(
+                        attempt.payload->'data'->>'subscription_id',
+                        attempt.payload->'data'->>'subscriptionId',
+                        attempt.payload->>'subscription_id',
+                        attempt.payload->>'subscriptionId'
+                      ) = users.paddle_subscription_id
+                    ORDER BY attempt.updated_at DESC, attempt.id DESC
+                    LIMIT 1
+                  ) AS next_payment_retry_at
+           FROM users
+           WHERE id = $1`,
+          [user.id],
+        )
+        const current = currentResult.rows[0]
+        if (current) Object.assign(user, current)
       }
     }
     const cancellationEffectiveAt = isoOrNull(user.cancellation_effective_at)
