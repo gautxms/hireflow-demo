@@ -204,6 +204,42 @@ test('persistVerifiedCheckoutSubscription replaces a cancelled Annual lifecycle 
   assert.equal(calls.at(-1).sql, 'COMMIT')
 })
 
+test('persistVerifiedCheckoutSubscription authoritatively recovers the same Past Due Monthly lifecycle and resolves only matching retries', async () => {
+  const calls = []
+  const client = { async query(sql, params = []) {
+    calls.push({ sql: String(sql), params })
+    return { rowCount: 1, rows: [{ id: 42 }] }
+  } }
+  const result = await persistVerifiedCheckoutSubscription({
+    client,
+    user: {
+      id: 42,
+      subscription_status: 'past_due',
+      subscription_plan: 'monthly',
+      paddle_customer_id: 'ctm_123',
+      paddle_subscription_id: 'sub_monthly',
+      paddle_environment: 'sandbox',
+    },
+    transaction: { id: 'txn_overdue', status: 'completed', customer_id: 'ctm_123', subscription_id: 'sub_monthly' },
+    subscription: {
+      id: 'sub_monthly', status: 'active', customer_id: 'ctm_123',
+      items: [{ price: { id: 'pri_monthly' } }],
+      current_billing_period: { starts_at: '2026-07-01T00:00:00Z', ends_at: '2026-08-01T00:00:00Z' },
+      next_billed_at: '2026-08-01T00:00:00Z',
+    },
+    paddle: { environment: 'sandbox', priceIdsByPlan: { monthly: 'pri_monthly' } },
+  })
+
+  assert.equal(result.result, 'recovered')
+  assert.equal(result.plan, 'monthly')
+  assert.equal(result.subscriptionId, 'sub_monthly')
+  const retryUpdate = calls.find(({ sql }) => /UPDATE payment_attempts/.test(sql))
+  assert.ok(retryUpdate)
+  assert.deepEqual(retryUpdate.params.slice(0, 3), [42, 'sandbox', 'sub_monthly'])
+  assert.match(retryUpdate.sql, /status IN \('pending', 'failed', 'retrying'\)/)
+  assert.equal(calls.at(-1).sql, 'COMMIT')
+})
+
 test('persistVerifiedCheckoutSubscription rejects a different subscription lifecycle for an active user', async () => {
   let queryCount = 0
   const result = await persistVerifiedCheckoutSubscription({

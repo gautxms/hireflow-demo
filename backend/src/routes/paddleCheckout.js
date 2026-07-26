@@ -3,7 +3,7 @@ import { pool } from '../db/client.js'
 import { requireAuth } from '../middleware/authMiddleware.js'
 import { schemas, validateBody } from '../middleware/validation.js'
 import { generalApiLimiterAuth } from '../middleware/rateLimiter.js'
-import { resolvePaddleConfigForUser } from '../config/paddle.js'
+import { resolvePaddleConfigForUser, resolvePaddleEnvironmentForUser } from '../config/paddle.js'
 import { inferPlanFromPaddlePayload } from '../services/paddlePlanChangeRecovery.js'
 
 const router = Router()
@@ -39,6 +39,13 @@ function transactionBelongsToUser(transaction = {}, user = {}, paddle = {}) {
   return String(transactionUserId || '') === String(user.id || '')
     && environment === paddle.environment
     && (!user.paddle_customer_id || transaction.customer_id === user.paddle_customer_id)
+}
+
+function transactionMatchesPastDueLifecycle(transaction = {}, user = {}, paddle = {}) {
+  return ['past_due', 'payment_failed'].includes(normalizeStatus(user.subscription_status))
+    && resolvePaddleEnvironmentForUser(user) === paddle.environment
+    && transaction.customer_id === user.paddle_customer_id
+    && transaction.subscription_id === user.paddle_subscription_id
 }
 
 export function selectReturningCheckoutTransaction(transactions = [], user = {}, paddle = {}) {
@@ -100,12 +107,17 @@ export async function persistVerifiedCheckoutSubscription({
   now = new Date(),
 }) {
   const checkoutMode = transaction?.custom_data?.checkoutMode
+  const isPastDueRecovery = ['past_due', 'payment_failed'].includes(normalizeStatus(user.subscription_status))
+    && transaction?.subscription_id === user.paddle_subscription_id
+    && transaction?.customer_id === user.paddle_customer_id
   if (
     normalizeStatus(transaction?.status) !== 'completed'
     || !transaction?.subscription_id
-    || !['trial', 'paid_returning', 'test'].includes(checkoutMode)
+    || (!isPastDueRecovery && !['trial', 'paid_returning', 'test'].includes(checkoutMode))
     || transaction.subscription_id !== subscription?.id
-    || !transactionBelongsToUser(transaction, user, paddle)
+    || (isPastDueRecovery
+      ? resolvePaddleEnvironmentForUser(user) !== paddle.environment
+      : !transactionBelongsToUser(transaction, user, paddle))
     || !['active', 'trialing'].includes(normalizeStatus(subscription?.status))
     || subscription?.customer_id !== transaction.customer_id
   ) {
@@ -119,7 +131,12 @@ export async function persistVerifiedCheckoutSubscription({
   const sameLifecycle = user.paddle_subscription_id === subscription.id
   const canReplaceLifecycle = isTerminalCancellation(user, now)
 
-  if (!plan || !currentPeriodEnd || !nextBillingDate || (!sameLifecycle && user.paddle_subscription_id && !canReplaceLifecycle)) {
+  const validDates = (isPastDueRecovery
+    ? [currentPeriodStart, currentPeriodEnd, nextBillingDate]
+    : [currentPeriodEnd, nextBillingDate])
+    .every((value) => value && !Number.isNaN(new Date(value).getTime()))
+
+  if (!plan || !validDates || (isPastDueRecovery && plan !== user.subscription_plan) || (!sameLifecycle && user.paddle_subscription_id && !canReplaceLifecycle)) {
     return { synced: false, reason: 'subscription_not_replaceable' }
   }
 
@@ -166,6 +183,24 @@ export async function persistVerifiedCheckoutSubscription({
 
     if (updateResult.rowCount !== 1) {
       await client.query('ROLLBACK')
+      const reread = await client.query(
+        `SELECT subscription_status, subscription_plan, paddle_subscription_id, paddle_customer_id,
+                current_period_end, next_billing_date
+         FROM users WHERE id = $1`,
+        [user.id],
+      )
+      const stored = reread.rows[0]
+      if (
+        isPastDueRecovery
+        && ['active', 'trialing'].includes(normalizeStatus(stored?.subscription_status))
+        && stored?.subscription_plan === plan
+        && stored?.paddle_subscription_id === subscription.id
+        && stored?.paddle_customer_id === transaction.customer_id
+        && new Date(stored?.current_period_end).getTime() === new Date(currentPeriodEnd).getTime()
+        && new Date(stored?.next_billing_date).getTime() === new Date(nextBillingDate).getTime()
+      ) {
+        return { synced: true, result: 'already_recovered', status: normalizeStatus(stored.subscription_status), plan, subscriptionId: subscription.id, transactionId: transaction.id }
+      }
       return { synced: false, reason: 'subscription_state_changed' }
     }
 
@@ -182,6 +217,21 @@ export async function persistVerifiedCheckoutSubscription({
          updated_at = NOW()`,
       [subscription.id, user.id, normalizeStatus(subscription.status), JSON.stringify({ data: subscription }), paddle.environment],
     )
+    if (isPastDueRecovery) {
+      await client.query(
+        `UPDATE payment_attempts
+         SET status = 'succeeded', next_retry_at = NULL, updated_at = NOW(),
+             metadata = COALESCE(metadata, '{}'::jsonb) || $4::jsonb
+         WHERE user_id = $1
+           AND COALESCE(NULLIF(LOWER(paddle_environment), ''), 'production') = $2
+           AND status IN ('pending', 'failed', 'retrying')
+           AND COALESCE(
+             payload->'data'->>'subscription_id', payload->'data'->>'subscriptionId',
+             payload->>'subscription_id', payload->>'subscriptionId'
+           ) = $3`,
+        [user.id, paddle.environment, subscription.id, JSON.stringify({ resolved_by: 'authoritative_reconciliation', transaction_id: transaction.id })],
+      )
+    }
     await client.query('COMMIT')
 
     return {
@@ -190,6 +240,7 @@ export async function persistVerifiedCheckoutSubscription({
       plan,
       subscriptionId: subscription.id,
       transactionId: transaction.id,
+      ...(isPastDueRecovery ? { result: 'recovered' } : {}),
     }
   } catch (error) {
     await client.query('ROLLBACK').catch(() => {})
@@ -516,15 +567,15 @@ router.post('/checkout/sync', requireAuth, generalApiLimiterAuth, async (req, re
     const transaction = await loadCompletedCheckoutTransaction(user, paddle, transactionId)
 
     if (!transaction) {
-      return res.status(202).json({ synced: false, reason: 'transaction_pending' })
+      return res.status(202).json({ synced: false, result: 'still_pending', reason: 'transaction_pending' })
     }
 
-    if (!transactionBelongsToUser(transaction, user, paddle)) {
-      return res.status(404).json({ error: 'Completed checkout was not found' })
+    if (!transactionBelongsToUser(transaction, user, paddle) && !transactionMatchesPastDueLifecycle(transaction, user, paddle)) {
+      return res.status(404).json({ synced: false, result: 'ownership_mismatch', error: 'Completed checkout was not found' })
     }
 
     if (normalizeStatus(transaction.status) !== 'completed' || !transaction.subscription_id) {
-      return res.status(202).json({ synced: false, reason: 'transaction_pending' })
+      return res.status(202).json({ synced: false, result: 'not_completed', reason: 'transaction_pending' })
     }
 
     const subscriptionPayload = await paddleApiGet(
@@ -543,7 +594,7 @@ router.post('/checkout/sync', requireAuth, generalApiLimiterAuth, async (req, re
       })
 
       if (!result.synced) {
-        return res.status(409).json(result)
+        return res.status(409).json({ ...result, result: result.reason === 'unverified_checkout' ? 'ownership_mismatch' : 'not_applicable' })
       }
 
       return res.json(result)

@@ -615,7 +615,12 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment) {
                next_billing_date = COALESCE($7, next_billing_date),
                paddle_environment = $8,
                updated_at = NOW()
-           WHERE id = $1`,
+           WHERE id = $1
+             AND (
+               LOWER(COALESCE(subscription_status, '')) NOT IN ('active', 'trialing')
+               OR $9::timestamptz IS NULL
+               OR $9::timestamptz >= updated_at
+             )`,
           [
             user.id,
             nextStatus || 'payment_failed',
@@ -625,6 +630,7 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment) {
             payload?.data?.billing_period?.ends_at || payload?.data?.current_billing_period?.ends_at || null,
             payload?.data?.billing_period?.ends_at || payload?.data?.next_billed_at || null,
             paddle.environment,
+            payload?.occurred_at || payload?.notification?.occurred_at || null,
           ],
         )
       }
@@ -697,6 +703,12 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment) {
                updated_at = NOW()
            WHERE id = $1
              AND (
+               $3 NOT IN ('past_due', 'payment_failed')
+               OR LOWER(COALESCE(subscription_status, '')) NOT IN ('active', 'trialing')
+               OR $11::timestamptz IS NULL
+               OR $11::timestamptz >= updated_at
+             )
+             AND (
                (
                  $2 IS NOT NULL
                  AND (paddle_subscription_id IS NULL OR $2 = paddle_subscription_id)
@@ -726,6 +738,7 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment) {
             paddle.environment,
             getScheduledCancellationEffectiveAt(payload),
             payload?.data?.current_billing_period?.starts_at || null,
+            payload?.occurred_at || payload?.notification?.occurred_at || null,
           ],
         )
 

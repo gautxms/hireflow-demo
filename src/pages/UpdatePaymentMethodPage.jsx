@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import usePageSeo from '../hooks/usePageSeo'
 import API_BASE from '../config/api'
+import { syncCompletedCheckout } from '../utils/paddleSubscriptionSync'
 import '../styles/billing.css'
 import '../styles/checkout.css'
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 const USER_STORAGE_KEY = 'hireflow_user_profile'
-const ACTIVE_SUBSCRIPTION_STATUSES = new Set(['active', 'trialing', 'trial'])
+const RECOVERY_TRANSACTION_KEY = 'hireflow_payment_recovery_transaction'
 const SYNC_ATTEMPTS = 10
 const SYNC_DELAY_MS = 1200
 
@@ -41,30 +42,12 @@ export default function UpdatePaymentMethodPage() {
     }
   }, [])
 
-  async function verifySubscription(token) {
-    const response = await fetch(`${API_BASE}/auth/me`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-
-    if (!response.ok) {
-      if (response.status === 401 || response.status === 403) {
-        throw new Error('Your session expired. Please log in again.')
-      }
-      throw new Error('Unable to confirm your updated billing status.')
-    }
-
-    const user = await response.json()
-    return {
-      user,
-      isActive: ACTIVE_SUBSCRIPTION_STATUSES.has(String(user?.subscription_status || '').toLowerCase()),
-    }
-  }
-
-  async function waitForBillingRecovery(token) {
+  async function waitForBillingRecovery(token, transactionId) {
     for (let attempt = 1; attempt <= SYNC_ATTEMPTS; attempt += 1) {
       try {
-        const result = await verifySubscription(token)
-        if (result.isActive) return result.user
+        const result = await syncCompletedCheckout({ apiBase: API_BASE, token, transactionId })
+        if (result.synced || ['recovered', 'already_recovered'].includes(result.result)) return result
+        if (!['still_pending', 'not_completed'].includes(result.result)) return result
       } catch (syncError) {
         if (attempt === SYNC_ATTEMPTS) throw syncError
       }
@@ -75,9 +58,11 @@ export default function UpdatePaymentMethodPage() {
     return null
   }
 
-  function persistRecoveredAccess(user) {
-    const subscriptionStatus = user?.subscription_status || 'inactive'
-    localStorage.setItem('subscription_status', subscriptionStatus)
+  async function persistRecoveredAccess(token) {
+    const response = await fetch(`${API_BASE}/auth/me`, { headers: { Authorization: `Bearer ${token}` } })
+    if (!response.ok) throw new Error('Your payment was confirmed, but access could not be refreshed.')
+    const user = await response.json()
+    localStorage.setItem('subscription_status', user.subscription_status || 'inactive')
     localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user))
     window.dispatchEvent(new CustomEvent('hireflow-auth-updated'))
   }
@@ -91,6 +76,8 @@ export default function UpdatePaymentMethodPage() {
       || event?.transaction_id
       || event?.id
     if (eventTransactionId && payload?.transactionId && eventTransactionId !== payload.transactionId) return
+    const transactionId = eventTransactionId || payload?.transactionId
+    if (!transactionId) return
 
     completionInFlightRef.current = true
     if (mountedRef.current) {
@@ -105,10 +92,12 @@ export default function UpdatePaymentMethodPage() {
       const token = localStorage.getItem(TOKEN_STORAGE_KEY)
       if (!token) throw new Error('Your session expired. Please log in again.')
 
-      const user = await waitForBillingRecovery(token)
-      if (user) {
-        persistRecoveredAccess(user)
-        window.location.assign('/dashboard?payment_recovered=1')
+      sessionStorage.setItem(RECOVERY_TRANSACTION_KEY, transactionId)
+      const result = await waitForBillingRecovery(token, transactionId)
+      if (result?.synced || ['recovered', 'already_recovered'].includes(result?.result)) {
+        await persistRecoveredAccess(token)
+        sessionStorage.removeItem(RECOVERY_TRANSACTION_KEY)
+        window.location.assign('/billing?payment_method=updated')
         return
       }
 

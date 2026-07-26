@@ -514,15 +514,21 @@ router.get('/current', requireAuth, async (req, res) => {
     const paddleStatus = normalizeStatus(paddleDates.status)
     const paddleSubscription = planCost.paddleSubscriptionPayload?.data || planCost.paddleSubscriptionPayload || {}
     const paddleCurrentPeriodEnd = paddleSubscription?.current_billing_period?.ends_at || null
+    const paddleCurrentPeriodStart = paddleSubscription?.current_billing_period?.starts_at || null
     const paddleNextBillingDate = paddleSubscription?.next_billed_at || null
+    const isPastDueRecovery = ['past_due', 'payment_failed'].includes(normalizeStatus(user.subscription_status))
+    const hasValidPaddleDates = [paddleCurrentPeriodStart, paddleCurrentPeriodEnd, paddleNextBillingDate]
+      .every((value) => value && !Number.isNaN(new Date(value).getTime()))
 
     if (
       paddleSubscription.id === user.paddle_subscription_id
+      && (!isPastDueRecovery || paddleSubscription.customer_id === user.paddle_customer_id)
       && paddlePlan === planKey
       && ['active', 'trialing'].includes(paddleStatus)
-      && paddleCurrentPeriodEnd
-      && paddleNextBillingDate
+      && (isPastDueRecovery ? hasValidPaddleDates : Boolean(paddleCurrentPeriodEnd && paddleNextBillingDate))
       && (
+        isPastDueRecovery
+        ||
         isoOrNull(user.current_period_end) !== isoOrNull(paddleCurrentPeriodEnd)
         || isoOrNull(user.subscription_renewal_date) !== isoOrNull(paddleCurrentPeriodEnd)
         || isoOrNull(user.next_billing_date) !== isoOrNull(paddleNextBillingDate)
@@ -534,10 +540,26 @@ router.get('/current', requireAuth, async (req, res) => {
            SET current_period_end = $2,
                subscription_renewal_date = $2,
                next_billing_date = $3,
+               subscription_status = CASE WHEN $9 THEN $6 ELSE subscription_status END,
+               cancellation_effective_at = CASE WHEN $9 THEN NULL ELSE cancellation_effective_at END,
+               cancellation_reason = CASE WHEN $9 THEN NULL ELSE cancellation_reason END,
                updated_at = NOW()
            WHERE id = $1
              AND paddle_subscription_id = $4
              AND subscription_plan = $5
+           RETURNING id
+         ), resolved_attempts AS (
+           UPDATE payment_attempts
+           SET status = 'succeeded', next_retry_at = NULL, updated_at = NOW(),
+               metadata = COALESCE(metadata, '{}'::jsonb) || '{"resolved_by":"subscription_get_reconciliation"}'::jsonb
+           WHERE $9
+             AND user_id = $1
+             AND COALESCE(NULLIF(LOWER(paddle_environment), ''), 'production') = $8
+             AND status IN ('pending', 'failed', 'retrying')
+             AND COALESCE(
+               payload->'data'->>'subscription_id', payload->'data'->>'subscriptionId',
+               payload->>'subscription_id', payload->>'subscriptionId'
+             ) = $4
            RETURNING id
          )
          INSERT INTO subscriptions (paddle_subscription_id, user_id, status, latest_event_type, latest_event_payload, paddle_environment)
@@ -551,13 +573,18 @@ router.get('/current', requireAuth, async (req, res) => {
            latest_event_payload = EXCLUDED.latest_event_payload,
            paddle_environment = EXCLUDED.paddle_environment,
            updated_at = NOW()`,
-        [user.id, paddleCurrentPeriodEnd, paddleNextBillingDate, user.paddle_subscription_id, planKey, paddleStatus, JSON.stringify(planCost.paddleSubscriptionPayload), paddle.environment],
+        [user.id, paddleCurrentPeriodEnd, paddleNextBillingDate, user.paddle_subscription_id, planKey, paddleStatus, JSON.stringify(planCost.paddleSubscriptionPayload), paddle.environment, isPastDueRecovery],
       )
 
       if (reconciliation.rowCount > 0) {
         user.current_period_end = paddleCurrentPeriodEnd
         user.subscription_renewal_date = paddleCurrentPeriodEnd
         user.next_billing_date = paddleNextBillingDate
+        if (isPastDueRecovery) {
+          user.subscription_status = paddleStatus
+          user.next_payment_retry_at = null
+          user.cancellation_effective_at = null
+        }
       }
     }
     const cancellationEffectiveAt = isoOrNull(user.cancellation_effective_at)
