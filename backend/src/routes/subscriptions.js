@@ -543,6 +543,10 @@ router.get('/current', requireAuth, async (req, res) => {
                subscription_status = CASE WHEN $9 THEN $6 ELSE subscription_status END,
                cancellation_effective_at = CASE WHEN $9 THEN NULL ELSE cancellation_effective_at END,
                cancellation_reason = CASE WHEN $9 THEN NULL ELSE cancellation_reason END,
+               last_paddle_event_at = CASE
+                 WHEN $9 THEN GREATEST(COALESCE(last_paddle_event_at, NOW()), NOW())
+                 ELSE last_paddle_event_at
+               END,
                updated_at = NOW()
            WHERE id = $1
              AND paddle_subscription_id = $4

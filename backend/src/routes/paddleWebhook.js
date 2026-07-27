@@ -592,9 +592,11 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment) {
           }
         }
 
-        if (activationApplied) {
-          await markPaymentAttemptSucceeded(payload)
-        } else {
+        // A completed transaction is authoritative for its own payment attempt even
+        // when a newer subscription event has already won the user projection CAS.
+        await markPaymentAttemptSucceeded(payload)
+
+        if (!activationApplied) {
           subscriptionProjection = null
         }
 

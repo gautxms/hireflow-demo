@@ -859,7 +859,7 @@ test('POST /api/paddle/webhook keeps a newer Past Due state when an older Active
   assert.ok(!calls.some(({ sql }) => /INSERT INTO subscriptions/.test(sql)))
 })
 
-test('POST /api/paddle/webhook does not apply an older completed transaction after a newer failure', async (t) => {
+test('POST /api/paddle/webhook resolves an older completed transaction attempt without overriding a newer failure', async (t) => {
   const payload = {
     event_id: 'evt_older_completed_after_failure',
     event_type: 'transaction.completed',
@@ -893,7 +893,9 @@ test('POST /api/paddle/webhook does not apply an older completed transaction aft
   const { response } = await postWebhook({ body: rawBody, signature: signBody(rawBody) })
 
   assert.equal(response.status, 200)
-  assert.ok(!calls.some(({ sql }) => /UPDATE payment_attempts/.test(sql)))
+  const attemptUpdate = calls.find(({ sql }) => /UPDATE payment_attempts/.test(sql))
+  assert.ok(attemptUpdate)
+  assert.equal(attemptUpdate.params[0], 'txn_older_completed_after_failure')
   assert.ok(!calls.some(({ sql }) => /INSERT INTO subscriptions/.test(sql)))
 })
 

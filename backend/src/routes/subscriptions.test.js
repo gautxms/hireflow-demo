@@ -650,6 +650,7 @@ test('GET /api/subscriptions/current atomically recovers the same Past Due lifec
   assert.equal(res.payload.subscription.nextRetryAt, null)
   assert.match(recovery.sql, /subscription_status IN \('past_due', 'payment_failed'\)/)
   assert.match(recovery.sql, /last_paddle_event_at IS NOT DISTINCT FROM \$12::timestamptz/)
+  assert.match(recovery.sql, /WHEN \$9 THEN GREATEST\(COALESCE\(last_paddle_event_at, NOW\(\)\), NOW\(\)\)/)
   assert.match(recovery.sql, /EXISTS \(SELECT 1 FROM reconciled_user\)/)
 })
 

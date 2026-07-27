@@ -233,6 +233,8 @@ test('persistVerifiedCheckoutSubscription authoritatively recovers the same Past
   assert.equal(result.result, 'recovered')
   assert.equal(result.plan, 'monthly')
   assert.equal(result.subscriptionId, 'sub_monthly')
+  const userUpdate = calls.find(({ sql }) => /UPDATE users/.test(sql))
+  assert.match(userUpdate.sql, /WHEN \$10::boolean THEN GREATEST\(COALESCE\(last_paddle_event_at, NOW\(\)\), NOW\(\)\)/)
   const retryUpdate = calls.find(({ sql }) => /UPDATE payment_attempts/.test(sql))
   assert.ok(retryUpdate)
   assert.deepEqual(retryUpdate.params.slice(0, 3), [42, 'sandbox', 'sub_monthly'])

@@ -158,6 +158,10 @@ export async function persistVerifiedCheckoutSubscription({
            quota_anchor_at = COALESCE($8, quota_anchor_at, NOW()),
            trial_consumed_at = COALESCE(trial_consumed_at, NOW()),
            paddle_environment = $9,
+           last_paddle_event_at = CASE
+             WHEN $10::boolean THEN GREATEST(COALESCE(last_paddle_event_at, NOW()), NOW())
+             ELSE last_paddle_event_at
+           END,
            updated_at = NOW()
        WHERE id = $1
          AND (
