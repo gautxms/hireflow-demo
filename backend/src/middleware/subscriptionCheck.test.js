@@ -100,6 +100,7 @@ test('billing-period usage identifies allocation rows by the exact reservation t
   assert.match(usageQuery.sql, /JOIN resume_quota_reservations AS reservation/)
   assert.match(usageQuery.sql, /reservation\.period_start = \$2/)
   assert.match(usageQuery.sql, /reservation\.period_end = \$3/)
+  assert.match(usageQuery.sql, /OR \(usage_log\.created_at >= \$2 AND usage_log\.created_at < \$3\)/)
   assert.doesNotMatch(usageQuery.sql, /month_start = \$2::date/)
   assert.equal(usageQuery.params[1].toISOString(), periodStart.toISOString())
   assert.equal(usageQuery.params[2].toISOString(), periodEnd.toISOString())

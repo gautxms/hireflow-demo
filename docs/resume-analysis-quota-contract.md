@@ -130,7 +130,10 @@ the immediate rollback path while `RESUME_QUOTA_RESERVATIONS_ENABLED=false`.
   whenever the rollout flag is enabled.
 - Allocation-backed usage is assigned to the exact timestamp-precise period on
   its durable reservation, so a recovery later on the same UTC date starts a
-  fresh period without rewriting pre-recovery usage or allocations.
+  fresh period without rewriting pre-recovery usage or allocations. If an
+  existing reservation is consumed after the new recovery boundary but before
+  local confirmation, its precise provider-start usage time counts in the new
+  period.
 - If the kill switch is turned off mid-period, calendar-month enforcement still
   includes allocation-backed usage written during the flagged rollout.
 

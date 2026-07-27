@@ -162,20 +162,23 @@ export async function reserveResumeQuotaUnits({
            AND (
              (
                quota_allocation_id IS NOT NULL
-               AND EXISTS (
-                 SELECT 1
-                 FROM resume_quota_allocations AS allocation
-                 JOIN resume_quota_reservations AS allocation_reservation
-                   ON allocation_reservation.id = allocation.reservation_id
-                 WHERE allocation.id = usage_log.quota_allocation_id
-                   AND allocation_reservation.period_start = $2
-                   AND allocation_reservation.period_end = $3
+               AND (
+                 EXISTS (
+                   SELECT 1
+                   FROM resume_quota_allocations AS allocation
+                   JOIN resume_quota_reservations AS allocation_reservation
+                     ON allocation_reservation.id = allocation.reservation_id
+                   WHERE allocation.id = usage_log.quota_allocation_id
+                     AND allocation_reservation.period_start = $2
+                     AND allocation_reservation.period_end = $3
+                 )
+                 OR (usage_log.created_at >= $2 AND usage_log.created_at < $3)
                )
              )
              OR (
                quota_allocation_id IS NULL
-               AND created_at >= $2
-               AND created_at < $3
+               AND usage_log.created_at >= $2
+               AND usage_log.created_at < $3
              )
            )`,
         [normalizedUserId, normalizedPeriodStart, normalizedPeriodEnd],

@@ -152,7 +152,8 @@ export default function BillingPage() {
           setRecoveryPending(false)
           window.history.replaceState({}, '', '/billing')
         } else if (!nextSubscription?.recoveryAdjustmentStatus) {
-          nextSubscription = { ...nextSubscription, recoveryAdjustmentStatus: 'pending' }
+          setRecoveryPending(false)
+          window.history.replaceState({}, '', '/billing')
         }
       }
       setSubscription(nextSubscription)

@@ -128,6 +128,7 @@ test('reservation preflight counts allocation usage by exact reservation period 
   assert.match(usageQuery.sql, /JOIN resume_quota_reservations AS allocation_reservation/)
   assert.match(usageQuery.sql, /allocation_reservation\.period_start = \$2/)
   assert.match(usageQuery.sql, /allocation_reservation\.period_end = \$3/)
+  assert.match(usageQuery.sql, /OR \(usage_log\.created_at >= \$2 AND usage_log\.created_at < \$3\)/)
   assert.doesNotMatch(usageQuery.sql, /month_start = \$2::date/)
   assert.equal(usageQuery.params[1].toISOString(), periodStart.toISOString())
   assert.equal(usageQuery.params[2].toISOString(), periodEnd.toISOString())
