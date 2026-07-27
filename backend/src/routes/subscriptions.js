@@ -12,6 +12,7 @@ import {
   PLAN_CHANGE_RECOVERY_OUTCOME,
   recoverFailedPaddlePlanChange,
 } from '../services/paddlePlanChangeRecovery.js'
+import { isRecoveryBillingAdjustmentEnabled } from '../services/recoveryBillingAdjustment.js'
 
 const router = Router()
 
@@ -711,6 +712,7 @@ router.get('/current', requireAuth, async (req, res) => {
           : null,
         recoveryAdjustmentStatus: user.recovery_adjustment_status || null,
         recoveryAdjustmentReference: user.recovery_adjustment_reference || null,
+        recoveryAdjustmentEnabled: isRecoveryBillingAdjustmentEnabled(paddle.environment),
         cancellationEffectiveAt,
         cancelAtPeriodEnd: hasScheduledCancellation,
         paymentMethod: isFinalCancellation ? null : user.payment_method_last4

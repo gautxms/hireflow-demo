@@ -96,6 +96,19 @@ async function markAttemptPermanentlyIneligible(db, attempt, reasonCode) {
   )
 }
 
+async function scheduleAttemptDiscoveryRetry(db, attempt, reasonCode) {
+  await db.query(
+    `UPDATE payment_attempts SET metadata=COALESCE(metadata, '{}'::jsonb)
+       || jsonb_build_object(
+         'recovery_adjustment_discovery_status', 'retryable_failed',
+         'recovery_adjustment_discovery_error_code', $2::text,
+         'recovery_adjustment_discovery_retry_at', NOW()+INTERVAL '15 minutes'
+       ), updated_at=NOW()
+     WHERE id=$1`,
+    [attempt.id, reasonCode],
+  )
+}
+
 function isPermanentTransactionLookupFailure(error) {
   return [404, 410].includes(Number(error?.status))
 }
@@ -117,7 +130,8 @@ async function recordMissingCapture(db, attempt) {
            'recovery_adjustment_capture_attempts', capture_retry.attempt_count,
            'recovery_adjustment_capture_status',
              CASE WHEN capture_retry.attempt_count >= $2 THEN 'manual_required' ELSE 'retryable_failed' END,
-           'recovery_adjustment_capture_error_code', 'missing_trustworthy_capture'
+           'recovery_adjustment_capture_error_code', 'missing_trustworthy_capture',
+           'recovery_adjustment_discovery_retry_at', NOW()+INTERVAL '15 minutes'
          ),
          updated_at=NOW()
      FROM capture_retry
@@ -138,12 +152,15 @@ export async function createRecoveryAdjustmentForAttempt(attempt, dependencies =
       ? dependencies.getTransaction(attempt.transaction_id)
       : paddleRequest(paddle, `/transactions/${encodeURIComponent(attempt.transaction_id)}`))
   } catch (error) {
-    if (!isPermanentTransactionLookupFailure(error)) throw error
-    await markAttemptPermanentlyIneligible(db, attempt, 'provider_transaction_unavailable')
-    console.warn('[recovery-billing-adjustment] ownership/security rejection', {
-      userId: attempt.user_id, environment: paddle.environment, reasonCode: 'provider_transaction_unavailable',
-    })
-    return null
+    if (isPermanentTransactionLookupFailure(error)) {
+      await markAttemptPermanentlyIneligible(db, attempt, 'provider_transaction_unavailable')
+      console.warn('[recovery-billing-adjustment] ownership/security rejection', {
+        userId: attempt.user_id, environment: paddle.environment, reasonCode: 'provider_transaction_unavailable',
+      })
+      return null
+    }
+    await scheduleAttemptDiscoveryRetry(db, attempt, `provider_transaction_${error?.status || 'unavailable'}`)
+    throw error
   }
   const capture = selectAuthoritativeCapture(transaction?.payments)
   const userResult = await db.query(
@@ -181,9 +198,19 @@ export async function createRecoveryAdjustmentForAttempt(attempt, dependencies =
     await markAttemptPermanentlyIneligible(db, attempt, 'subscription_finally_cancelled')
     return null
   }
-  const subscription = await (dependencies.getSubscription
-    ? dependencies.getSubscription(transaction?.subscription_id)
-    : paddleRequest(paddle, `/subscriptions/${encodeURIComponent(transaction?.subscription_id || '')}`))
+  let subscription
+  try {
+    subscription = await (dependencies.getSubscription
+      ? dependencies.getSubscription(transaction?.subscription_id)
+      : paddleRequest(paddle, `/subscriptions/${encodeURIComponent(transaction?.subscription_id || '')}`))
+  } catch (error) {
+    if (isPermanentTransactionLookupFailure(error)) {
+      await markAttemptPermanentlyIneligible(db, attempt, 'provider_subscription_unavailable')
+      return null
+    }
+    await scheduleAttemptDiscoveryRetry(db, attempt, `provider_subscription_${error?.status || 'unavailable'}`)
+    throw error
+  }
   const plan = inferPlanFromPaddlePayload(subscription, paddle)
   const permanentlyIncompatible = subscription.id !== user.paddle_subscription_id
     || subscription.customer_id !== user.paddle_customer_id
@@ -193,6 +220,10 @@ export async function createRecoveryAdjustmentForAttempt(attempt, dependencies =
     || ['canceled', 'cancelled'].includes(String(subscription.status).toLowerCase())
   if (permanentlyIncompatible) {
     await markAttemptPermanentlyIneligible(db, attempt, 'subscription_lifecycle_incompatible')
+    return null
+  }
+  if (subscription.status !== 'active') {
+    await scheduleAttemptDiscoveryRetry(db, attempt, 'subscription_not_active')
     return null
   }
   const safe = user && transactionIsRecurringRenewal(transaction) && capture
@@ -211,6 +242,7 @@ export async function createRecoveryAdjustmentForAttempt(attempt, dependencies =
   const currentNext = validDate(subscription?.next_billed_at)
   const target = addBillingInterval(capture?.captured_at, plan)
   if (!safe || !currentNext || !target) {
+    await scheduleAttemptDiscoveryRetry(db, attempt, 'provider_state_not_ready')
     console.warn('[recovery-billing-adjustment] ownership/security rejection', {
       userId: attempt.user_id, environment: paddle.environment, reasonCode: 'ineligible_recovery',
     })
@@ -448,13 +480,19 @@ export async function runRecoveryBillingAdjustments(dependencies = {}) {
          COALESCE(pa.metadata->>'recovery_adjustment_capture_status','') <> 'retryable_failed'
          OR pa.updated_at<=NOW()-INTERVAL '15 minutes'
        )
+       AND (
+         COALESCE(pa.metadata->>'recovery_adjustment_discovery_retry_at','') = ''
+         OR (pa.metadata->>'recovery_adjustment_discovery_retry_at')::timestamptz<=NOW()
+       )
        AND COALESCE(pa.payload->'data'->>'origin', pa.payload->>'origin','') = 'subscription_recurring'
        AND COALESCE(NULLIF(LOWER(pa.paddle_environment),''),'production') = ANY($1::text[])
        AND NOT EXISTS (SELECT 1 FROM recovery_billing_adjustments a
          WHERE COALESCE(NULLIF(LOWER(a.paddle_environment),''),'production')
              = COALESCE(NULLIF(LOWER(pa.paddle_environment),''),'production')
            AND a.recovery_transaction_id=pa.transaction_id)
-     ORDER BY pa.updated_at DESC LIMIT 20`, [enabled],
+     ORDER BY (pa.metadata->>'recovery_adjustment_discovery_retry_at')::timestamptz ASC NULLS FIRST,
+              pa.updated_at DESC
+     LIMIT 20`, [enabled],
   )
   for (const attempt of candidates.rows) {
     try {

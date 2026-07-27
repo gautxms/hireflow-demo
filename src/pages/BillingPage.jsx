@@ -142,6 +142,9 @@ export default function BillingPage() {
         if (adjustmentIsTerminal) {
           setRecoveryPending(false)
           window.history.replaceState({}, '', '/billing')
+        } else if (nextSubscription?.recoveryAdjustmentEnabled === false) {
+          setRecoveryPending(false)
+          window.history.replaceState({}, '', '/billing')
         } else if (!nextSubscription?.recoveryAdjustmentStatus) {
           nextSubscription = { ...nextSubscription, recoveryAdjustmentStatus: 'pending' }
         }

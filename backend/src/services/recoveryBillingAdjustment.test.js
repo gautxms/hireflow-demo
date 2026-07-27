@@ -193,6 +193,8 @@ test('scheduler filters enabled environments before both limits and isolates can
   assert.match(sql[0].text, /COALESCE\(NULLIF\(LOWER\(a\.paddle_environment\),''\),'production'\)[\s\S]*COALESCE\(NULLIF\(LOWER\(pa\.paddle_environment\),''\),'production'\)/)
   assert.match(sql[0].text, /recovery_adjustment_capture_status',''\) <> 'manual_required'/)
   assert.match(sql[0].text, /pa\.updated_at<=NOW\(\)-INTERVAL '15 minutes'/)
+  assert.match(sql[0].text, /recovery_adjustment_discovery_retry_at[\s\S]*timestamptz<=NOW\(\)/)
+  assert.match(sql[0].text, /recovery_adjustment_discovery_retry_at[\s\S]*ASC NULLS FIRST/)
   assert.match(sql[1].text, /paddle_environment = ANY\(\$1::text\[\]\)[\s\S]*LIMIT 20 FOR UPDATE OF a SKIP LOCKED/)
   assert.deepEqual(sql.map(({ params }) => params), [[['sandbox']], [['sandbox']]])
 })
@@ -574,6 +576,7 @@ test('transient Past Due subscription stays retryable while later candidates con
   })
   assert.equal(result, null)
   assert.equal(writes.some(({ sql }) => /recovery_adjustment_ineligible/.test(sql)), false)
+  assert.equal(writes.some(({ sql }) => /recovery_adjustment_discovery_retry_at/.test(sql)), true)
 })
 
 test('permanent Paddle transaction lookup failure is durably excluded from discovery', async () => {
@@ -610,6 +613,7 @@ for (const [name, status] of [['rate limit', 429], ['provider failure', 503], ['
       error,
     )
     assert.equal(writes.some(({ sql }) => /recovery_adjustment_ineligible/.test(sql)), false)
+    assert.equal(writes.some(({ sql }) => /recovery_adjustment_discovery_retry_at/.test(sql)), true)
   })
 }
 
@@ -739,5 +743,58 @@ test('more than 20 permanent transaction 404s cannot starve an older valid recov
   await runRecoveryBillingAdjustments(dependencies)
 
   assert.equal(classified.size, 21)
+  assert.deepEqual(created, ['txn_valid'])
+})
+
+test('more than 20 transient candidates are deferred so an older valid recovery is discovered', async () => {
+  const attempts = [
+    ...Array.from({ length: 21 }, (_, index) => ({
+      id: `transient_${index}`, user_id: 7, transaction_id: `txn_transient_${index}`,
+      paddle_environment: 'sandbox', retryScheduled: false,
+    })),
+    { id: 'valid', user_id: 7, transaction_id: 'txn_valid', paddle_environment: 'sandbox', retryScheduled: false },
+  ]
+  const created = []
+  let currentTransactionId = ''
+  const db = { async query(sql, params) {
+    if (/SELECT pa\.\*/.test(sql)) {
+      const rows = attempts.filter((attempt) => !attempt.retryScheduled).slice(0, 20)
+      return { rows, rowCount: rows.length }
+    }
+    if (/recovery_adjustment_discovery_retry_at/.test(sql) && /UPDATE payment_attempts/.test(sql)) {
+      attempts.find((attempt) => attempt.id === params[0]).retryScheduled = true
+      return { rows: [], rowCount: 1 }
+    }
+    if (/FROM users/.test(sql)) return { rows: [{
+      id: 7, subscription_status: 'past_due', subscription_plan: 'monthly', paddle_environment: 'sandbox',
+      paddle_customer_id: 'ctm_1', paddle_subscription_id: 'sub_1', cancellation_effective_at: null,
+    }] }
+    if (/INSERT INTO recovery_billing_adjustments/.test(sql)) {
+      created.push(params[4])
+      return { rows: [{ id: 'adj_valid' }], rowCount: 1 }
+    }
+    return { rows: [], rowCount: 0 }
+  } }
+  const dependencies = {
+    db,
+    env: { PADDLE_PAST_DUE_RECOVERY_BILLING_ADJUSTMENT_ENVIRONMENTS: 'sandbox' },
+    paddle: { environment: 'sandbox', priceIdsByPlan: { monthly: 'pri_month' }, noTrialPriceIdsByPlan: {}, legacyPriceIdsByPlan: {} },
+    getTransaction: async (transactionId) => {
+      currentTransactionId = transactionId
+      return recurringTransaction({ id: transactionId })
+    },
+    getSubscription: async () => ({
+      id: 'sub_1', customer_id: 'ctm_1',
+      status: currentTransactionId === 'txn_valid' ? 'active' : 'past_due',
+      scheduled_change: null, next_billed_at: '2026-08-23T00:00:00Z',
+      items: [{ price: { id: 'pri_month', billing_cycle: { interval: 'month' } } }],
+    }),
+    logError: async () => {},
+  }
+
+  await runRecoveryBillingAdjustments(dependencies)
+  await runRecoveryBillingAdjustments(dependencies)
+
+  assert.equal(attempts.filter((attempt) => attempt.retryScheduled).length, 21)
   assert.deepEqual(created, ['txn_valid'])
 })

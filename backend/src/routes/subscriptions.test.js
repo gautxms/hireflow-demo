@@ -58,6 +58,7 @@ function resetPaddleEnv() {
   delete process.env.PADDLE_TEST_UPGRADE_KEY
   delete process.env.PADDLE_TEST_ANNUAL_PRICE_ID
   delete process.env.PADDLE_TEST_MONTHLY_PRICE_ID
+  delete process.env.PADDLE_PAST_DUE_RECOVERY_BILLING_ADJUSTMENT_ENVIRONMENTS
 }
 
 function activeMonthlyUser() {
@@ -727,8 +728,25 @@ test('GET /api/subscriptions/current exposes durable missing-capture manual revi
   assert.equal(res.statusCode, 200)
   assert.equal(res.payload.subscription.recoveryAdjustmentStatus, 'manual_required')
   assert.equal(res.payload.subscription.recoveryAdjustmentReference, 'payment_attempt:42')
+  assert.equal(res.payload.subscription.recoveryAdjustmentEnabled, false)
   assert.match(calls[0].sql, /recovery_adjustment_capture_status/)
   assert.match(calls[0].sql, /ORDER BY recovery\.occurred_at DESC/)
+})
+
+test('GET /api/subscriptions/current exposes recovery adjustment rollout applicability', async () => {
+  resetPaddleEnv()
+  process.env.PADDLE_PAST_DUE_RECOVERY_BILLING_ADJUSTMENT_ENVIRONMENTS = 'production'
+  installDbMock({
+    ...activeMonthlyUser(),
+    paddle_customer_id: 'ctm_123',
+    paddle_environment: 'production',
+  })
+  mockPaddleResponse()
+
+  const res = await invokeRoute('/current')
+
+  assert.equal(res.statusCode, 200)
+  assert.equal(res.payload.subscription.recoveryAdjustmentEnabled, true)
 })
 
 test('POST /api/subscriptions/change-plan-preview uses gated test annual price for valid upgradeTestKey', async () => {

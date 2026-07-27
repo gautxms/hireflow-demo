@@ -10,7 +10,7 @@ export function getPastDueBillingNotice() {
 }
 
 export function isRecoveryAdjustmentTerminal(status) {
-  return ['confirmed', 'already_satisfied', 'manual_required'].includes(String(status || '').toLowerCase())
+  return ['confirmed', 'already_satisfied', 'manual_required', 'superseded'].includes(String(status || '').toLowerCase())
 }
 
 export function shouldPollRecoveryAdjustment(recoveryPending, subscription) {
