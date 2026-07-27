@@ -786,6 +786,119 @@ test('POST /api/paddle/webhook allows failed payment for active user current sub
   assert.equal(calls.some(({ sql, params }) => /UPDATE users/.test(sql) && params?.[1] === 'payment_failed'), true)
 })
 
+test('POST /api/paddle/webhook orders a failed payment by Paddle occurred_at instead of users.updated_at', async (t) => {
+  const occurredAt = '2026-07-20T10:00:02.000Z'
+  const payload = {
+    event_id: 'evt_payment_failed_provider_ordering',
+    event_type: 'transaction.payment_failed',
+    occurred_at: occurredAt,
+    data: {
+      id: 'txn_failed_provider_ordering',
+      subscription_id: 'sub_current_123',
+      customer_id: 'ctm_test_123',
+      custom_data: { userId: 42, plan: 'monthly', paddleEnvironment: 'sandbox' },
+    },
+  }
+  const rawBody = JSON.stringify(payload)
+  const calls = []
+
+  t.mock.method(pool, 'query', async (sql, params) => {
+    calls.push({ sql: String(sql), params })
+    if (String(sql).includes('FROM paddle_webhook_events')) return { rowCount: 0, rows: [] }
+    if (String(sql).includes('FROM users')) {
+      return { rowCount: 1, rows: [{ id: 42, paddle_customer_id: 'ctm_test_123', paddle_subscription_id: 'sub_current_123', subscription_status: 'active' }] }
+    }
+    return { rowCount: 1, rows: [] }
+  })
+
+  const { response } = await postWebhook({ body: rawBody, signature: signBody(rawBody) })
+  const statusUpdate = calls.find(({ sql, params }) => /UPDATE users/.test(sql) && params?.[1] === 'payment_failed')
+
+  assert.equal(response.status, 200)
+  assert.equal(statusUpdate.params[8], occurredAt)
+  assert.match(statusUpdate.sql, /\$9::timestamptz >= last_paddle_event_at/)
+  assert.doesNotMatch(statusUpdate.sql, /\$9::timestamptz >= updated_at/)
+  assert.match(statusUpdate.sql, /last_paddle_event_at = CASE/)
+})
+
+test('POST /api/paddle/webhook keeps a newer Past Due state when an older Active subscription update arrives', async (t) => {
+  const state = {
+    id: 42,
+    paddle_customer_id: 'ctm_test_123',
+    paddle_subscription_id: 'sub_test_123',
+    subscription_status: 'past_due',
+    subscription_plan: 'monthly',
+    current_period_end: '2026-08-01T00:00:00.000Z',
+    cancellation_effective_at: '2026-08-01T00:00:00.000Z',
+    last_paddle_event_at: '2026-07-20T10:00:05.000Z',
+  }
+  const payload = buildSubscriptionUpdatedPayload({
+    event_id: 'evt_older_active_after_failure',
+    occurred_at: '2026-07-20T10:00:02.000Z',
+    data: { ...buildSubscriptionUpdatedPayload().data, status: 'active' },
+  })
+  const rawBody = JSON.stringify(payload)
+  const calls = []
+
+  t.mock.method(pool, 'query', async (sql, params) => {
+    calls.push({ sql: String(sql), params })
+    if (String(sql).includes('FROM paddle_webhook_events')) return { rowCount: 0, rows: [] }
+    if (String(sql).includes('FROM users')) return { rowCount: 1, rows: [{ ...state }] }
+    if (/UPDATE users/.test(sql)) {
+      assert.match(String(sql), /\$11::timestamptz >= last_paddle_event_at/)
+      return { rowCount: 0, rows: [] }
+    }
+    return { rowCount: 1, rows: [] }
+  })
+
+  const { response } = await postWebhook({ body: rawBody, signature: signBody(rawBody) })
+
+  assert.equal(response.status, 200)
+  assert.equal(state.subscription_status, 'past_due')
+  assert.equal(state.last_paddle_event_at, '2026-07-20T10:00:05.000Z')
+  assert.ok(!calls.some(({ sql }) => /INSERT INTO subscriptions/.test(sql)))
+})
+
+test('POST /api/paddle/webhook resolves an older completed transaction attempt without overriding a newer failure', async (t) => {
+  const payload = {
+    event_id: 'evt_older_completed_after_failure',
+    event_type: 'transaction.completed',
+    occurred_at: '2026-07-20T10:00:02.000Z',
+    data: {
+      id: 'txn_older_completed_after_failure',
+      subscription_id: 'sub_test_123',
+      customer_id: 'ctm_test_123',
+      custom_data: { userId: 42, plan: 'monthly', paddleEnvironment: 'sandbox' },
+      billing_period: { starts_at: '2026-07-01T00:00:00.000Z', ends_at: '2026-08-01T00:00:00.000Z' },
+    },
+  }
+  const rawBody = JSON.stringify(payload)
+  const calls = []
+
+  t.mock.method(pool, 'query', async (sql, params) => {
+    calls.push({ sql: String(sql), params })
+    if (String(sql).includes('FROM paddle_webhook_events')) return { rowCount: 0, rows: [] }
+    if (String(sql).includes('FROM users')) return { rowCount: 1, rows: [{
+      id: 42, paddle_customer_id: 'ctm_test_123', paddle_subscription_id: 'sub_test_123',
+      subscription_status: 'past_due', subscription_plan: 'monthly',
+      last_paddle_event_at: '2026-07-20T10:00:05.000Z',
+    }] }
+    if (/UPDATE users/.test(sql)) {
+      assert.match(String(sql), /\$9::timestamptz >= last_paddle_event_at/)
+      return { rowCount: 0, rows: [] }
+    }
+    return { rowCount: 1, rows: [] }
+  })
+
+  const { response } = await postWebhook({ body: rawBody, signature: signBody(rawBody) })
+
+  assert.equal(response.status, 200)
+  const attemptUpdate = calls.find(({ sql }) => /UPDATE payment_attempts/.test(sql))
+  assert.ok(attemptUpdate)
+  assert.equal(attemptUpdate.params[0], 'txn_older_completed_after_failure')
+  assert.ok(!calls.some(({ sql }) => /INSERT INTO subscriptions/.test(sql)))
+})
+
 test('POST /api/paddle/webhook preserves Monthly access and restores Paddle after a failed Annual upgrade', async (t) => {
   const originalFetch = globalThis.fetch
   const calls = []

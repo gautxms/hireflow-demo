@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import usePageSeo from '../hooks/usePageSeo'
 import BackButton from '../components/BackButton'
 import StatePattern from '../components/state/StatePattern'
@@ -10,6 +10,8 @@ import '../styles/billing.css'
 import '../styles/checkout.css'
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
+const RECOVERY_TRANSACTION_KEY = 'hireflow_payment_recovery_transaction'
+const RECOVERY_POLL_LIMIT = 8
 
 function formatDate(value) {
   return value ? new Date(value).toLocaleDateString() : '—'
@@ -87,6 +89,10 @@ export default function BillingPage() {
   const [previewErrorCode, setPreviewErrorCode] = useState('')
   const [isCancelling, setIsCancelling] = useState(false)
   const [isKeepingSubscription, setIsKeepingSubscription] = useState(false)
+  const recoveryPollRef = useRef(0)
+  const recoveryTimerRef = useRef(null)
+  const recoveryPending = typeof window !== 'undefined'
+    && new URLSearchParams(window.location.search).get('sync') === 'pending'
 
   const upgradeTestKey = useMemo(() => {
     if (typeof window === 'undefined') return ''
@@ -108,7 +114,8 @@ export default function BillingPage() {
       setLoading(true)
       setError('')
       try {
-        await syncCompletedCheckout({ apiBase: API_BASE, token })
+        const recoveryTransactionId = sessionStorage.getItem(RECOVERY_TRANSACTION_KEY)
+        await syncCompletedCheckout({ apiBase: API_BASE, token, transactionId: recoveryTransactionId })
       } catch (syncError) {
         console.warn('[BillingPage] Completed checkout reconciliation is not available yet', syncError)
       }
@@ -121,6 +128,13 @@ export default function BillingPage() {
 
       const nextSubscription = subPayload.subscription || null
       setSubscription(nextSubscription)
+
+      if (recoveryPending && ['active', 'trialing'].includes(String(nextSubscription?.status || '').toLowerCase())) {
+        sessionStorage.removeItem(RECOVERY_TRANSACTION_KEY)
+        window.history.replaceState({}, '', '/billing')
+        setActionFeedback({ type: 'success', message: 'Payment confirmed. Your subscription and workspace access are active.' })
+        window.dispatchEvent(new CustomEvent('hireflow-auth-updated'))
+      }
 
       const subscriptionState = resolveSubscriptionState({ subscription: nextSubscription })
 
@@ -146,8 +160,19 @@ export default function BillingPage() {
 
   useEffect(() => {
     loadBilling()
+    return () => {
+      if (recoveryTimerRef.current) window.clearTimeout(recoveryTimerRef.current)
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  useEffect(() => {
+    if (!recoveryPending || loading || !subscriptionState.isPastDue || recoveryPollRef.current >= RECOVERY_POLL_LIMIT) return
+    recoveryPollRef.current += 1
+    recoveryTimerRef.current = window.setTimeout(() => { void loadBilling() }, 1500)
+    return () => window.clearTimeout(recoveryTimerRef.current)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recoveryPending, loading, subscription?.status])
 
   const subscriptionState = resolveSubscriptionState({ subscription })
   const canShowBillingPage = canRenderBillingPage(subscriptionState)
@@ -388,6 +413,11 @@ export default function BillingPage() {
                 ))}
               </div>
               {pastDueBillingNotice ? <p className="billing-page__past-due-note">{pastDueBillingNotice}</p> : null}
+              {recoveryPending && subscriptionState.isPastDue ? (
+                <p className="billing-page__feedback billing-page__feedback--success" role="status">
+                  Payment received. We’re confirming your subscription.
+                </p>
+              ) : null}
               {cancellationAccessMessage ? (
                 <p className="billing-page__renewal-note">{cancellationAccessMessage}</p>
               ) : null}
@@ -401,7 +431,9 @@ export default function BillingPage() {
                     </button>
                   ) : null}
                   {subscriptionState.isPastDue ? (
-                    <a className="hf-btn hf-btn--primary" href="/account/payment-method">Update payment &amp; pay now</a>
+                    recoveryPending ? (
+                      <button type="button" className="hf-btn hf-btn--primary" onClick={() => { recoveryPollRef.current = 0; void loadBilling() }}>Retry status check</button>
+                    ) : <a className="hf-btn hf-btn--primary" href="/account/payment-method">Update payment &amp; pay now</a>
                   ) : null}
                   {!hasScheduledCancellation && !isFinalCancellation && !subscriptionState.isPastDue && planAction?.isSelfServe ? (
                     <button type="button" className="hf-btn hf-btn--primary" onClick={() => openPlanModal(planAction.targetPlan)}>

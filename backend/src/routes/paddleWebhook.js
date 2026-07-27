@@ -177,6 +177,15 @@ function shouldPreservePaidPlanDuringUpdate(user, payload, paddle, eventType) {
   )
 }
 
+function getProviderEventTimestamp(payload) {
+  const value = payload?.occurred_at || payload?.notification?.occurred_at || null
+  if (!value) return null
+  const parsed = new Date(value)
+  // SQL ordering permits an undated event only while no authoritative provider
+  // timestamp has been stored, preserving compatibility for pre-migration rows.
+  return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString()
+}
+
 async function restorePlanChangeEntitlement(user, metadata) {
   if (!user?.id || !metadata?.fromPlan) return
 
@@ -466,6 +475,7 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment) {
     }
 
     const nextStatus = mapToSubscriptionStatus(eventType, payload)
+    const providerEventAt = getProviderEventTimestamp(payload)
     const subscriptionId = getSubscriptionId(payload, eventType)
     const payloadEnvironment = payload?.data?.custom_data?.paddleEnvironment || payload?.custom_data?.paddleEnvironment || null
     const userResolution = await resolveUserFromPayload(payload, paddle.environment, strictEnvironment)
@@ -501,6 +511,7 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment) {
       const transactionId = payload?.data?.id || payload?.transaction_id || payload?.id || null
       const completedPlanChange = getPlanChangeMetadata(payload)
       const isRecoveredPlanChange = isSubscriptionUpdateTransaction(payload) && completedPlanChange?.outcome === 'recovered'
+      let activationApplied = false
 
       if (!hasEnvironmentMismatch && !isRecoveredPlanChange) {
         if (userId) {
@@ -525,8 +536,19 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment) {
                    ELSE cancellation_reason
                  END,
                  paddle_environment = $7,
+                 last_paddle_event_at = CASE
+                   WHEN $9::timestamptz IS NULL THEN last_paddle_event_at
+                   ELSE GREATEST(COALESCE(last_paddle_event_at, $9::timestamptz), $9::timestamptz)
+                 END,
                  updated_at = NOW()
              WHERE id = $1
+               AND ($3 IS NULL OR paddle_customer_id IS NULL OR paddle_customer_id = $3)
+               AND COALESCE(NULLIF(LOWER(paddle_environment), ''), $7) = $7
+               AND (
+                 $2 IS DISTINCT FROM paddle_subscription_id
+                 OR last_paddle_event_at IS NULL
+                 OR ($9::timestamptz IS NOT NULL AND $9::timestamptz >= last_paddle_event_at)
+               )
                AND (
                  (
                    $2 IS NOT NULL
@@ -555,8 +577,10 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment) {
               payload?.data?.billing_period?.ends_at || null,
               paddle.environment,
               payload?.data?.billing_period?.starts_at || null,
+              providerEventAt,
             ],
           )
+          activationApplied = activationResult.rowCount > 0
 
           if (
             activationResult.rowCount === 0
@@ -568,7 +592,13 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment) {
           }
         }
 
+        // A completed transaction is authoritative for its own payment attempt even
+        // when a newer subscription event has already won the user projection CAS.
         await markPaymentAttemptSucceeded(payload)
+
+        if (!activationApplied) {
+          subscriptionProjection = null
+        }
 
         await trackEvent({
           userId,
@@ -582,12 +612,14 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment) {
           },
         })
 
-        await triggerWebhook('subscription.activated', {
-          userId,
-          subscriptionId: transactionSubscriptionId,
-          transactionId,
-          status: 'active',
-        })
+        if (activationApplied) {
+          await triggerWebhook('subscription.activated', {
+            userId,
+            subscriptionId: transactionSubscriptionId,
+            transactionId,
+            status: 'active',
+          })
+        }
       }
     }
 
@@ -604,8 +636,12 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment) {
         }
       }
 
-      if (!hasEnvironmentMismatch && !preservePaidPlan && shouldApplyFailedPaymentToUser(user, payload, eventType)) {
-        await pool.query(
+      let failedStatusApplied = false
+      const shouldApplyFailure = !hasEnvironmentMismatch
+        && !preservePaidPlan
+        && shouldApplyFailedPaymentToUser(user, payload, eventType)
+      if (shouldApplyFailure) {
+        const failedUpdateResult = await pool.query(
           `UPDATE users
            SET subscription_status = $2,
                paddle_subscription_id = COALESCE($3, paddle_subscription_id),
@@ -614,8 +650,22 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment) {
                current_period_end = COALESCE($6, current_period_end),
                next_billing_date = COALESCE($7, next_billing_date),
                paddle_environment = $8,
+               last_paddle_event_at = CASE
+                 WHEN $9::timestamptz IS NULL THEN last_paddle_event_at
+                 ELSE GREATEST(COALESCE(last_paddle_event_at, $9::timestamptz), $9::timestamptz)
+               END,
                updated_at = NOW()
-           WHERE id = $1`,
+           WHERE id = $1
+             AND (
+               (paddle_subscription_id IS NULL AND $3 IS NULL)
+               OR paddle_subscription_id = $3
+             )
+             AND ($4 IS NULL OR paddle_customer_id IS NULL OR paddle_customer_id = $4)
+             AND COALESCE(NULLIF(LOWER(paddle_environment), ''), $8) = $8
+             AND (
+               last_paddle_event_at IS NULL
+               OR ($9::timestamptz IS NOT NULL AND $9::timestamptz >= last_paddle_event_at)
+             )`,
           [
             user.id,
             nextStatus || 'payment_failed',
@@ -625,12 +675,17 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment) {
             payload?.data?.billing_period?.ends_at || payload?.data?.current_billing_period?.ends_at || null,
             payload?.data?.billing_period?.ends_at || payload?.data?.next_billed_at || null,
             paddle.environment,
+            providerEventAt,
           ],
         )
+        failedStatusApplied = failedUpdateResult.rowCount > 0
+        if (!failedStatusApplied) subscriptionProjection = null
       }
 
       try {
-        await recordFailedPaymentAttempt(payload, null, paddle.environment)
+        if (failedStatusApplied || !shouldApplyFailure) {
+          await recordFailedPaymentAttempt(payload, null, paddle.environment)
+        }
       } catch (error) {
         const transactionId = payload?.data?.id || payload?.transaction_id || payload?.id || null
         const failedSubscriptionId = getTransactionSubscriptionId(payload)
@@ -694,8 +749,19 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment) {
                  ELSE quota_anchor_at
                END,
                trial_consumed_at = CASE WHEN $3 IN ('active', 'trialing') THEN COALESCE(trial_consumed_at, NOW()) ELSE trial_consumed_at END,
+               last_paddle_event_at = CASE
+                 WHEN $11::timestamptz IS NULL THEN last_paddle_event_at
+                 ELSE GREATEST(COALESCE(last_paddle_event_at, $11::timestamptz), $11::timestamptz)
+               END,
                updated_at = NOW()
            WHERE id = $1
+             AND ($4 IS NULL OR paddle_customer_id IS NULL OR paddle_customer_id = $4)
+             AND COALESCE(NULLIF(LOWER(paddle_environment), ''), $8) = $8
+             AND (
+               $2 IS DISTINCT FROM paddle_subscription_id
+               OR last_paddle_event_at IS NULL
+               OR ($11::timestamptz IS NOT NULL AND $11::timestamptz >= last_paddle_event_at)
+             )
              AND (
                (
                  $2 IS NOT NULL
@@ -726,8 +792,13 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment) {
             paddle.environment,
             getScheduledCancellationEffectiveAt(payload),
             payload?.data?.current_billing_period?.starts_at || null,
+            providerEventAt,
           ],
         )
+
+        if (subscriptionUpdateResult.rowCount === 0) {
+          subscriptionProjection = null
+        }
 
         if (
           subscriptionUpdateResult.rowCount === 0
@@ -744,7 +815,7 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment) {
       const canceledSubscriptionId = getSubscriptionId(payload, eventType)
 
       if (user?.id) {
-        await pool.query(
+        const cancellationResult = await pool.query(
           `UPDATE users
            SET subscription_status = 'cancelled',
                paddle_subscription_id = COALESCE($2, paddle_subscription_id),
@@ -754,10 +825,20 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment) {
                next_billing_date = NULL,
                cancellation_effective_at = COALESCE($5, cancellation_effective_at, $4, NOW()),
                paddle_environment = $6,
+               last_paddle_event_at = CASE
+                 WHEN $7::timestamptz IS NULL THEN last_paddle_event_at
+                 ELSE GREATEST(COALESCE(last_paddle_event_at, $7::timestamptz), $7::timestamptz)
+               END,
                updated_at = NOW()
            WHERE id = $1
              AND $2 IS NOT NULL
-             AND (paddle_subscription_id IS NULL OR paddle_subscription_id = $2)`,
+             AND (paddle_subscription_id IS NULL OR paddle_subscription_id = $2)
+             AND ($3 IS NULL OR paddle_customer_id IS NULL OR paddle_customer_id = $3)
+             AND COALESCE(NULLIF(LOWER(paddle_environment), ''), $6) = $6
+             AND (
+               last_paddle_event_at IS NULL
+               OR ($7::timestamptz IS NOT NULL AND $7::timestamptz >= last_paddle_event_at)
+             )`,
           [
             user.id,
             canceledSubscriptionId,
@@ -765,8 +846,10 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment) {
             payload?.data?.current_billing_period?.ends_at || null,
             payload?.data?.canceled_at || payload?.data?.scheduled_change?.effective_at || payload?.data?.current_billing_period?.ends_at || null,
             paddle.environment,
+            providerEventAt,
           ],
         )
+        if (cancellationResult.rowCount === 0) subscriptionProjection = null
       }
 
       await trackEvent({

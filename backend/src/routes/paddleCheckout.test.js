@@ -204,6 +204,126 @@ test('persistVerifiedCheckoutSubscription replaces a cancelled Annual lifecycle 
   assert.equal(calls.at(-1).sql, 'COMMIT')
 })
 
+test('persistVerifiedCheckoutSubscription authoritatively recovers the same Past Due Monthly lifecycle and resolves only matching retries', async () => {
+  const calls = []
+  const client = { async query(sql, params = []) {
+    calls.push({ sql: String(sql), params })
+    return { rowCount: 1, rows: [{ id: 42 }] }
+  } }
+  const result = await persistVerifiedCheckoutSubscription({
+    client,
+    user: {
+      id: 42,
+      subscription_status: 'past_due',
+      subscription_plan: 'monthly',
+      paddle_customer_id: 'ctm_123',
+      paddle_subscription_id: 'sub_monthly',
+      paddle_environment: 'sandbox',
+    },
+    transaction: { id: 'txn_overdue', status: 'completed', customer_id: 'ctm_123', subscription_id: 'sub_monthly' },
+    subscription: {
+      id: 'sub_monthly', status: 'active', customer_id: 'ctm_123',
+      items: [{ price: { id: 'pri_monthly' } }],
+      current_billing_period: { starts_at: '2026-07-01T00:00:00Z', ends_at: '2026-08-01T00:00:00Z' },
+      next_billed_at: '2026-08-01T00:00:00Z',
+    },
+    paddle: { environment: 'sandbox', priceIdsByPlan: { monthly: 'pri_monthly' } },
+  })
+
+  assert.equal(result.result, 'recovered')
+  assert.equal(result.plan, 'monthly')
+  assert.equal(result.subscriptionId, 'sub_monthly')
+  const userUpdate = calls.find(({ sql }) => /UPDATE users/.test(sql))
+  assert.match(userUpdate.sql, /WHEN \$10::boolean THEN GREATEST\(COALESCE\(last_paddle_event_at, NOW\(\)\), NOW\(\)\)/)
+  const retryUpdate = calls.find(({ sql }) => /UPDATE payment_attempts/.test(sql))
+  assert.ok(retryUpdate)
+  assert.deepEqual(retryUpdate.params.slice(0, 3), [42, 'sandbox', 'sub_monthly'])
+  assert.match(retryUpdate.sql, /status IN \('pending', 'failed', 'retrying'\)/)
+  assert.equal(calls.at(-1).sql, 'COMMIT')
+})
+
+function pastDueRecoveryFixture(userOverrides = {}) {
+  return {
+    user: {
+      id: 42,
+      subscription_status: 'past_due',
+      subscription_plan: 'monthly',
+      paddle_customer_id: 'ctm_123',
+      paddle_subscription_id: 'sub_monthly',
+      paddle_environment: 'sandbox',
+      last_paddle_event_at: '2026-07-01T10:00:00.000Z',
+      ...userOverrides,
+    },
+    transaction: { id: 'txn_overdue', status: 'completed', customer_id: 'ctm_123', subscription_id: 'sub_monthly' },
+    subscription: {
+      id: 'sub_monthly', status: 'active', customer_id: 'ctm_123',
+      items: [{ price: { id: 'pri_monthly' } }],
+      current_billing_period: { starts_at: '2026-07-01T00:00:00Z', ends_at: '2026-08-01T00:00:00Z' },
+      next_billed_at: '2026-08-01T00:00:00Z',
+    },
+    paddle: { environment: 'sandbox', priceIdsByPlan: { monthly: 'pri_monthly' } },
+  }
+}
+
+test('persistVerifiedCheckoutSubscription classifies a concurrent cancellation as superseded without resolving retries', async () => {
+  const calls = []
+  const client = { async query(sql, params = []) {
+    calls.push({ sql: String(sql), params })
+    if (/UPDATE users/.test(sql)) return { rowCount: 0, rows: [] }
+    if (/SELECT subscription_status/.test(sql)) return { rowCount: 1, rows: [{
+      subscription_status: 'cancelled',
+      subscription_plan: 'monthly',
+      paddle_customer_id: 'ctm_123',
+      paddle_subscription_id: 'sub_monthly',
+      paddle_environment: 'sandbox',
+      cancellation_effective_at: '2026-07-01T10:05:00.000Z',
+      last_paddle_event_at: '2026-07-01T10:05:00.000Z',
+    }] }
+    return { rowCount: 1, rows: [] }
+  } }
+
+  const result = await persistVerifiedCheckoutSubscription({ client, ...pastDueRecoveryFixture() })
+
+  assert.deepEqual(result, { synced: false, reason: 'recovery_superseded' })
+  assert.ok(!calls.some(({ sql }) => /UPDATE payment_attempts/.test(sql)))
+  assert.ok(!calls.some(({ sql }) => sql === 'COMMIT'))
+})
+
+test('persistVerifiedCheckoutSubscription preserves a concurrent newer failure event', async () => {
+  const calls = []
+  const client = { async query(sql, params = []) {
+    calls.push({ sql: String(sql), params })
+    if (/UPDATE users/.test(sql)) return { rowCount: 0, rows: [] }
+    if (/SELECT subscription_status/.test(sql)) return { rowCount: 1, rows: [{
+      ...pastDueRecoveryFixture().user,
+      last_paddle_event_at: '2026-07-01T10:06:00.000Z',
+    }] }
+    return { rowCount: 1, rows: [] }
+  } }
+
+  const result = await persistVerifiedCheckoutSubscription({ client, ...pastDueRecoveryFixture() })
+
+  assert.deepEqual(result, { synced: false, reason: 'recovery_superseded' })
+  assert.ok(!calls.some(({ sql }) => /UPDATE payment_attempts/.test(sql)))
+})
+
+test('persistVerifiedCheckoutSubscription classifies an idempotent concurrent recovery as already recovered', async () => {
+  const client = { async query(sql) {
+    if (/UPDATE users/.test(sql)) return { rowCount: 0, rows: [] }
+    if (/SELECT subscription_status/.test(sql)) return { rowCount: 1, rows: [{
+      subscription_status: 'active', subscription_plan: 'monthly', paddle_subscription_id: 'sub_monthly',
+      paddle_customer_id: 'ctm_123', paddle_environment: 'sandbox',
+      current_period_end: '2026-08-01T00:00:00Z', next_billing_date: '2026-08-01T00:00:00Z',
+    }] }
+    return { rowCount: 1, rows: [] }
+  } }
+
+  const result = await persistVerifiedCheckoutSubscription({ client, ...pastDueRecoveryFixture() })
+
+  assert.equal(result.result, 'already_recovered')
+  assert.equal(result.synced, true)
+})
+
 test('persistVerifiedCheckoutSubscription rejects a different subscription lifecycle for an active user', async () => {
   let queryCount = 0
   const result = await persistVerifiedCheckoutSubscription({
