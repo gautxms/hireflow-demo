@@ -47,7 +47,7 @@ test('environment kill switch is disabled by default and supports sandbox-only r
   assert.equal(isRecoveryBillingAdjustmentEnabled('production', { PADDLE_PAST_DUE_RECOVERY_BILLING_ADJUSTMENT_ENVIRONMENTS: 'sandbox' }), false)
 })
 
-test('monthly recovery PATCHes only next_billed_at with do_not_bill then confirms local dates and anchor', async () => {
+test('late August recovery PATCHes once from the existing August renewal to September and confirms local dates and anchor', async () => {
   const calls = []
   let released = false
   const client = {
@@ -63,22 +63,23 @@ test('monthly recovery PATCHes only next_billed_at with do_not_bill then confirm
   }
   const subscriptions = [
     { id: 'sub_1', customer_id: 'ctm_1', status: 'active', scheduled_change: null, next_billed_at: '2026-08-23T00:00:00Z', items: [{ price: { id: 'pri_month' } }] },
-    { id: 'sub_1', customer_id: 'ctm_1', status: 'active', scheduled_change: null, next_billed_at: '2026-08-27T00:00:00Z', items: [{ price: { id: 'pri_month' } }] },
+    { id: 'sub_1', customer_id: 'ctm_1', status: 'active', scheduled_change: null, next_billed_at: '2026-09-22T00:00:00Z', items: [{ price: { id: 'pri_month' } }] },
   ]
   const patches = []
   const result = await processRecoveryAdjustment({
     id: 'adj_1', user_id: 7, status: 'provider_updating', subscription_plan: 'monthly', paddle_environment: 'sandbox', recovery_transaction_id: 'txn_1',
-    paddle_customer_id: 'ctm_1', paddle_subscription_id: 'sub_1', captured_at: '2026-07-27T00:00:00Z',
-    target_next_billed_at: '2026-08-27T00:00:00Z',
+    paddle_customer_id: 'ctm_1', paddle_subscription_id: 'sub_1', captured_at: '2026-08-22T00:00:00Z',
+    target_next_billed_at: '2026-09-22T00:00:00Z',
   }, {
     db, paddle: { environment: 'sandbox', priceIdsByPlan: { monthly: 'pri_month' }, noTrialPriceIdsByPlan: {}, legacyPriceIdsByPlan: {} },
-    getTransaction: async () => recurringTransaction(), getSubscription: async () => subscriptions.shift(),
+    getTransaction: async () => recurringTransaction({ capturedAt: '2026-08-22T00:00:00Z' }), getSubscription: async () => subscriptions.shift(),
     patchSubscription: async (id, body, key) => patches.push({ id, body, key }),
   })
   assert.equal(result, 'confirmed')
-  assert.deepEqual(patches[0].body, { next_billed_at: '2026-08-27T00:00:00.000Z', proration_billing_mode: 'do_not_bill' })
+  assert.deepEqual(patches[0].body, { next_billed_at: '2026-09-22T00:00:00.000Z', proration_billing_mode: 'do_not_bill' })
   assert.equal(Object.hasOwn(patches[0].body, 'items'), false)
   assert.match(calls.find((call) => /UPDATE users/.test(call.sql)).sql, /quota_anchor_at=\$3/)
+  assert.deepEqual(calls.find((call) => /UPDATE users/.test(call.sql)).params.slice(1, 3).map((value) => new Date(value).toISOString()), ['2026-09-22T00:00:00.000Z', '2026-08-22T00:00:00.000Z'])
   assert.deepEqual(calls.filter((call) => ['BEGIN', 'COMMIT'].includes(call.sql)).map((call) => call.sql), ['BEGIN', 'COMMIT'])
   assert.equal(released, true)
 })
@@ -98,6 +99,53 @@ test('already favorable provider date is never shortened', async () => {
   })
   assert.equal(result, 'already_satisfied')
   assert.equal(patched, false)
+})
+
+test('Annual recovery moves renewal one calendar year and quota anchor once while preserving monthly allowance semantics', async () => {
+  const calls = []
+  const subscriptions = [
+    { id: 'sub_a', customer_id: 'ctm_a', status: 'active', scheduled_change: null, next_billed_at: '2027-08-20T00:00:00Z', items: [{ price: { id: 'pri_year' } }] },
+    { id: 'sub_a', customer_id: 'ctm_a', status: 'active', scheduled_change: null, next_billed_at: '2027-08-22T00:00:00Z', items: [{ price: { id: 'pri_year' } }] },
+  ]
+  const db = { async query(sql, params) { calls.push({ sql, params }); return { rowCount: /^\s*UPDATE (users|recovery_billing_adjustments)/.test(sql) ? 1 : 0, rows: [] } } }
+  const patches = []
+  const status = await processRecoveryAdjustment({
+    id: 'adj_annual', user_id: 9, status: 'provider_updating', subscription_plan: 'annual', paddle_environment: 'sandbox',
+    recovery_transaction_id: 'txn_annual', paddle_customer_id: 'ctm_a', paddle_subscription_id: 'sub_a',
+    captured_at: '2026-08-22T00:00:00Z', target_next_billed_at: '2027-08-22T00:00:00Z',
+  }, {
+    db, paddle: { environment: 'sandbox', priceIdsByPlan: { annual: 'pri_year' }, noTrialPriceIdsByPlan: {}, legacyPriceIdsByPlan: {} },
+    getTransaction: async () => recurringTransaction({ id: 'txn_annual', customerId: 'ctm_a', subscriptionId: 'sub_a', plan: 'annual', capturedAt: '2026-08-22T00:00:00Z' }),
+    getSubscription: async () => subscriptions.shift(), patchSubscription: async (id, body) => patches.push({ id, body }),
+  })
+  assert.equal(status, 'confirmed')
+  assert.equal(patches[0].body.next_billed_at, '2027-08-22T00:00:00.000Z')
+  const userUpdate = calls.find(({ sql }) => /UPDATE users/.test(sql))
+  assert.equal(new Date(userUpdate.params[2]).toISOString(), '2026-08-22T00:00:00.000Z')
+  assert.match(userUpdate.sql, /quota_anchor_at=\$3/)
+})
+
+test('exact sandbox account recovery PATCHes once and a confirmed second run performs no mutation', async () => {
+  const subscriptions = [
+    { id: 'sub_exact', customer_id: 'ctm_exact', status: 'active', scheduled_change: null, next_billed_at: '2026-08-23T00:00:00Z', items: [{ price: { id: 'pri_month' } }] },
+    { id: 'sub_exact', customer_id: 'ctm_exact', status: 'active', scheduled_change: null, next_billed_at: '2026-08-27T00:00:00Z', items: [{ price: { id: 'pri_month' } }] },
+  ]
+  const db = { async query(sql) { return { rowCount: /^\s*UPDATE (users|recovery_billing_adjustments)/.test(sql) ? 1 : 0, rows: [] } } }
+  const adjustment = {
+    id: 'adj_exact', user_id: 10, status: 'provider_updating', subscription_plan: 'monthly', paddle_environment: 'sandbox',
+    recovery_transaction_id: 'txn_exact', paddle_customer_id: 'ctm_exact', paddle_subscription_id: 'sub_exact',
+    previous_next_billed_at: '2026-07-23T00:00:00Z', captured_at: '2026-07-27T00:00:00Z', target_next_billed_at: '2026-08-27T00:00:00Z',
+  }
+  const patches = []
+  const dependencies = {
+    db, paddle: { environment: 'sandbox', priceIdsByPlan: { monthly: 'pri_month' }, noTrialPriceIdsByPlan: {}, legacyPriceIdsByPlan: {} },
+    getTransaction: async () => recurringTransaction({ id: 'txn_exact', customerId: 'ctm_exact', subscriptionId: 'sub_exact' }),
+    getSubscription: async () => subscriptions.shift(), patchSubscription: async (id, body) => patches.push({ id, body }),
+  }
+  assert.equal(await processRecoveryAdjustment(adjustment, dependencies), 'confirmed')
+  assert.equal(await processRecoveryAdjustment({ ...adjustment, status: 'confirmed' }, dependencies), 'confirmed')
+  assert.equal(patches.length, 1)
+  assert.deepEqual(patches[0].body, { next_billed_at: '2026-08-27T00:00:00.000Z', proration_billing_mode: 'do_not_bill' })
 })
 
 test('due adjustments are not processed when their environment kill switch is disabled', async () => {
@@ -427,4 +475,101 @@ test('candidate creation rejects a historical Monthly renewal after an Annual pl
   })
   assert.equal(result, null)
   assert.equal(writes.some((sql) => /INSERT INTO recovery_billing_adjustments/.test(sql)), false)
+})
+
+for (const followingStatus of ['ready', 'completed']) {
+  test(`following renewal already ${followingStatus} requires manual accounting without a Paddle PATCH`, async () => {
+    const updates = []
+    let patched = false
+    const recovery = recurringTransaction({ capturedAt: '2026-08-22T00:00:00Z' })
+    recovery.created_at = '2026-08-22T00:00:00Z'
+    const following = recurringTransaction({ id: 'txn_following', capturedAt: '2026-09-22T00:00:00Z' })
+    following.created_at = '2026-09-21T00:00:00Z'
+    following.status = followingStatus
+    const status = await processRecoveryAdjustment({
+      id: `adj_following_${followingStatus}`, user_id: 7, status: 'provider_updating', subscription_plan: 'monthly', paddle_environment: 'sandbox',
+      recovery_transaction_id: 'txn_1', paddle_customer_id: 'ctm_1', paddle_subscription_id: 'sub_1',
+      captured_at: '2026-08-22T00:00:00Z', target_next_billed_at: '2026-09-22T00:00:00Z',
+    }, {
+      db: { async query(sql, params) { updates.push({ sql, params }); return { rowCount: 1, rows: [] } } },
+      paddle: { environment: 'sandbox', priceIdsByPlan: { monthly: 'pri_month' }, noTrialPriceIdsByPlan: {}, legacyPriceIdsByPlan: {} },
+      getTransaction: async () => recovery,
+      listTransactions: async () => [recovery, following],
+      getSubscription: async () => ({ id: 'sub_1', customer_id: 'ctm_1', status: 'active', scheduled_change: null, next_billed_at: '2026-08-23T00:00:00Z', items: [{ price: { id: 'pri_month' } }] }),
+      patchSubscription: async () => { patched = true },
+    })
+    assert.equal(status, 'manual_required')
+    assert.equal(patched, false)
+    assert.match(updates[0].sql, /status='manual_required'/)
+    assert.match(updates[0].sql, /safe_error_code='following_renewal_exists'/)
+    assert.equal(updates.some(({ sql }) => /UPDATE users/.test(sql)), false)
+  })
+}
+
+test('deterministically wrong ownership is durably classified instead of rediscovered', async () => {
+  const writes = []
+  const db = { async query(sql, params) {
+    writes.push({ sql, params })
+    if (/FROM users/.test(sql)) return { rows: [{
+      id: 7, subscription_status: 'active', subscription_plan: 'monthly', paddle_environment: 'sandbox',
+      paddle_customer_id: 'ctm_current', paddle_subscription_id: 'sub_current', cancellation_effective_at: null,
+    }] }
+    return { rowCount: 1, rows: [] }
+  } }
+  const result = await createRecoveryAdjustmentForAttempt({ id: 99, user_id: 7, transaction_id: 'txn_1', paddle_environment: 'sandbox' }, {
+    db, env: { PADDLE_PAST_DUE_RECOVERY_BILLING_ADJUSTMENT_ENVIRONMENTS: 'sandbox' },
+    paddle: { environment: 'sandbox', priceIdsByPlan: { monthly: 'pri_month' }, noTrialPriceIdsByPlan: {}, legacyPriceIdsByPlan: {} },
+    getTransaction: async () => recurringTransaction(),
+  })
+  assert.equal(result, null)
+  const classification = writes.find(({ sql }) => /recovery_adjustment_ineligible/.test(sql))
+  assert.deepEqual(classification.params, [99, 'subscription_ownership_mismatch'])
+})
+
+test('more than 20 permanently ineligible recurring candidates cannot indefinitely starve an older valid recovery', async () => {
+  const ineligible = Array.from({ length: 21 }, (_, index) => ({ id: `bad_${index}`, permanentlyIneligible: true }))
+  const valid = { id: 'valid_recovery' }
+  const remaining = [...ineligible, valid]
+  const classified = new Set()
+  const created = []
+  const db = {
+    async query(sql) {
+      if (/SELECT pa\.\*/.test(sql)) {
+        const rows = remaining.filter((attempt) => !classified.has(attempt.id)).slice(0, 20)
+        return { rows, rowCount: rows.length }
+      }
+      return { rows: [], rowCount: 0 }
+    },
+  }
+  const dependencies = {
+    db, env: { PADDLE_PAST_DUE_RECOVERY_BILLING_ADJUSTMENT_ENVIRONMENTS: 'sandbox' }, logError: async () => {},
+    createAdjustment: async (attempt) => {
+      if (attempt.permanentlyIneligible) classified.add(attempt.id)
+      else created.push(attempt.id)
+    },
+  }
+  await runRecoveryBillingAdjustments(dependencies)
+  await runRecoveryBillingAdjustments(dependencies)
+  assert.equal(classified.size, 21)
+  assert.deepEqual(created, ['valid_recovery'])
+})
+
+test('transient Past Due subscription stays retryable while later candidates continue', async () => {
+  const writes = []
+  const result = await createRecoveryAdjustmentForAttempt({ id: 100, user_id: 7, transaction_id: 'txn_1', paddle_environment: 'sandbox' }, {
+    db: { async query(sql, params) {
+      writes.push({ sql, params })
+      if (/FROM users/.test(sql)) return { rows: [{
+        id: 7, subscription_status: 'past_due', subscription_plan: 'monthly', paddle_environment: 'sandbox',
+        paddle_customer_id: 'ctm_1', paddle_subscription_id: 'sub_1', cancellation_effective_at: null,
+      }] }
+      return { rowCount: 1, rows: [] }
+    } },
+    env: { PADDLE_PAST_DUE_RECOVERY_BILLING_ADJUSTMENT_ENVIRONMENTS: 'sandbox' },
+    paddle: { environment: 'sandbox', priceIdsByPlan: { monthly: 'pri_month' }, noTrialPriceIdsByPlan: {}, legacyPriceIdsByPlan: {} },
+    getTransaction: async () => recurringTransaction(),
+    getSubscription: async () => ({ id: 'sub_1', customer_id: 'ctm_1', status: 'past_due', scheduled_change: null, next_billed_at: '2026-08-23T00:00:00Z', items: [{ price: { id: 'pri_month' } }] }),
+  })
+  assert.equal(result, null)
+  assert.equal(writes.some(({ sql }) => /recovery_adjustment_ineligible/.test(sql)), false)
 })

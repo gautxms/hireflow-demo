@@ -86,6 +86,15 @@ async function paddleRequest(paddle, path, options = {}) {
   return payload?.data || payload
 }
 
+async function markAttemptPermanentlyIneligible(db, attempt, reasonCode) {
+  await db.query(
+    `UPDATE payment_attempts SET metadata=COALESCE(metadata, '{}'::jsonb)
+       || jsonb_build_object('recovery_adjustment_ineligible', $2::text), updated_at=NOW()
+     WHERE id=$1`,
+    [attempt.id, reasonCode],
+  )
+}
+
 export async function createRecoveryAdjustmentForAttempt(attempt, dependencies = {}) {
   const db = dependencies.db || pool
   const paddle = dependencies.paddle || resolvePaddleConfig(process.env, attempt.paddle_environment)
@@ -101,10 +110,41 @@ export async function createRecoveryAdjustmentForAttempt(attempt, dependencies =
      FROM users WHERE id = $1`, [attempt.user_id],
   )
   const user = userResult.rows[0]
+  const transactionIdentityValid = transactionIsRecurringRenewal(transaction)
+    && transaction.id === attempt.transaction_id
+    && normalizedEnvironment(attempt.paddle_environment) === paddle.environment
+    && capture
+  if (!transactionIdentityValid || !user) {
+    await markAttemptPermanentlyIneligible(db, attempt, !capture ? 'missing_trustworthy_capture' : 'invalid_provider_identity')
+    return null
+  }
+  if (transaction.customer_id !== user.paddle_customer_id
+    || transaction.subscription_id !== user.paddle_subscription_id) {
+    await markAttemptPermanentlyIneligible(db, attempt, 'subscription_ownership_mismatch')
+    return null
+  }
+  if (normalizedEnvironment(user.paddle_environment) !== paddle.environment) {
+    await markAttemptPermanentlyIneligible(db, attempt, 'environment_ownership_mismatch')
+    return null
+  }
+  if (user.cancellation_effective_at || ['canceled', 'cancelled'].includes(String(user.subscription_status).toLowerCase())) {
+    await markAttemptPermanentlyIneligible(db, attempt, 'subscription_finally_cancelled')
+    return null
+  }
   const subscription = await (dependencies.getSubscription
     ? dependencies.getSubscription(transaction?.subscription_id)
     : paddleRequest(paddle, `/subscriptions/${encodeURIComponent(transaction?.subscription_id || '')}`))
   const plan = inferPlanFromPaddlePayload(subscription, paddle)
+  const permanentlyIncompatible = subscription.id !== user.paddle_subscription_id
+    || subscription.customer_id !== user.paddle_customer_id
+    || plan !== user.subscription_plan
+    || !transactionMatchesPlan(transaction, paddle, user.subscription_plan)
+    || Boolean(subscription.scheduled_change)
+    || ['canceled', 'cancelled'].includes(String(subscription.status).toLowerCase())
+  if (permanentlyIncompatible) {
+    await markAttemptPermanentlyIneligible(db, attempt, 'subscription_lifecycle_incompatible')
+    return null
+  }
   const safe = user && transactionIsRecurringRenewal(transaction) && capture
     && transactionMatchesPlan(transaction, paddle, plan)
     && attempt.transaction_id === transaction.id
@@ -124,14 +164,6 @@ export async function createRecoveryAdjustmentForAttempt(attempt, dependencies =
     console.warn('[recovery-billing-adjustment] ownership/security rejection', {
       userId: attempt.user_id, environment: paddle.environment, reasonCode: 'ineligible_recovery',
     })
-    if (transaction && !transactionIsRecurringRenewal(transaction)) {
-      await db.query(
-        `UPDATE payment_attempts SET metadata=COALESCE(metadata, '{}'::jsonb)
-           || '{"recovery_adjustment_ineligible":"non_recurring"}'::jsonb, updated_at=NOW()
-         WHERE id=$1`,
-        [attempt.id],
-      )
-    }
     return null
   }
 
@@ -158,6 +190,20 @@ function subscriptionMatchesAdjustment(subscription, adjustment, paddle, plan) {
     && subscription?.status === 'active'
     && !subscription?.scheduled_change
     && inferPlanFromPaddlePayload(subscription, paddle) === plan
+}
+
+function followingRenewalExists(transactions, recoveryTransaction, adjustment, paddle) {
+  const recoveryTime = validDate(recoveryTransaction?.created_at) || validDate(adjustment.captured_at)
+  return transactions.some((transaction) => {
+    const createdAt = validDate(transaction?.created_at)
+    return transaction?.id !== recoveryTransaction.id
+      && transaction?.origin === 'subscription_recurring'
+      && transaction?.subscription_id === adjustment.paddle_subscription_id
+      && transaction?.customer_id === adjustment.paddle_customer_id
+      && transactionMatchesPlan(transaction, paddle, adjustment.subscription_plan)
+      && !['canceled', 'cancelled'].includes(String(transaction?.status).toLowerCase())
+      && createdAt && recoveryTime && createdAt > recoveryTime
+  })
 }
 
 async function classifyLocalRace(db, adjustment, confirmed, plan, paddle) {
@@ -217,6 +263,12 @@ export async function processRecoveryAdjustment(adjustment, dependencies = {}) {
     || ((id) => paddleRequest(paddle, `/subscriptions/${encodeURIComponent(id)}`))
   const getTransaction = dependencies.getTransaction
     || ((id) => paddleRequest(paddle, `/transactions/${encodeURIComponent(id)}`))
+  const listTransactions = dependencies.listTransactions || (dependencies.getTransaction
+    ? async () => []
+    : async (subscriptionId, customerId) => paddleRequest(
+      paddle,
+      `/transactions?subscription_id=${encodeURIComponent(subscriptionId)}&customer_id=${encodeURIComponent(customerId)}&per_page=30`,
+    ))
   let transactionClient = null
   let transactionStarted = false
   let subscription
@@ -239,6 +291,15 @@ export async function processRecoveryAdjustment(adjustment, dependencies = {}) {
       || subscription.scheduled_change) {
       await db.query(`UPDATE recovery_billing_adjustments SET status='superseded', safe_error_code='lifecycle_changed', updated_at=NOW() WHERE id=$1 AND status='provider_updating'`, [adjustment.id])
       return 'superseded'
+    }
+    const relatedTransactions = await listTransactions(adjustment.paddle_subscription_id, adjustment.paddle_customer_id)
+    if (followingRenewalExists(Array.isArray(relatedTransactions) ? relatedTransactions : [], transaction, adjustment, paddle)) {
+      await db.query(
+        `UPDATE recovery_billing_adjustments SET status='manual_required', safe_error_code='following_renewal_exists',
+           next_retry_at=NULL, updated_at=NOW() WHERE id=$1 AND status='provider_updating'`,
+        [adjustment.id],
+      )
+      return 'manual_required'
     }
     if (current < target) {
       console.info('[recovery-billing-adjustment] provider update attempted', { adjustmentId: adjustment.id, userId: adjustment.user_id, environment: paddle.environment })
