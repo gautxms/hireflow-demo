@@ -458,22 +458,8 @@ router.get('/current', requireAuth, async (req, res) => {
               trial_ends_at, trial_consumed_at,
               payment_method_brand, payment_method_last4, paddle_customer_id, paddle_subscription_id,
               paddle_environment, last_paddle_event_at,
-              (
-                SELECT adjustment.status
-                FROM recovery_billing_adjustments adjustment
-                WHERE adjustment.user_id = users.id
-                  AND adjustment.paddle_environment = COALESCE(NULLIF(LOWER(users.paddle_environment), ''), 'production')
-                  AND adjustment.paddle_subscription_id = users.paddle_subscription_id
-                ORDER BY adjustment.created_at DESC LIMIT 1
-              ) AS recovery_adjustment_status,
-              (
-                SELECT adjustment.id
-                FROM recovery_billing_adjustments adjustment
-                WHERE adjustment.user_id = users.id
-                  AND adjustment.paddle_environment = COALESCE(NULLIF(LOWER(users.paddle_environment), ''), 'production')
-                  AND adjustment.paddle_subscription_id = users.paddle_subscription_id
-                ORDER BY adjustment.created_at DESC LIMIT 1
-              ) AS recovery_adjustment_reference,
+              latest_recovery.status AS recovery_adjustment_status,
+              latest_recovery.reference AS recovery_adjustment_reference,
               EXISTS (SELECT 1 FROM payment_attempts attempt WHERE attempt.user_id = users.id) AS has_payment_attempts,
               (
                 SELECT attempt.next_retry_at
@@ -496,7 +482,35 @@ router.get('/current', requireAuth, async (req, res) => {
                 LIMIT 1
               ) AS next_payment_retry_at
        FROM users
-       WHERE id = $1`,
+       LEFT JOIN LATERAL (
+         SELECT recovery.status, recovery.reference
+         FROM (
+           SELECT adjustment.status, adjustment.id::text AS reference, adjustment.created_at AS occurred_at
+           FROM recovery_billing_adjustments adjustment
+           WHERE adjustment.user_id = users.id
+             AND adjustment.paddle_environment = COALESCE(NULLIF(LOWER(users.paddle_environment), ''), 'production')
+             AND adjustment.paddle_subscription_id = users.paddle_subscription_id
+           UNION ALL
+           SELECT attempt.metadata->>'recovery_adjustment_capture_status' AS status,
+                  'payment_attempt:' || attempt.id::text AS reference,
+                  attempt.updated_at AS occurred_at
+           FROM payment_attempts attempt
+           WHERE attempt.user_id = users.id
+             AND attempt.metadata->>'recovery_adjustment_capture_status' IN ('retryable_failed', 'manual_required')
+             AND COALESCE(attempt.metadata->>'recovery_adjustment_ineligible', '') = ''
+             AND COALESCE(NULLIF(LOWER(attempt.paddle_environment), ''), 'production')
+               = COALESCE(NULLIF(LOWER(users.paddle_environment), ''), 'production')
+             AND COALESCE(
+               attempt.payload->'data'->>'subscription_id',
+               attempt.payload->'data'->>'subscriptionId',
+               attempt.payload->>'subscription_id',
+               attempt.payload->>'subscriptionId'
+             ) = users.paddle_subscription_id
+         ) recovery
+         ORDER BY recovery.occurred_at DESC
+         LIMIT 1
+       ) latest_recovery ON TRUE
+       WHERE users.id = $1`,
       [req.userId],
     )
 

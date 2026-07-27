@@ -711,6 +711,26 @@ test('GET /api/subscriptions/current preserves a newer failure committed during 
   assert.equal(res.payload.subscription.nextRetryAt, '2026-07-22T10:00:00.000Z')
 })
 
+test('GET /api/subscriptions/current exposes durable missing-capture manual review state', async () => {
+  resetPaddleEnv()
+  const { calls } = installDbMock({
+    ...activeMonthlyUser(),
+    paddle_customer_id: 'ctm_123',
+    paddle_environment: 'production',
+    recovery_adjustment_status: 'manual_required',
+    recovery_adjustment_reference: 'payment_attempt:42',
+  })
+  mockPaddleResponse()
+
+  const res = await invokeRoute('/current')
+
+  assert.equal(res.statusCode, 200)
+  assert.equal(res.payload.subscription.recoveryAdjustmentStatus, 'manual_required')
+  assert.equal(res.payload.subscription.recoveryAdjustmentReference, 'payment_attempt:42')
+  assert.match(calls[0].sql, /recovery_adjustment_capture_status/)
+  assert.match(calls[0].sql, /ORDER BY recovery\.occurred_at DESC/)
+})
+
 test('POST /api/subscriptions/change-plan-preview uses gated test annual price for valid upgradeTestKey', async () => {
   resetPaddleEnv()
   enableTestUpgrade()

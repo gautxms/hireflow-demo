@@ -191,6 +191,8 @@ test('scheduler filters enabled environments before both limits and isolates can
   assert.match(sql[0].text, /paddle_environment[\s\S]*ANY\(\$1::text\[\]\)[\s\S]*LIMIT 20/)
   assert.match(sql[0].text, /payload->'data'->>'origin'[\s\S]*subscription_recurring[\s\S]*LIMIT 20/)
   assert.match(sql[0].text, /COALESCE\(NULLIF\(LOWER\(a\.paddle_environment\),''\),'production'\)[\s\S]*COALESCE\(NULLIF\(LOWER\(pa\.paddle_environment\),''\),'production'\)/)
+  assert.match(sql[0].text, /recovery_adjustment_capture_status',''\) <> 'manual_required'/)
+  assert.match(sql[0].text, /pa\.updated_at<=NOW\(\)-INTERVAL '15 minutes'/)
   assert.match(sql[1].text, /paddle_environment = ANY\(\$1::text\[\]\)[\s\S]*LIMIT 20 FOR UPDATE OF a SKIP LOCKED/)
   assert.deepEqual(sql.map(({ params }) => params), [[['sandbox']], [['sandbox']]])
 })
@@ -572,4 +574,170 @@ test('transient Past Due subscription stays retryable while later candidates con
   })
   assert.equal(result, null)
   assert.equal(writes.some(({ sql }) => /recovery_adjustment_ineligible/.test(sql)), false)
+})
+
+test('permanent Paddle transaction lookup failure is durably excluded from discovery', async () => {
+  const writes = []
+  const error = Object.assign(new Error('not found'), { status: 404 })
+  const result = await createRecoveryAdjustmentForAttempt({
+    id: 101, user_id: 7, transaction_id: 'txn_deleted', paddle_environment: 'sandbox',
+  }, {
+    db: { async query(sql, params) { writes.push({ sql, params }); return { rowCount: 1, rows: [] } } },
+    env: { PADDLE_PAST_DUE_RECOVERY_BILLING_ADJUSTMENT_ENVIRONMENTS: 'sandbox' },
+    paddle: { environment: 'sandbox' },
+    getTransaction: async () => { throw error },
+  })
+
+  assert.equal(result, null)
+  assert.equal(writes.length, 1)
+  assert.match(writes[0].sql, /recovery_adjustment_ineligible/)
+  assert.deepEqual(writes[0].params, [101, 'provider_transaction_unavailable'])
+})
+
+for (const [name, status] of [['rate limit', 429], ['provider failure', 503], ['timeout', undefined]]) {
+  test(`${name} during transaction lookup remains retryable`, async () => {
+    const writes = []
+    const error = Object.assign(new Error(name), status ? { status } : {})
+    await assert.rejects(
+      createRecoveryAdjustmentForAttempt({
+        id: `retry_${name}`, user_id: 7, transaction_id: 'txn_retry', paddle_environment: 'sandbox',
+      }, {
+        db: { async query(sql, params) { writes.push({ sql, params }); return { rowCount: 1, rows: [] } } },
+        env: { PADDLE_PAST_DUE_RECOVERY_BILLING_ADJUSTMENT_ENVIRONMENTS: 'sandbox' },
+        paddle: { environment: 'sandbox' },
+        getTransaction: async () => { throw error },
+      }),
+      error,
+    )
+    assert.equal(writes.some(({ sql }) => /recovery_adjustment_ineligible/.test(sql)), false)
+  })
+}
+
+test('missing capture timestamp retries durably and can create the adjustment when capture later appears', async () => {
+  const writes = []
+  let transactionRead = 0
+  const db = { async query(sql, params) {
+    writes.push({ sql, params })
+    if (/FROM users/.test(sql)) return { rows: [{
+      id: 7, subscription_status: 'active', subscription_plan: 'monthly', paddle_environment: 'sandbox',
+      paddle_customer_id: 'ctm_1', paddle_subscription_id: 'sub_1', cancellation_effective_at: null,
+    }] }
+    if (/WITH capture_retry/.test(sql)) return { rows: [{ status: 'retryable_failed' }], rowCount: 1 }
+    if (/INSERT INTO recovery_billing_adjustments/.test(sql)) return { rows: [{ id: 'adj_capture' }], rowCount: 1 }
+    return { rows: [], rowCount: 0 }
+  } }
+  const dependencies = {
+    db,
+    env: { PADDLE_PAST_DUE_RECOVERY_BILLING_ADJUSTMENT_ENVIRONMENTS: 'sandbox' },
+    paddle: { environment: 'sandbox', priceIdsByPlan: { monthly: 'pri_month' }, noTrialPriceIdsByPlan: {}, legacyPriceIdsByPlan: {} },
+    getTransaction: async () => {
+      transactionRead += 1
+      const transaction = recurringTransaction()
+      if (transactionRead === 1) transaction.payments = []
+      return transaction
+    },
+    getSubscription: async () => ({
+      id: 'sub_1', customer_id: 'ctm_1', status: 'active', scheduled_change: null,
+      next_billed_at: '2026-08-23T00:00:00Z', items: [{ price: { id: 'pri_month' } }],
+    }),
+  }
+
+  assert.equal(await createRecoveryAdjustmentForAttempt(
+    { id: 102, user_id: 7, transaction_id: 'txn_1', paddle_environment: 'sandbox' },
+    dependencies,
+  ), null)
+  assert.deepEqual(await createRecoveryAdjustmentForAttempt(
+    { id: 102, user_id: 7, transaction_id: 'txn_1', paddle_environment: 'sandbox' },
+    dependencies,
+  ), { id: 'adj_capture' })
+  assert.equal(writes.filter(({ sql }) => /WITH capture_retry/.test(sql)).length, 1)
+  assert.equal(writes.filter(({ sql }) => /INSERT INTO recovery_billing_adjustments/.test(sql)).length, 1)
+  assert.equal(writes.some(({ sql }) => /recovery_adjustment_ineligible/.test(sql)), false)
+})
+
+test('persistently missing capture timestamp becomes manual required after bounded retries', async () => {
+  const captureStates = []
+  let attempts = 0
+  const db = { async query(sql, params) {
+    if (/FROM users/.test(sql)) return { rows: [{
+      id: 7, subscription_status: 'active', subscription_plan: 'monthly', paddle_environment: 'sandbox',
+      paddle_customer_id: 'ctm_1', paddle_subscription_id: 'sub_1', cancellation_effective_at: null,
+    }] }
+    if (/WITH capture_retry/.test(sql)) {
+      attempts += 1
+      const status = attempts >= params[1] ? 'manual_required' : 'retryable_failed'
+      captureStates.push({ status, params, sql })
+      return { rows: [{ status }], rowCount: 1 }
+    }
+    return { rows: [], rowCount: 0 }
+  } }
+  const dependencies = {
+    db,
+    env: { PADDLE_PAST_DUE_RECOVERY_BILLING_ADJUSTMENT_ENVIRONMENTS: 'sandbox' },
+    paddle: { environment: 'sandbox' },
+    getTransaction: async () => ({ ...recurringTransaction(), payments: [] }),
+  }
+
+  for (let index = 0; index < 4; index += 1) {
+    await createRecoveryAdjustmentForAttempt(
+      { id: 103, user_id: 7, transaction_id: 'txn_1', paddle_environment: 'sandbox' },
+      dependencies,
+    )
+  }
+
+  assert.deepEqual(captureStates.map(({ status }) => status), [
+    'retryable_failed', 'retryable_failed', 'retryable_failed', 'manual_required',
+  ])
+  assert.deepEqual(captureStates.at(-1).params, [103, 4])
+  assert.match(captureStates.at(-1).sql, /missing_trustworthy_capture/)
+})
+
+test('more than 20 permanent transaction 404s cannot starve an older valid recovery', async () => {
+  const attempts = [
+    ...Array.from({ length: 21 }, (_, index) => ({
+      id: `missing_${index}`, user_id: 7, transaction_id: `txn_missing_${index}`, paddle_environment: 'sandbox',
+    })),
+    { id: 'valid', user_id: 7, transaction_id: 'txn_valid', paddle_environment: 'sandbox' },
+  ]
+  const classified = new Set()
+  const created = []
+  const db = { async query(sql, params) {
+    if (/SELECT pa\.\*/.test(sql)) {
+      const rows = attempts.filter((attempt) => !classified.has(attempt.id)).slice(0, 20)
+      return { rows, rowCount: rows.length }
+    }
+    if (/UPDATE payment_attempts/.test(sql)) {
+      classified.add(params[0])
+      return { rows: [], rowCount: 1 }
+    }
+    if (/FROM users/.test(sql)) return { rows: [{
+      id: 7, subscription_status: 'active', subscription_plan: 'monthly', paddle_environment: 'sandbox',
+      paddle_customer_id: 'ctm_1', paddle_subscription_id: 'sub_1', cancellation_effective_at: null,
+    }] }
+    if (/INSERT INTO recovery_billing_adjustments/.test(sql)) {
+      created.push(params[4])
+      return { rows: [{ id: 'adj_valid' }], rowCount: 1 }
+    }
+    return { rows: [], rowCount: 0 }
+  } }
+  const dependencies = {
+    db,
+    env: { PADDLE_PAST_DUE_RECOVERY_BILLING_ADJUSTMENT_ENVIRONMENTS: 'sandbox' },
+    paddle: { environment: 'sandbox', priceIdsByPlan: { monthly: 'pri_month' }, noTrialPriceIdsByPlan: {}, legacyPriceIdsByPlan: {} },
+    getTransaction: async (transactionId) => {
+      if (transactionId !== 'txn_valid') throw Object.assign(new Error('not found'), { status: 404 })
+      return recurringTransaction({ id: 'txn_valid' })
+    },
+    getSubscription: async () => ({
+      id: 'sub_1', customer_id: 'ctm_1', status: 'active', scheduled_change: null,
+      next_billed_at: '2026-08-23T00:00:00Z', items: [{ price: { id: 'pri_month' } }],
+    }),
+    logError: async () => {},
+  }
+
+  await runRecoveryBillingAdjustments(dependencies)
+  await runRecoveryBillingAdjustments(dependencies)
+
+  assert.equal(classified.size, 21)
+  assert.deepEqual(created, ['txn_valid'])
 })

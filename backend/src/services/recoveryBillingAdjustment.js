@@ -4,6 +4,7 @@ import { resolvePaddleConfig } from '../config/paddle.js'
 import { inferPlanFromPaddlePayload } from './paddlePlanChangeRecovery.js'
 
 const TERMINAL = new Set(['confirmed', 'already_satisfied', 'manual_required', 'superseded'])
+const MISSING_CAPTURE_MAX_ATTEMPTS = 4
 
 function enabledEnvironments(env) {
   return [...new Set(String(env.PADDLE_PAST_DUE_RECOVERY_BILLING_ADJUSTMENT_ENVIRONMENTS || '')
@@ -95,14 +96,55 @@ async function markAttemptPermanentlyIneligible(db, attempt, reasonCode) {
   )
 }
 
+function isPermanentTransactionLookupFailure(error) {
+  return [404, 410].includes(Number(error?.status))
+}
+
+async function recordMissingCapture(db, attempt) {
+  return db.query(
+    `WITH capture_retry AS (
+       SELECT CASE
+         WHEN COALESCE(metadata->>'recovery_adjustment_capture_attempts', '') ~ '^[0-9]+$'
+           THEN (metadata->>'recovery_adjustment_capture_attempts')::integer
+         ELSE 0
+       END + 1 AS attempt_count
+       FROM payment_attempts
+       WHERE id=$1
+       FOR UPDATE
+     )
+     UPDATE payment_attempts pa
+     SET metadata=COALESCE(pa.metadata, '{}'::jsonb) || jsonb_build_object(
+           'recovery_adjustment_capture_attempts', capture_retry.attempt_count,
+           'recovery_adjustment_capture_status',
+             CASE WHEN capture_retry.attempt_count >= $2 THEN 'manual_required' ELSE 'retryable_failed' END,
+           'recovery_adjustment_capture_error_code', 'missing_trustworthy_capture'
+         ),
+         updated_at=NOW()
+     FROM capture_retry
+     WHERE pa.id=$1
+     RETURNING metadata->>'recovery_adjustment_capture_status' AS status`,
+    [attempt.id, MISSING_CAPTURE_MAX_ATTEMPTS],
+  )
+}
+
 export async function createRecoveryAdjustmentForAttempt(attempt, dependencies = {}) {
   const db = dependencies.db || pool
   const paddle = dependencies.paddle || resolvePaddleConfig(process.env, attempt.paddle_environment)
   if (!isRecoveryBillingAdjustmentEnabled(paddle.environment, dependencies.env || process.env)) return null
 
-  const transaction = await (dependencies.getTransaction
-    ? dependencies.getTransaction(attempt.transaction_id)
-    : paddleRequest(paddle, `/transactions/${encodeURIComponent(attempt.transaction_id)}`))
+  let transaction
+  try {
+    transaction = await (dependencies.getTransaction
+      ? dependencies.getTransaction(attempt.transaction_id)
+      : paddleRequest(paddle, `/transactions/${encodeURIComponent(attempt.transaction_id)}`))
+  } catch (error) {
+    if (!isPermanentTransactionLookupFailure(error)) throw error
+    await markAttemptPermanentlyIneligible(db, attempt, 'provider_transaction_unavailable')
+    console.warn('[recovery-billing-adjustment] ownership/security rejection', {
+      userId: attempt.user_id, environment: paddle.environment, reasonCode: 'provider_transaction_unavailable',
+    })
+    return null
+  }
   const capture = selectAuthoritativeCapture(transaction?.payments)
   const userResult = await db.query(
     `SELECT id, subscription_status, subscription_plan, paddle_environment, paddle_customer_id,
@@ -113,9 +155,17 @@ export async function createRecoveryAdjustmentForAttempt(attempt, dependencies =
   const transactionIdentityValid = transactionIsRecurringRenewal(transaction)
     && transaction.id === attempt.transaction_id
     && normalizedEnvironment(attempt.paddle_environment) === paddle.environment
-    && capture
   if (!transactionIdentityValid || !user) {
-    await markAttemptPermanentlyIneligible(db, attempt, !capture ? 'missing_trustworthy_capture' : 'invalid_provider_identity')
+    await markAttemptPermanentlyIneligible(db, attempt, 'invalid_provider_identity')
+    return null
+  }
+  if (!capture) {
+    const captureState = await recordMissingCapture(db, attempt)
+    const status = captureState.rows[0]?.status || 'retryable_failed'
+    console.warn(`[recovery-billing-adjustment] ${status === 'manual_required' ? 'manual intervention required' : 'capture retry scheduled'}`, {
+      userId: attempt.user_id, environment: paddle.environment, attemptId: attempt.id,
+      reasonCode: 'missing_trustworthy_capture',
+    })
     return null
   }
   if (transaction.customer_id !== user.paddle_customer_id
@@ -393,6 +443,11 @@ export async function runRecoveryBillingAdjustments(dependencies = {}) {
      WHERE pa.status='succeeded' AND pa.transaction_id IS NOT NULL
        AND COALESCE(pa.metadata->>'resolved_by','') <> ''
        AND COALESCE(pa.metadata->>'recovery_adjustment_ineligible','') = ''
+       AND COALESCE(pa.metadata->>'recovery_adjustment_capture_status','') <> 'manual_required'
+       AND (
+         COALESCE(pa.metadata->>'recovery_adjustment_capture_status','') <> 'retryable_failed'
+         OR pa.updated_at<=NOW()-INTERVAL '15 minutes'
+       )
        AND COALESCE(pa.payload->'data'->>'origin', pa.payload->>'origin','') = 'subscription_recurring'
        AND COALESCE(NULLIF(LOWER(pa.paddle_environment),''),'production') = ANY($1::text[])
        AND NOT EXISTS (SELECT 1 FROM recovery_billing_adjustments a
