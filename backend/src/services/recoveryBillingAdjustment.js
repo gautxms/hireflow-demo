@@ -21,6 +21,7 @@ export function isRecoveryBillingAdjustmentEnabled(environment, env = process.en
 }
 
 function validDate(value) {
+  if (value === null || value === undefined || (typeof value === 'string' && value.trim() === '')) return null
   const date = new Date(value)
   return Number.isNaN(date.getTime()) ? null : date
 }
@@ -51,6 +52,12 @@ export function addBillingInterval(capturedAt, plan) {
 function transactionIsRecurringRenewal(transaction) {
   return transaction?.origin === 'subscription_recurring'
     && transaction?.status === 'completed'
+    && Boolean(transaction?.subscription_id)
+    && Number(transaction?.details?.totals?.grand_total ?? transaction?.details?.totals?.total ?? 0) > 0
+}
+
+function transactionHasRecurringIdentity(transaction) {
+  return transaction?.origin === 'subscription_recurring'
     && Boolean(transaction?.subscription_id)
     && Number(transaction?.details?.totals?.grand_total ?? transaction?.details?.totals?.total ?? 0) > 0
 }
@@ -169,11 +176,15 @@ export async function createRecoveryAdjustmentForAttempt(attempt, dependencies =
      FROM users WHERE id = $1`, [attempt.user_id],
   )
   const user = userResult.rows[0]
-  const transactionIdentityValid = transactionIsRecurringRenewal(transaction)
+  const transactionIdentityValid = transactionHasRecurringIdentity(transaction)
     && transaction.id === attempt.transaction_id
     && normalizedEnvironment(attempt.paddle_environment) === paddle.environment
   if (!transactionIdentityValid || !user) {
     await markAttemptPermanentlyIneligible(db, attempt, 'invalid_provider_identity')
+    return null
+  }
+  if (transaction.status !== 'completed') {
+    await scheduleAttemptDiscoveryRetry(db, attempt, 'provider_transaction_not_completed')
     return null
   }
   if (!capture) {

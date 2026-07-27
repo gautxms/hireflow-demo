@@ -39,6 +39,9 @@ test('authoritative capture deterministically selects latest valid captured paym
     { id: 'pay_later', status: 'failed', captured_at: '2026-07-28T10:00:00Z' },
   ])
   assert.equal(selected.id, 'pay_z')
+  assert.equal(selectAuthoritativeCapture([
+    { id: 'pay_null', status: 'captured', captured_at: null },
+  ]), null)
 })
 
 test('environment kill switch is disabled by default and supports sandbox-only rollout', () => {
@@ -577,6 +580,30 @@ test('transient Past Due subscription stays retryable while later candidates con
   assert.equal(result, null)
   assert.equal(writes.some(({ sql }) => /recovery_adjustment_ineligible/.test(sql)), false)
   assert.equal(writes.some(({ sql }) => /recovery_adjustment_discovery_retry_at/.test(sql)), true)
+})
+
+test('matching recurring transaction that is not completed remains retryable', async () => {
+  const writes = []
+  const result = await createRecoveryAdjustmentForAttempt({
+    id: 104, user_id: 7, transaction_id: 'txn_processing', paddle_environment: 'sandbox',
+  }, {
+    db: { async query(sql, params) {
+      writes.push({ sql, params })
+      if (/FROM users/.test(sql)) return { rows: [{
+        id: 7, subscription_status: 'past_due', subscription_plan: 'monthly', paddle_environment: 'sandbox',
+        paddle_customer_id: 'ctm_1', paddle_subscription_id: 'sub_1', cancellation_effective_at: null,
+      }] }
+      return { rowCount: 1, rows: [] }
+    } },
+    env: { PADDLE_PAST_DUE_RECOVERY_BILLING_ADJUSTMENT_ENVIRONMENTS: 'sandbox' },
+    paddle: { environment: 'sandbox', priceIdsByPlan: { monthly: 'pri_month' }, noTrialPriceIdsByPlan: {}, legacyPriceIdsByPlan: {} },
+    getTransaction: async () => ({ ...recurringTransaction({ id: 'txn_processing' }), status: 'paid' }),
+  })
+
+  assert.equal(result, null)
+  assert.equal(writes.some(({ sql }) => /recovery_adjustment_ineligible/.test(sql)), false)
+  const retry = writes.find(({ sql }) => /recovery_adjustment_discovery_retry_at/.test(sql))
+  assert.deepEqual(retry.params, [104, 'provider_transaction_not_completed'])
 })
 
 test('permanent Paddle transaction lookup failure is durably excluded from discovery', async () => {
