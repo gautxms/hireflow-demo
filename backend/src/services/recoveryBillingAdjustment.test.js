@@ -249,7 +249,33 @@ test('scheduler filters enabled environments before both limits and isolates can
   assert.match(sql[1].text, /paddle_environment = ANY\(\$1::text\[\]\)[\s\S]*LIMIT 20 FOR UPDATE OF a SKIP LOCKED/)
   assert.match(sql[1].text, /u\.last_paddle_event_at AS observed_last_paddle_event_at/)
   assert.match(sql[1].text, /u\.current_period_end AS observed_current_period_end/)
-  assert.deepEqual(sql.map(({ params }) => params), [[['sandbox']], [['sandbox']]])
+  assert.deepEqual(sql.map(({ params }) => params), [
+    [['sandbox'], false, null, null],
+    [['sandbox'], false, null, null],
+  ])
+})
+
+test('immediate recovery processing scopes discovery and claiming to one transaction', async () => {
+  const calls = []
+  await runRecoveryBillingAdjustments({
+    db: {
+      async query(sql, params) {
+        calls.push({ sql, params })
+        return { rows: [], rowCount: 0 }
+      },
+    },
+    env: { PADDLE_PAST_DUE_RECOVERY_BILLING_ADJUSTMENT_ENVIRONMENTS: 'sandbox' },
+    candidateUserId: 7,
+    candidateTransactionId: 'txn_immediate',
+  })
+
+  assert.equal(calls.length, 2)
+  assert.match(calls[0].sql, /pa\.user_id=\$3 AND pa\.transaction_id=\$4/)
+  assert.match(calls[1].sql, /a\.user_id=\$3 AND a\.recovery_transaction_id=\$4/)
+  assert.deepEqual(calls.map(({ params }) => params), [
+    [['sandbox'], true, 7, 'txn_immediate'],
+    [['sandbox'], true, 7, 'txn_immediate'],
+  ])
 })
 
 test('authoritative reconciliation discovers only the exact recovered transaction', async () => {

@@ -110,6 +110,29 @@ test('atomic reservation permits the 800th unit and blocks a concurrent 801st un
   assert.equal(calls.some(({ sql }) => sql === 'ROLLBACK'), true)
 })
 
+test('reservation preflight counts allocation usage by exact reservation period identity', async (t) => {
+  const { calls } = mockReservationDatabase(t)
+  const periodStart = new Date('2026-07-27T14:35:42.123Z')
+  const periodEnd = new Date('2026-08-27T14:35:42.123Z')
+
+  await reserveResumeQuotaUnits({
+    userId: 42,
+    periodStart,
+    periodEnd,
+    uploadLimit: 800,
+    requestedUnits: 1,
+    idempotencyKey: 'capture-precise-period',
+  })
+
+  const usageQuery = calls.find(({ sql }) => sql.includes('FROM usage_log'))
+  assert.match(usageQuery.sql, /JOIN resume_quota_reservations AS allocation_reservation/)
+  assert.match(usageQuery.sql, /allocation_reservation\.period_start = \$2/)
+  assert.match(usageQuery.sql, /allocation_reservation\.period_end = \$3/)
+  assert.doesNotMatch(usageQuery.sql, /month_start = \$2::date/)
+  assert.equal(usageQuery.params[1].toISOString(), periodStart.toISOString())
+  assert.equal(usageQuery.params[2].toISOString(), periodEnd.toISOString())
+})
+
 test('replaying a batch idempotency key returns the original reservation', async (t) => {
   const { reservations } = mockReservationDatabase(t, { used: 100 })
   const request = {

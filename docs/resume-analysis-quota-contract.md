@@ -128,6 +128,9 @@ the immediate rollback path while `RESUME_QUOTA_RESERVATIONS_ENABLED=false`.
   failure remains one consumed unit.
 - The usage API reads the same period and ledger-backed count as enforcement
   whenever the rollout flag is enabled.
+- Allocation-backed usage is assigned to the exact timestamp-precise period on
+  its durable reservation, so a recovery later on the same UTC date starts a
+  fresh period without rewriting pre-recovery usage or allocations.
 - If the kill switch is turned off mid-period, calendar-month enforcement still
   includes allocation-backed usage written during the flagged rollout.
 

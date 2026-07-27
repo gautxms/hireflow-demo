@@ -514,6 +514,9 @@ export async function runRecoveryBillingAdjustments(dependencies = {}) {
   const env = dependencies.env || process.env
   const createAdjustment = dependencies.createAdjustment || createRecoveryAdjustmentForAttempt
   const processAdjustment = dependencies.processAdjustment || processRecoveryAdjustment
+  const scopedUserId = dependencies.candidateUserId || null
+  const scopedTransactionId = dependencies.candidateTransactionId || null
+  const scoped = Boolean(scopedUserId && scopedTransactionId)
   const enabled = enabledEnvironments(env)
   if (enabled.length === 0) return 0
   const candidates = await db.query(
@@ -538,13 +541,14 @@ export async function runRecoveryBillingAdjustments(dependencies = {}) {
        )
        AND COALESCE(pa.payload->'data'->>'origin', pa.payload->>'origin','') = 'subscription_recurring'
        AND COALESCE(NULLIF(LOWER(pa.paddle_environment),''),'production') = ANY($1::text[])
+       AND (NOT $2::boolean OR (pa.user_id=$3 AND pa.transaction_id=$4))
        AND NOT EXISTS (SELECT 1 FROM recovery_billing_adjustments a
          WHERE COALESCE(NULLIF(LOWER(a.paddle_environment),''),'production')
              = COALESCE(NULLIF(LOWER(pa.paddle_environment),''),'production')
            AND a.recovery_transaction_id=pa.transaction_id)
      ORDER BY (pa.metadata->>'recovery_adjustment_discovery_retry_at')::timestamptz ASC NULLS FIRST,
               pa.updated_at DESC
-     LIMIT 20`, [enabled],
+     LIMIT 20`, [enabled, scoped, scopedUserId, scopedTransactionId],
   )
   for (const attempt of candidates.rows) {
     try {
@@ -562,6 +566,7 @@ export async function runRecoveryBillingAdjustments(dependencies = {}) {
               u.next_billing_date AS observed_next_billing_date
        FROM recovery_billing_adjustments a JOIN users u ON u.id=a.user_id
        WHERE a.paddle_environment = ANY($1::text[])
+         AND (NOT $2::boolean OR (a.user_id=$3 AND a.recovery_transaction_id=$4))
          AND (a.status='pending'
            OR (a.status='retryable_failed' AND a.next_retry_at<=NOW())
            OR (a.status='provider_updating' AND a.updated_at<=NOW()-INTERVAL '15 minutes'))
@@ -572,7 +577,7 @@ export async function runRecoveryBillingAdjustments(dependencies = {}) {
      FROM claimable c WHERE a.id=c.id
      RETURNING a.*, c.subscription_plan, c.observed_last_paddle_event_at,
                c.observed_current_period_end, c.observed_subscription_renewal_date,
-               c.observed_next_billing_date`, [enabled],
+               c.observed_next_billing_date`, [enabled, scoped, scopedUserId, scopedTransactionId],
   )
   for (const adjustment of due.rows) {
     if (!isRecoveryBillingAdjustmentEnabled(adjustment.paddle_environment, env)) continue

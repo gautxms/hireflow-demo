@@ -5,6 +5,7 @@ import { pool } from '../db/client.js'
 import {
   enforceUploadLimit,
   getUsageCount,
+  getUsageCountForPeriod,
   observeBillingPeriodQuota,
   recordChunkUploadUsage,
   requireActiveSubscription,
@@ -82,6 +83,26 @@ test('legacy usage counting keeps provider-start rows visible after kill-switch 
   assert.match(usageQuery.sql, /created_at >= \$2/)
   assert.match(usageQuery.sql, /created_at < \$3/)
   assert.equal(usageQuery.params[2].toISOString(), '2026-08-01T00:00:00.000Z')
+})
+
+test('billing-period usage identifies allocation rows by the exact reservation timestamps', async (t) => {
+  let usageQuery = null
+  t.mock.method(pool, 'query', async (sql, params) => {
+    usageQuery = { sql: String(sql), params }
+    return { rows: [{ usage_count: 12 }] }
+  })
+  const periodStart = new Date('2026-07-27T14:35:42.123Z')
+  const periodEnd = new Date('2026-08-27T14:35:42.123Z')
+
+  const used = await getUsageCountForPeriod(7, periodStart, periodEnd)
+
+  assert.equal(used, 12)
+  assert.match(usageQuery.sql, /JOIN resume_quota_reservations AS reservation/)
+  assert.match(usageQuery.sql, /reservation\.period_start = \$2/)
+  assert.match(usageQuery.sql, /reservation\.period_end = \$3/)
+  assert.doesNotMatch(usageQuery.sql, /month_start = \$2::date/)
+  assert.equal(usageQuery.params[1].toISOString(), periodStart.toISOString())
+  assert.equal(usageQuery.params[2].toISOString(), periodEnd.toISOString())
 })
 
 test('billing-period quota observation compares counts without changing the legacy decision', async () => {

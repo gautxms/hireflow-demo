@@ -709,10 +709,13 @@ test('GET reconciliation reports a new recovery as pending instead of reusing an
 
 test('GET /api/subscriptions/current records only the exact provider-confirmed recovered attempt', async () => {
   resetPaddleEnv()
+  process.env.PADDLE_PAST_DUE_RECOVERY_BILLING_ADJUSTMENT_ENVIRONMENTS = 'production'
   const user = recoverableMonthlyUser()
   let reconciliationParams = null
+  const dbCalls = []
   pool.connect = async () => { throw new Error('pool.connect should not be called') }
   pool.query = async (sql, params) => {
+    dbCalls.push({ sql: String(sql), params })
     if (/SELECT transaction_id\s+FROM payment_attempts/.test(String(sql))) {
       return { rows: [{ transaction_id: 'txn_old' }, { transaction_id: 'txn_recovered' }], rowCount: 2 }
     }
@@ -751,6 +754,10 @@ test('GET /api/subscriptions/current records only the exact provider-confirmed r
     transaction_id: 'txn_recovered',
   })
   assert.match(paddleCalls[1].url, /transactions\?subscription_id=sub_123&customer_id=ctm_123&per_page=30/)
+  const immediateDiscovery = dbCalls.find(({ sql }) => /SELECT pa\.\*/.test(sql))
+  const immediateClaim = dbCalls.find(({ sql }) => /WITH claimable AS/.test(sql))
+  assert.deepEqual(immediateDiscovery.params, [['production'], true, 123, 'txn_recovered'])
+  assert.deepEqual(immediateClaim.params, [['production'], true, 123, 'txn_recovered'])
 })
 
 test('GET /api/subscriptions/current does not revive a cancellation committed during Paddle refresh', async () => {

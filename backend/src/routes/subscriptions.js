@@ -12,7 +12,11 @@ import {
   PLAN_CHANGE_RECOVERY_OUTCOME,
   recoverFailedPaddlePlanChange,
 } from '../services/paddlePlanChangeRecovery.js'
-import { isRecoveryBillingAdjustmentEnabled, selectAuthoritativeCapture } from '../services/recoveryBillingAdjustment.js'
+import {
+  isRecoveryBillingAdjustmentEnabled,
+  runRecoveryBillingAdjustments,
+  selectAuthoritativeCapture,
+} from '../services/recoveryBillingAdjustment.js'
 
 const router = Router()
 
@@ -432,6 +436,22 @@ async function resolveHeldGetRecoveryAttempts(user, paddle) {
   return transactionId
 }
 
+async function processRecoveredTransactionImmediately(userId, transactionId, paddle) {
+  if (!transactionId || !isRecoveryBillingAdjustmentEnabled(paddle.environment)) return
+  try {
+    await runRecoveryBillingAdjustments({
+      candidateUserId: userId,
+      candidateTransactionId: transactionId,
+    })
+  } catch (error) {
+    await logErrorToDatabase('recovery_billing_adjustment.immediate_failed', error, {
+      userId,
+      transactionId,
+      environment: paddle.environment,
+    })
+  }
+}
+
 function extractBillingDates(paddlePayload = {}) {
   const data = paddlePayload.data || paddlePayload
   return {
@@ -690,7 +710,8 @@ router.get('/current', requireAuth, async (req, res) => {
     const hasValidPaddleDates = [paddleCurrentPeriodStart, paddleCurrentPeriodEnd, paddleNextBillingDate]
       .every((value) => value && !Number.isNaN(new Date(value).getTime()))
     if (!isPastDueRecovery && paddleStatus === 'active') {
-      await resolveHeldGetRecoveryAttempts(user, paddle)
+      const heldRecoveryTransactionId = await resolveHeldGetRecoveryAttempts(user, paddle)
+      await processRecoveredTransactionImmediately(user.id, heldRecoveryTransactionId, paddle)
     }
 
     if (
@@ -808,6 +829,7 @@ router.get('/current', requireAuth, async (req, res) => {
               ? `transaction:${exactRecoveryTransactionId}`
               : null
           }
+          await processRecoveredTransactionImmediately(user.id, exactRecoveryTransactionId, paddle)
         }
       } else if (isPastDueRecovery) {
         const currentResult = await pool.query(

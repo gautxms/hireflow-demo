@@ -23,6 +23,10 @@ import {
   PLAN_CHANGE_RECOVERY_OUTCOME,
   recoverFailedPaddlePlanChange,
 } from '../services/paddlePlanChangeRecovery.js'
+import {
+  isRecoveryBillingAdjustmentEnabled,
+  runRecoveryBillingAdjustments,
+} from '../services/recoveryBillingAdjustment.js'
 
 const router = express.Router()
 
@@ -595,6 +599,20 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment) {
         // A completed transaction is authoritative for its own payment attempt even
         // when a newer subscription event has already won the user projection CAS.
         await markPaymentAttemptSucceeded(payload)
+        if (userId && transactionId && isRecoveryBillingAdjustmentEnabled(paddle.environment)) {
+          try {
+            await runRecoveryBillingAdjustments({
+              candidateUserId: userId,
+              candidateTransactionId: transactionId,
+            })
+          } catch (error) {
+            await logErrorToDatabase('recovery_billing_adjustment.immediate_failed', error, {
+              userId,
+              transactionId,
+              environment: paddle.environment,
+            })
+          }
+        }
 
         if (!activationApplied) {
           subscriptionProjection = null

@@ -66,9 +66,11 @@ unknown outcomes retry after a provider GET.
 Migration 049 additively creates `recovery_billing_adjustments`, with
 timezone-aware timestamps, safe status/error fields, a due-work index, and a
 unique `(paddle_environment, recovery_transaction_id)` identity. The existing
-15-minute payment scheduler discovers exact local recovered attempts and resumes
-pending work after restarts. Concurrent discovery is harmless through the
-unique key; local confirmation uses a lifecycle compare-and-set.
+recovery webhook and GET reconciliation paths immediately process the exact
+locally recorded recovery transaction. The existing 15-minute payment scheduler
+remains the durable retry/resume path after provider failures or restarts.
+Concurrent discovery is harmless through the unique key; local confirmation
+uses provider-event and billing-projection compare-and-set guards.
 
 `PADDLE_PAST_DUE_RECOVERY_BILLING_ADJUSTMENT_ENVIRONMENTS` is empty by default.
 Deploy disabled, set it to `sandbox`, verify the previously recovered account

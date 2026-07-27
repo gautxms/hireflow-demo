@@ -160,7 +160,18 @@ export async function reserveResumeQuotaUnits({
          FROM usage_log
          WHERE user_id = $1
            AND (
-             (quota_allocation_id IS NOT NULL AND month_start = $2::date)
+             (
+               quota_allocation_id IS NOT NULL
+               AND EXISTS (
+                 SELECT 1
+                 FROM resume_quota_allocations AS allocation
+                 JOIN resume_quota_reservations AS allocation_reservation
+                   ON allocation_reservation.id = allocation.reservation_id
+                 WHERE allocation.id = usage_log.quota_allocation_id
+                   AND allocation_reservation.period_start = $2
+                   AND allocation_reservation.period_end = $3
+               )
+             )
              OR (
                quota_allocation_id IS NULL
                AND created_at >= $2
