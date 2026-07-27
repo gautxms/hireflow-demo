@@ -17,6 +17,8 @@ import {
   ResumeQuotaExceededError,
 } from '../services/resumeQuotaReservations.js'
 
+export const RESUME_ANALYSIS_QUOTA_EXCEEDED_CODE = 'RESUME_ANALYSIS_QUOTA_EXCEEDED'
+
 export function getMonthStart(referenceDate = new Date()) {
   return new Date(Date.UTC(referenceDate.getUTCFullYear(), referenceDate.getUTCMonth(), 1))
 }
@@ -208,6 +210,7 @@ export async function requireActiveSubscription(req, res, next) {
 }
 
 export async function enforceUploadLimit(req, res, next) {
+  let quotaPeriodEnd = null
   try {
     const legacyMonthStart = getMonthStart()
     const legacyMonthEnd = new Date(Date.UTC(
@@ -233,6 +236,7 @@ export async function enforceUploadLimit(req, res, next) {
       }
     const periodStart = enforcementPeriod.start
     const periodEnd = enforcementPeriod.end
+    quotaPeriodEnd = periodEnd
     const legacyUsage = await getUsageCount(
       req.userId,
       legacyMonthStart,
@@ -274,12 +278,14 @@ export async function enforceUploadLimit(req, res, next) {
 
     if (projectedUsage > uploadLimit) {
       return res.status(429).json({
+        code: RESUME_ANALYSIS_QUOTA_EXCEEDED_CODE,
         error: 'Upload limit reached',
-        message: `This upload would exceed your monthly resume analysis limit (${uploadLimit}). Contact support or upgrade your plan to continue.`,
+        message: `This batch exceeds your resume analysis allowance. You can submit ${remainingUploads} more resume${remainingUploads === 1 ? '' : 's'} before ${periodEnd.toISOString()}.`,
         limit: uploadLimit,
         used: currentUsage,
         requested: requestedUploads,
         remaining: remainingUploads,
+        periodEnd: periodEnd.toISOString(),
       })
     }
 
@@ -338,13 +344,15 @@ export async function enforceUploadLimit(req, res, next) {
   } catch (error) {
     if (error instanceof ResumeQuotaExceededError) {
       return res.status(429).json({
+        code: RESUME_ANALYSIS_QUOTA_EXCEEDED_CODE,
         error: 'Upload limit reached',
-        message: `This upload would exceed your monthly resume analysis limit (${error.details.limit}). Contact support or upgrade your plan to continue.`,
+        message: `This batch exceeds your resume analysis allowance. You can submit ${error.details.remaining} more resume${error.details.remaining === 1 ? '' : 's'} this period.`,
         limit: error.details.limit,
         used: error.details.used,
         reserved: error.details.reserved,
         requested: error.details.requested,
         remaining: error.details.remaining,
+        ...(quotaPeriodEnd ? { periodEnd: quotaPeriodEnd.toISOString() } : {}),
       })
     }
     console.error('[Subscription] Failed to enforce upload usage limit:', error)

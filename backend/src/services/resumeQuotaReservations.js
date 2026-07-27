@@ -89,6 +89,46 @@ export class ResumeQuotaExceededError extends Error {
   }
 }
 
+export async function getActiveResumeQuotaReservationCount({
+  userId,
+  periodStart,
+  periodEnd,
+  queryable = pool,
+}) {
+  const result = await queryable.query(
+    `SELECT COALESCE(SUM(
+       CASE
+         WHEN reservation.expires_at > NOW()
+           THEN reservation.requested_units
+                - reservation.consumed_units
+                - reservation.released_units
+         ELSE (
+           SELECT COUNT(*)::INT
+           FROM resume_quota_allocations AS allocation
+           WHERE allocation.reservation_id = reservation.id
+             AND allocation.status = 'reserved'
+         )
+       END
+     ), 0)::INT AS reserved_count
+     FROM resume_quota_reservations AS reservation
+     WHERE reservation.user_id = $1
+       AND reservation.period_start = $2
+       AND reservation.period_end = $3
+       AND reservation.status = 'reserved'
+       AND (
+         reservation.expires_at > NOW()
+         OR EXISTS (
+           SELECT 1
+           FROM resume_quota_allocations AS active_allocation
+           WHERE active_allocation.reservation_id = reservation.id
+             AND active_allocation.status = 'reserved'
+         )
+       )`,
+    [userId, periodStart, periodEnd],
+  )
+  return Number(result.rows[0]?.reserved_count || 0)
+}
+
 export function isResumeQuotaReservationsEnabled(env = process.env) {
   return String(env.RESUME_QUOTA_RESERVATIONS_ENABLED || 'false').trim().toLowerCase() === 'true'
 }
@@ -169,40 +209,13 @@ export async function reserveResumeQuotaUnits({
            )`,
         [normalizedUserId, normalizedPeriodStart, normalizedPeriodEnd],
       )
-    const reservedResult = await client.query(
-      `SELECT COALESCE(SUM(
-         CASE
-           WHEN reservation.expires_at > NOW()
-             THEN reservation.requested_units
-                  - reservation.consumed_units
-                  - reservation.released_units
-           ELSE (
-             SELECT COUNT(*)::INT
-             FROM resume_quota_allocations AS allocation
-             WHERE allocation.reservation_id = reservation.id
-               AND allocation.status = 'reserved'
-           )
-         END
-       ), 0)::INT AS reserved_count
-       FROM resume_quota_reservations AS reservation
-       WHERE reservation.user_id = $1
-         AND reservation.period_start = $2
-         AND reservation.period_end = $3
-         AND reservation.status = 'reserved'
-         AND (
-           reservation.expires_at > NOW()
-           OR EXISTS (
-             SELECT 1
-             FROM resume_quota_allocations AS active_allocation
-             WHERE active_allocation.reservation_id = reservation.id
-               AND active_allocation.status = 'reserved'
-           )
-         )`,
-      [normalizedUserId, normalizedPeriodStart, normalizedPeriodEnd],
-    )
-
     const used = Number(usageResult.rows[0]?.usage_count || 0)
-    const reserved = Number(reservedResult.rows[0]?.reserved_count || 0)
+    const reserved = await getActiveResumeQuotaReservationCount({
+      userId: normalizedUserId,
+      periodStart: normalizedPeriodStart,
+      periodEnd: normalizedPeriodEnd,
+      queryable: client,
+    })
     if (used + reserved + normalizedRequestedUnits > normalizedLimit) {
       throw new ResumeQuotaExceededError({
         limit: normalizedLimit,

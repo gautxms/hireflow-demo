@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Info, Trash2, Upload, X } from 'lucide-react'
 import API_BASE from '../config/api'
+import useResumeAnalysisQuota from '../hooks/useResumeAnalysisQuota.js'
 import { ANALYZE_WITHOUT_JOB_DESCRIPTION_LABEL, toOptionalJobDescriptionId } from '../components/resumeUploaderState'
 import { ANALYSES_PAGE_SIZE, clampAnalysesPage, paginateAnalyses } from './analysesPaginationState'
 import { deriveDisplayStatus, mergeInFlightAnalyses, shouldRemoveInFlightOverlay } from './analysesDisplayState.js'
@@ -13,6 +14,7 @@ import {
   preflightResumeQuota,
   releaseResumeQuotaBatch,
 } from '../utils/resumeQuotaPreflight.js'
+import { formatResumeQuotaRejection, formatResumeQuotaResetDate, getBatchQuotaGuidance, isResumeQuotaRejection } from '../utils/resumeAnalysisQuota.js'
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 const MAX_FILE_SIZE = 25 * 1024 * 1024
@@ -73,6 +75,7 @@ function inferResumeMimeType(fileLike = {}) {
 }
 
 export default function AnalysesPage({ isReadOnly = false }) {
+  const resumeQuota = useResumeAnalysisQuota({ enabled: !isReadOnly })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [items, setItems] = useState([])
@@ -307,7 +310,12 @@ export default function AnalysesPage({ isReadOnly = false }) {
       }),
     })
     const initPayload = await initResponse.json().catch(() => ({}))
-    if (!initResponse.ok) throw new Error(initPayload.error || `Failed to start chunk upload for ${file.name}`)
+    if (!initResponse.ok) {
+      const error = new Error(initPayload.message || initPayload.error || `Failed to start chunk upload for ${file.name}`)
+      error.status = initResponse.status
+      error.quota = initPayload
+      throw error
+    }
     return {
       analysisId: String(initPayload.analysisId || analysisId || '').trim(),
       uploadId: initPayload.uploadId,
@@ -396,6 +404,14 @@ export default function AnalysesPage({ isReadOnly = false }) {
     }
     setValidationErrors(nextValidationErrors)
     if (nextValidationErrors.name || nextValidationErrors.files) return
+    if (resumeQuota.status === 'success' && resumeQuota.quota?.canCreateAnalysis === false) {
+      setSubmitError(formatResumeQuotaRejection({}, resumeQuota.quota))
+      return
+    }
+    const batchGuidance = getBatchQuotaGuidance(resumeQuota.status === 'success' ? resumeQuota.quota : null, filesSnapshot.length)
+    if (batchGuidance) {
+      return
+    }
 
     const token = localStorage.getItem(TOKEN_STORAGE_KEY)
     if (!token) {
@@ -462,6 +478,7 @@ export default function AnalysesPage({ isReadOnly = false }) {
           reservationId: quotaPreflight.reservationId,
         }).catch(() => {})
       }
+      await resumeQuota.refresh()
 
       const overlay = {
         analysisId: firstInit.analysisId,
@@ -490,7 +507,12 @@ export default function AnalysesPage({ isReadOnly = false }) {
         refreshAnalysesList({ ...inFlightAnalysesRef.current, [overlay.analysisId]: overlay }).catch(() => {})
       })
     } catch (submitFailure) {
-      setSubmitError(submitFailure.message || 'Unable to analyze resumes')
+      if (isResumeQuotaRejection(submitFailure)) {
+        setSubmitError(formatResumeQuotaRejection(submitFailure.quota, resumeQuota.quota))
+        await resumeQuota.refresh()
+      } else {
+        setSubmitError(submitFailure.message || 'Unable to analyze resumes')
+      }
       setIsSubmitting(false)
     }
   }
@@ -662,6 +684,8 @@ export default function AnalysesPage({ isReadOnly = false }) {
         isDraggingOverDropzone={isDraggingOverDropzone}
         onDraggingOverDropzoneChange={setIsDraggingOverDropzone}
         onRemoveSelectedFile={handleRemoveSelectedFile}
+        quotaStatus={resumeQuota.status}
+        quota={resumeQuota.quota}
       /> : null}
     </main>
   )
@@ -735,7 +759,7 @@ function FilesPreviewPopover({ analysis, isOpen, onOpen, onClose, popoverId }) {
   )
 }
 
-function CreateAnalysisModal({ isOpen, isSubmitting, analysisName, onAnalysisNameChange, selectedJobDescriptionId, onSelectedJobDescriptionIdChange, jobDescriptions, onFileSelection, onFilesSelected, selectedFiles, validationErrors, submitError, onSubmit, onClose, nameInputRef, isDraggingOverDropzone, onDraggingOverDropzoneChange, onRemoveSelectedFile }) {
+function CreateAnalysisModal({ isOpen, isSubmitting, analysisName, onAnalysisNameChange, selectedJobDescriptionId, onSelectedJobDescriptionIdChange, jobDescriptions, onFileSelection, onFilesSelected, selectedFiles, validationErrors, submitError, onSubmit, onClose, nameInputRef, isDraggingOverDropzone, onDraggingOverDropzoneChange, onRemoveSelectedFile, quotaStatus, quota }) {
   const dialogRef = useRef(null)
   const fileInputRef = useRef(null)
 
@@ -779,18 +803,24 @@ function CreateAnalysisModal({ isOpen, isSubmitting, analysisName, onAnalysisNam
 
   if (!isOpen) return null
 
+  const quotaBlocked = quotaStatus === 'success' && quota?.canCreateAnalysis === false
+  const batchGuidance = getBatchQuotaGuidance(quotaStatus === 'success' ? quota : null, selectedFiles.length)
+  const resetDate = formatResumeQuotaResetDate(quota?.periodEnd)
+
   return createPortal(
     <div className="ui-modal analyses-create-modal" role="dialog" aria-modal="true" aria-labelledby="create-analysis-title" aria-describedby="create-analysis-description" onMouseDown={(event) => { if (event.target === event.currentTarget && !isSubmitting) onClose() }}>
       <div ref={dialogRef} className="ui-card ui-card--card-spacing ui-modal__dialog analyses-create-modal__dialog">
         <div className="analyses-modal__header"><div><h2 id="create-analysis-title">Create analysis</h2><p id="create-analysis-description" className="analyses-modal__description">Upload resumes and choose a job description to start ranking candidates.</p></div><button type="button" className="analyses-modal__close" aria-label="Close create analysis modal" onClick={onClose} disabled={isSubmitting}><X size={18} strokeWidth={1.5} aria-hidden="true" /></button></div>
         <form onSubmit={onSubmit} className="analyses-modal__form" noValidate>
           <div className="analyses-modal__scrollable">
+            {quotaBlocked ? <div className="analyses-modal__quota-callout" role="status"><strong>Resume-analysis limit reached</strong><p>Existing analyses and results remain available.{resetDate ? ` Your allowance resets on ${resetDate}.` : ''}</p></div> : null}
+            {!quotaBlocked && batchGuidance ? <div className="analyses-modal__quota-callout analyses-modal__quota-callout--warning" role="status"><strong>Reduce this batch</strong><p>{batchGuidance}</p></div> : null}
             <div className="analyses-modal__field"><label htmlFor="analysis-name">Analysis name</label><input className="analyses-modal__control" ref={nameInputRef} id="analysis-name" value={analysisName} onChange={(event) => onAnalysisNameChange(event.target.value)} aria-invalid={Boolean(validationErrors.name)} aria-describedby={validationErrors.name ? 'analysis-name-error' : undefined} />{validationErrors.name && <p id="analysis-name-error" role="alert" className="analyses-modal__error">{validationErrors.name}</p>}</div>
           <div className="analyses-modal__field"><label htmlFor="analysis-jd">Job description</label><select className="analyses-modal__control" id="analysis-jd" value={selectedJobDescriptionId} onChange={(event) => onSelectedJobDescriptionIdChange(event.target.value)}><option value="">{ANALYZE_WITHOUT_JOB_DESCRIPTION_LABEL}</option>{jobDescriptions.map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}</select></div>
           <div className="analyses-modal__field"><label htmlFor="analysis-files">Resume files</label><input ref={fileInputRef} className="analyses-modal__input-hidden" id="analysis-files" type="file" multiple accept=".pdf,.docx,.doc,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onChange={onFileSelection} aria-invalid={Boolean(validationErrors.files)} aria-describedby={validationErrors.files ? 'analysis-files-error' : 'analysis-files-help'} /><div className={`analyses-modal__dropzone${isDraggingOverDropzone ? ' is-dragging' : ''}${validationErrors.files ? ' is-invalid' : ''}`} onDragEnter={(event) => { event.preventDefault(); if (!isSubmitting) setDropzoneDragging(true) }} onDragOver={(event) => { event.preventDefault(); if (!isSubmitting) setDropzoneDragging(true) }} onDragLeave={(event) => { event.preventDefault(); if (event.currentTarget.contains(event.relatedTarget)) return; setDropzoneDragging(false) }} onDrop={handleDrop}><Upload size={18} strokeWidth={1.5} aria-hidden="true" /><p className="analyses-modal__dropzone-title">Drag and drop resumes here</p><p id="analysis-files-help" className="analyses-modal__help">Upload PDF, DOC, or DOCX resumes. Max 25MB per file.</p><button type="button" className="hf-btn hf-btn--secondary analyses-modal__browse-btn" onClick={() => fileInputRef.current?.click()} disabled={isSubmitting}>Browse files</button></div>{selectedFiles.length > 0 && <div className="analyses-modal__selected-files"><p className="analyses-modal__selected-count">{selectedFiles.length} file(s) selected</p><ul>{selectedFiles.map((file) => <li key={getFileKey(file)}><span>{file.name}</span><button type="button" className="analyses-modal__file-remove" onClick={() => onRemoveSelectedFile(getFileKey(file))} aria-label={`Remove ${file.name}`}>×</button></li>)}</ul></div>}{validationErrors.files && <p id="analysis-files-error" role="alert" className="analyses-modal__error">{validationErrors.files}</p>}</div>
             {submitError && <p role="alert" className="analyses-modal__error">{submitError}</p>}
           </div>
-          <div className="analyses-modal__actions"><button type="button" className="hf-btn hf-btn--secondary" onClick={onClose} disabled={isSubmitting}>Cancel</button><button type="submit" className="hf-btn hf-btn--primary" disabled={isSubmitting}>{isSubmitting ? 'Analyzing…' : 'Analyze resumes'}</button></div>
+          <div className="analyses-modal__actions"><button type="button" className="hf-btn hf-btn--secondary" onClick={onClose} disabled={isSubmitting}>Cancel</button><button type="submit" className="hf-btn hf-btn--primary" disabled={isSubmitting || quotaBlocked || Boolean(batchGuidance)}>{isSubmitting ? 'Analyzing…' : 'Analyze resumes'}</button></div>
         </form>
       </div>
     </div>,

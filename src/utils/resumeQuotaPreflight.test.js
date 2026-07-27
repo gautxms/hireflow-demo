@@ -84,3 +84,25 @@ test('file identities distinguish same-named files within a stable batch', () =>
     buildResumeQuotaFileIdentity(batchKey, 0),
   )
 })
+
+test('quota rejection is returned once without an automatic preflight retry', async (t) => {
+  let requestCount = 0
+  t.mock.method(globalThis, 'fetch', async () => {
+    requestCount += 1
+    return {
+      ok: false,
+      status: 429,
+      json: async () => ({
+        code: 'RESUME_ANALYSIS_QUOTA_EXCEEDED',
+        message: 'This batch exceeds your resume analysis allowance.',
+        remaining: 0,
+      }),
+    }
+  })
+
+  await assert.rejects(
+    preflightResumeQuota({ apiBase: '/api', token: 'token', fileCount: 1, batchKey: `blocked-${Date.now()}` }),
+    (error) => error.status === 429 && error.quota.code === 'RESUME_ANALYSIS_QUOTA_EXCEEDED',
+  )
+  assert.equal(requestCount, 1)
+})

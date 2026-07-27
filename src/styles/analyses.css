@@ -408,6 +408,11 @@
   font-size: 0.875rem;
 }
 
+.analyses-modal__quota-callout { margin-bottom: 16px; padding: 12px 14px; border: 1px solid color-mix(in srgb, var(--hf-error) 40%, var(--border)); border-radius: 8px; background: color-mix(in srgb, var(--hf-error) 8%, var(--card)); color: var(--color-text-secondary); font-family: var(--font-family-base); }
+.analyses-modal__quota-callout strong { display: block; margin-bottom: 3px; color: var(--color-text-primary); font-family: var(--font-family-heading); font-size: 0.9rem; }
+.analyses-modal__quota-callout p { margin: 0; font-size: 0.82rem; line-height: 1.45; }
+.analyses-modal__quota-callout--warning { border-color: color-mix(in srgb, var(--hf-warning) 42%, var(--border)); background: color-mix(in srgb, var(--hf-warning) 8%, var(--card)); }
+
 .analyses-modal__actions {
   display: flex;
   flex: 0 0 auto;

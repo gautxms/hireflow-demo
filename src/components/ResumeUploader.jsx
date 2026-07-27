@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import DOMPurify from 'dompurify'
 import API_BASE from '../config/api'
+import useResumeAnalysisQuota from '../hooks/useResumeAnalysisQuota.js'
 import { buildRoleSafeErrorView, isStorageInfrastructureError, mapProviderError } from './aiProviderErrorMapping'
 import {
   ANALYZE_WITHOUT_JOB_DESCRIPTION_LABEL,
@@ -29,6 +30,7 @@ import {
   preflightResumeQuota,
   releaseResumeQuotaBatch,
 } from '../utils/resumeQuotaPreflight.js'
+import { formatResumeQuotaRejection, formatResumeQuotaResetDate, getBatchQuotaGuidance, isResumeQuotaRejection } from '../utils/resumeAnalysisQuota.js'
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 const RESUME_UPLOAD_STATE_KEY = 'hireflow_resume_upload_state_v1'
@@ -140,6 +142,7 @@ function writeUploadCache(next) {
 }
 
 export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated, onRequireAuth, subscriptionStatus, isAdmin = false, userProfile = null }) {
+  const resumeQuota = useResumeAnalysisQuota({ enabled: isAuthenticated })
   const fileInputRef = useRef(null)
   const mountedRef = useRef(true)
   const activePollAbortControllerRef = useRef(null)
@@ -401,6 +404,14 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
       setError('Please re-select files before retrying analysis.')
       return
     }
+    if (resumeQuota.status === 'success' && resumeQuota.quota?.canCreateAnalysis === false) {
+      setError(formatResumeQuotaRejection({}, resumeQuota.quota))
+      return
+    }
+    const batchGuidance = getBatchQuotaGuidance(resumeQuota.status === 'success' ? resumeQuota.quota : null, uploadedFiles.length)
+    if (batchGuidance) {
+      return
+    }
 
     setIsAnalyzing(true)
     setError('')
@@ -474,11 +485,13 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
 
           if (!initResponse.ok) {
             const payload = await parseJsonSafe(initResponse)
-            throw withErrorContext(new Error(payload.error || `Failed to start chunk upload for ${file.name}`), {
+            const initError = withErrorContext(new Error(payload.message || payload.error || `Failed to start chunk upload for ${file.name}`), {
               stage: 'upload_init',
               endpoint: '/uploads/chunks/init',
               status: initResponse.status,
             })
+            initError.quota = payload
+            throw initError
           }
 
           const initPayload = await parseJsonSafe(initResponse)
@@ -545,6 +558,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
             })
           }
         }
+        await resumeQuota.refresh()
 
         for (const uploadSession of [firstUpload, ...remainingUploads]) {
           const {
@@ -673,6 +687,16 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
       setIsAnalyzing(false)
       setParseStatus('')
       setParseProgress(0)
+
+      if (isResumeQuotaRejection(err)) {
+        setUploadProgress({ completed: 0, total: 0 })
+        setError(formatResumeQuotaRejection(err.quota, resumeQuota.quota))
+        setTechnicalErrorDetails('')
+        setProviderErrorGuidance(null)
+        setFailedAnalysisState(null)
+        await resumeQuota.refresh()
+        return
+      }
 
       const errorMessage = sanitizeForDisplay(err.message || 'Unable to analyze resumes')
       const errorContext = err?.context && typeof err.context === 'object' ? err.context : {}
@@ -1064,6 +1088,9 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
   const uploadPercent = uploadProgress.total > 0
     ? Math.round((uploadProgress.completed / uploadProgress.total) * 100)
     : 0
+  const quotaBlocked = resumeQuota.status === 'success' && resumeQuota.quota?.canCreateAnalysis === false
+  const quotaBatchGuidance = getBatchQuotaGuidance(resumeQuota.status === 'success' ? resumeQuota.quota : null, uploadedFiles.length)
+  const quotaResetDate = formatResumeQuotaResetDate(resumeQuota.quota?.periodEnd)
 
   if (!isAuthenticated) {
     return null
@@ -1224,6 +1251,9 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
           </div>
         )}
 
+        {quotaBlocked ? <div className="resume-quota-callout" role="status"><strong>Resume-analysis limit reached</strong><p>Existing analyses and results remain available.{quotaResetDate ? ` Your allowance resets on ${quotaResetDate}.` : ''}</p></div> : null}
+        {!quotaBlocked && quotaBatchGuidance ? <div className="resume-quota-callout resume-quota-callout--warning" role="status"><strong>Reduce this batch</strong><p>{quotaBatchGuidance}</p></div> : null}
+
         {error && (
           <div className="resume-error-banner">
             {error}
@@ -1314,7 +1344,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
           <button
             className={`touch-target resume-analyze-button ${uploadedFiles.length === 0 ? 'resume-analyze-button--disabled' : ''}`}
             onClick={() => handleAnalyze()}
-            disabled={uploadedFiles.length === 0 || isAnalyzing}
+            disabled={uploadedFiles.length === 0 || isAnalyzing || quotaBlocked || Boolean(quotaBatchGuidance)}
           >
             {isAnalyzing ? 'Analyzing...' : 'Analyze Candidates'}
           </button>

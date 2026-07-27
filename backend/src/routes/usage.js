@@ -7,7 +7,10 @@ import {
   getUsageCountForPeriod,
   getUsageOverride,
 } from '../middleware/subscriptionCheck.js'
-import { isResumeQuotaReservationsEnabled } from '../services/resumeQuotaReservations.js'
+import {
+  getActiveResumeQuotaReservationCount,
+  isResumeQuotaReservationsEnabled,
+} from '../services/resumeQuotaReservations.js'
 import { resolveResumeQuotaPeriod } from '../utils/resumeQuotaPeriod.js'
 import { hasScheduledCancellationAccess } from '../utils/subscriptionAccess.js'
 
@@ -30,10 +33,12 @@ export function buildResumeAnalysisUsageResponse({
   used,
   periodStart,
   periodEnd = getMonthEnd(periodStart),
+  reserved = 0,
 }) {
   const normalizedLimit = Number(limit || 0)
   const normalizedUsed = Number(used || 0)
   const remaining = Math.max(normalizedLimit - normalizedUsed, 0)
+  const available = Math.max(remaining - Math.max(Number(reserved || 0), 0), 0)
   const percentageUsed = normalizedLimit > 0
     ? Math.floor((normalizedUsed / normalizedLimit) * 100)
     : 0
@@ -42,6 +47,8 @@ export function buildResumeAnalysisUsageResponse({
     limit: normalizedLimit,
     used: normalizedUsed,
     remaining,
+    available,
+    canCreateAnalysis: available > 0,
     periodStart: periodStart.toISOString(),
     periodEnd: periodEnd.toISOString(),
     percentageUsed,
@@ -86,12 +93,20 @@ router.get('/resume-analysis', async (req, res) => {
         usageOverride?.reset_usage,
       )
       : await getUsageCount(req.userId, legacyMonthStart, usageOverride?.reset_usage)
+    const reserved = reservationsEnabled
+      ? await getActiveResumeQuotaReservationCount({
+        userId: req.userId,
+        periodStart: period.start,
+        periodEnd: period.end,
+      })
+      : 0
 
     return res.json(buildResumeAnalysisUsageResponse({
       limit,
       used,
       periodStart: period.start,
       periodEnd: period.end,
+      reserved,
     }))
   } catch (error) {
     console.error('[Usage] Failed to load resume analysis usage:', error)

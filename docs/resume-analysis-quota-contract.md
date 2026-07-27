@@ -80,6 +80,25 @@ The target accounting contract for the reservation and enforcement phases is:
 The legacy path continues to record accepted uploads before scanning. It remains
 the immediate rollback path while `RESUME_QUOTA_RESERVATIONS_ENABLED=false`.
 
+### Customer-facing availability contract
+
+`GET /api/usage/resume-analysis` keeps `used`, `remaining`, and
+`percentageUsed` consumption-based for backward compatibility. In particular,
+`used` counts `usage_log` rows and `remaining` is `limit - used`; neither field
+includes active capacity reservations that have not reached provider start.
+
+The additive `available` field is the amount that atomic enforcement can accept
+now: `max(limit - used - active reserved, 0)`. `canCreateAnalysis` is the
+authoritative server decision for whether at least one new resume may be
+submitted and is equivalent to `available > 0`. When reservation enforcement is
+disabled, there is no active reservation capacity to subtract and `available`
+equals `remaining`.
+
+Customer UI must use `available` and `canCreateAnalysis` for submission guidance,
+while it may use `used`, `percentageUsed`, and `warningLevel` to describe actual
+consumption. Active reservations must not be described as completed or analyzed
+resumes.
+
 ## PR 2 reservation behavior
 
 - Reservation rollout is disabled by default.

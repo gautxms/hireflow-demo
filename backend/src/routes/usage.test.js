@@ -53,6 +53,8 @@ test('buildResumeAnalysisUsageResponse exposes UI-ready quota fields', () => {
     limit: 800,
     used: 600,
     remaining: 200,
+    available: 200,
+    canCreateAnalysis: true,
     periodStart: '2026-05-01T00:00:00.000Z',
     periodEnd: '2026-06-01T00:00:00.000Z',
     percentageUsed: 75,
@@ -94,6 +96,8 @@ test('GET /usage/resume-analysis returns paid active user usage without mutating
   assert.equal(payload.limit, 800)
   assert.equal(payload.used, 720)
   assert.equal(payload.remaining, 80)
+  assert.equal(payload.available, 80)
+  assert.equal(payload.canCreateAnalysis, true)
   assert.equal(payload.percentageUsed, 90)
   assert.equal(payload.warningLevel, 'critical')
   assert.match(payload.periodStart, /^\d{4}-\d{2}-01T00:00:00\.000Z$/)
@@ -140,8 +144,38 @@ test('GET /usage/resume-analysis preserves trial/free limit resolution', async (
   assert.equal(payload.limit, 10)
   assert.equal(payload.used, 10)
   assert.equal(payload.remaining, 0)
+  assert.equal(payload.available, 0)
+  assert.equal(payload.canCreateAnalysis, false)
   assert.equal(payload.percentageUsed, 100)
   assert.equal(payload.warningLevel, 'exceeded')
+})
+
+test('buildResumeAnalysisUsageResponse subtracts active reservations from current availability', () => {
+  const payload = buildResumeAnalysisUsageResponse({
+    limit: 800,
+    used: 790,
+    reserved: 5,
+    periodStart: new Date('2026-05-01T00:00:00.000Z'),
+  })
+
+  assert.equal(payload.used, 790)
+  assert.equal(payload.remaining, 10)
+  assert.equal(payload.available, 5)
+  assert.equal(payload.canCreateAnalysis, true)
+  assert.equal(payload.percentageUsed, 98)
+})
+
+test('server availability blocks creation when reservations consume all remaining capacity', () => {
+  const payload = buildResumeAnalysisUsageResponse({
+    limit: 800,
+    used: 799,
+    reserved: 1,
+    periodStart: new Date('2026-05-01T00:00:00.000Z'),
+  })
+
+  assert.equal(payload.remaining, 1)
+  assert.equal(payload.available, 0)
+  assert.equal(payload.canCreateAnalysis, false)
 })
 
 test('flagged usage response uses the billing-anniversary period and canonical ledger count', async (t) => {
@@ -174,6 +208,31 @@ test('flagged usage response uses the billing-anniversary period and canonical l
     const now = Date.now()
     assert.ok(new Date(payload.periodStart).getTime() <= now)
     assert.ok(new Date(payload.periodEnd).getTime() > now)
+  } finally {
+    if (previousFlag === undefined) delete process.env.RESUME_QUOTA_RESERVATIONS_ENABLED
+    else process.env.RESUME_QUOTA_RESERVATIONS_ENABLED = previousFlag
+  }
+})
+
+test('flagged usage response reports enforcement-consistent availability after active reservations', async (t) => {
+  const previousFlag = process.env.RESUME_QUOTA_RESERVATIONS_ENABLED
+  process.env.RESUME_QUOTA_RESERVATIONS_ENABLED = 'true'
+
+  try {
+    t.mock.method(pool, 'query', async (sql) => {
+      if (sql.includes('FROM users')) return { rows: [{ id: 11, subscription_status: 'active', quota_anchor_at: '2026-01-20T08:30:00.000Z' }] }
+      if (sql.includes('FROM usage_overrides')) return { rows: [] }
+      if (sql.includes('FROM usage_log')) return { rows: [{ usage_count: 790 }] }
+      if (sql.includes('FROM resume_quota_reservations')) return { rows: [{ reserved_count: 5 }] }
+      return { rows: [] }
+    })
+
+    const { response, payload } = await requestUsage({ headers: authHeader(11) })
+    assert.equal(response.status, 200)
+    assert.equal(payload.used, 790)
+    assert.equal(payload.remaining, 10)
+    assert.equal(payload.available, 5)
+    assert.equal(payload.canCreateAnalysis, true)
   } finally {
     if (previousFlag === undefined) delete process.env.RESUME_QUOTA_RESERVATIONS_ENABLED
     else process.env.RESUME_QUOTA_RESERVATIONS_ENABLED = previousFlag
