@@ -2,11 +2,23 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
   addBillingInterval,
+  createRecoveryAdjustmentForAttempt,
   isRecoveryBillingAdjustmentEnabled,
   processRecoveryAdjustment,
   runRecoveryBillingAdjustments,
   selectAuthoritativeCapture,
 } from './recoveryBillingAdjustment.js'
+
+function recurringTransaction({
+  id = 'txn_1', customerId = 'ctm_1', subscriptionId = 'sub_1', plan = 'monthly', capturedAt = '2026-07-27T00:00:00Z',
+} = {}) {
+  return {
+    id, customer_id: customerId, subscription_id: subscriptionId, origin: 'subscription_recurring', status: 'completed',
+    details: { totals: { grand_total: '9900' } },
+    payments: [{ id: 'pay_1', status: 'captured', captured_at: capturedAt }],
+    items: [{ quantity: 1, price: { id: plan === 'annual' ? 'pri_year' : 'pri_month', billing_cycle: { interval: plan === 'annual' ? 'year' : 'month' } } }],
+  }
+}
 
 test('calendar targets clamp month ends and leap years in UTC', () => {
   assert.equal(addBillingInterval('2026-01-31T23:55:00Z', 'monthly').toISOString(), '2026-02-28T23:55:00.000Z')
@@ -16,7 +28,7 @@ test('calendar targets clamp month ends and leap years in UTC', () => {
 })
 
 test('late monthly recovery still anchors one full calendar month from capture', () => {
-  assert.equal(addBillingInterval('2026-07-01T00:01:00Z', 'monthly').toISOString(), '2026-08-01T00:01:00.000Z')
+  assert.equal(addBillingInterval('2026-08-22T09:30:00Z', 'monthly').toISOString(), '2026-09-22T09:30:00.000Z')
 })
 
 test('authoritative capture deterministically selects latest valid captured payment', () => {
@@ -55,12 +67,12 @@ test('monthly recovery PATCHes only next_billed_at with do_not_bill then confirm
   ]
   const patches = []
   const result = await processRecoveryAdjustment({
-    id: 'adj_1', user_id: 7, status: 'provider_updating', subscription_plan: 'monthly', paddle_environment: 'sandbox',
+    id: 'adj_1', user_id: 7, status: 'provider_updating', subscription_plan: 'monthly', paddle_environment: 'sandbox', recovery_transaction_id: 'txn_1',
     paddle_customer_id: 'ctm_1', paddle_subscription_id: 'sub_1', captured_at: '2026-07-27T00:00:00Z',
     target_next_billed_at: '2026-08-27T00:00:00Z',
   }, {
     db, paddle: { environment: 'sandbox', priceIdsByPlan: { monthly: 'pri_month' }, noTrialPriceIdsByPlan: {}, legacyPriceIdsByPlan: {} },
-    getSubscription: async () => subscriptions.shift(),
+    getTransaction: async () => recurringTransaction(), getSubscription: async () => subscriptions.shift(),
     patchSubscription: async (id, body, key) => patches.push({ id, body, key }),
   })
   assert.equal(result, 'confirmed')
@@ -75,11 +87,12 @@ test('already favorable provider date is never shortened', async () => {
   let patched = false
   const db = { async query(sql) { return { rowCount: /^\s*UPDATE (users|recovery_billing_adjustments)/.test(sql) ? 1 : 0, rows: [] } } }
   const result = await processRecoveryAdjustment({
-    id: 'adj_2', user_id: 8, status: 'provider_updating', subscription_plan: 'annual', paddle_environment: 'sandbox',
+    id: 'adj_2', user_id: 8, status: 'provider_updating', subscription_plan: 'annual', paddle_environment: 'sandbox', recovery_transaction_id: 'txn_2',
     paddle_customer_id: 'ctm_2', paddle_subscription_id: 'sub_2', captured_at: '2026-07-27T00:00:00Z',
     target_next_billed_at: '2027-07-27T00:00:00Z',
   }, {
     db, paddle: { environment: 'sandbox', priceIdsByPlan: { annual: 'pri_year' }, noTrialPriceIdsByPlan: {}, legacyPriceIdsByPlan: {} },
+    getTransaction: async () => recurringTransaction({ id: 'txn_2', customerId: 'ctm_2', subscriptionId: 'sub_2', plan: 'annual' }),
     getSubscription: async () => ({ id: 'sub_2', customer_id: 'ctm_2', status: 'active', scheduled_change: null, next_billed_at: '2027-08-01T00:00:00Z', items: [{ price: { id: 'pri_year' } }] }),
     patchSubscription: async () => { patched = true },
   })
@@ -128,8 +141,37 @@ test('scheduler filters enabled environments before both limits and isolates can
   assert.deepEqual(created, [1, 2])
   assert.equal(errors[0].event, 'recovery_billing_adjustment.discovery_failed')
   assert.match(sql[0].text, /paddle_environment[\s\S]*ANY\(\$1::text\[\]\)[\s\S]*LIMIT 20/)
+  assert.match(sql[0].text, /payload->'data'->>'origin'[\s\S]*subscription_recurring[\s\S]*LIMIT 20/)
+  assert.match(sql[0].text, /COALESCE\(NULLIF\(LOWER\(a\.paddle_environment\),''\),'production'\)[\s\S]*COALESCE\(NULLIF\(LOWER\(pa\.paddle_environment\),''\),'production'\)/)
   assert.match(sql[1].text, /paddle_environment = ANY\(\$1::text\[\]\)[\s\S]*LIMIT 20 FOR UPDATE OF a SKIP LOCKED/)
   assert.deepEqual(sql.map(({ params }) => params), [[['sandbox']], [['sandbox']]])
+})
+
+test('permanently ineligible initial checkouts are filtered before LIMIT and cannot starve a recurring recovery', async () => {
+  const queries = []
+  const created = []
+  const responses = [
+    { rows: [{ id: 'valid_recurring', payload: { data: { origin: 'subscription_recurring' } } }], rowCount: 1 },
+    { rows: [], rowCount: 0 },
+  ]
+  await runRecoveryBillingAdjustments({
+    db: { async query(sql) { queries.push(sql); return responses.shift() } },
+    env: { PADDLE_PAST_DUE_RECOVERY_BILLING_ADJUSTMENT_ENVIRONMENTS: 'production' },
+    createAdjustment: async (attempt) => created.push(attempt.id),
+  })
+  assert.deepEqual(created, ['valid_recurring'])
+  assert.match(queries[0], /origin'[\s\S]*= 'subscription_recurring'[\s\S]*ORDER BY[\s\S]*LIMIT 20/)
+  assert.match(queries[0], /recovery_adjustment_ineligible/)
+})
+
+test('legacy null and blank production environments share adjustment idempotency identity', async () => {
+  const sql = []
+  const responses = [{ rows: [], rowCount: 0 }, { rows: [], rowCount: 0 }]
+  await runRecoveryBillingAdjustments({
+    db: { async query(text) { sql.push(text); return responses.shift() } },
+    env: { PADDLE_PAST_DUE_RECOVERY_BILLING_ADJUSTMENT_ENVIRONMENTS: 'production' },
+  })
+  assert.match(sql[0], /COALESCE\(NULLIF\(LOWER\(a\.paddle_environment\),''\),'production'\)\s*=\s*COALESCE\(NULLIF\(LOWER\(pa\.paddle_environment\),''\),'production'\)/)
 })
 
 test('atomic claiming prevents concurrent schedulers from processing the same adjustment', async () => {
@@ -188,12 +230,12 @@ for (const [name, changedSubscription] of [
     const subscriptions = [base, { ...base, next_billed_at: '2026-08-27T00:00:00Z', ...changedSubscription }]
     const db = { async query(sql) { calls.push(sql); return { rows: [], rowCount: 1 } } }
     const status = await processRecoveryAdjustment({
-      id: 'adj_lifecycle', user_id: 7, status: 'provider_updating', subscription_plan: 'monthly', paddle_environment: 'sandbox',
+      id: 'adj_lifecycle', user_id: 7, status: 'provider_updating', subscription_plan: 'monthly', paddle_environment: 'sandbox', recovery_transaction_id: 'txn_1',
       paddle_customer_id: 'ctm_1', paddle_subscription_id: 'sub_1', captured_at: '2026-07-27T00:00:00Z',
       target_next_billed_at: '2026-08-27T00:00:00Z',
     }, {
       db, paddle: { environment: 'sandbox', priceIdsByPlan: { monthly: 'pri_month', annual: 'pri_year' }, noTrialPriceIdsByPlan: {}, legacyPriceIdsByPlan: {} },
-      getSubscription: async () => subscriptions.shift(), patchSubscription: async () => {}, logError: async () => {},
+      getTransaction: async () => recurringTransaction(), getSubscription: async () => subscriptions.shift(), patchSubscription: async () => {}, logError: async () => {},
     })
     assert.equal(status, 'superseded')
     assert.equal(calls.some((sql) => /UPDATE users/.test(sql)), false)
@@ -223,11 +265,11 @@ test('a lost local race after provider success self-heals an already-applied pro
     },
   }
   const status = await processRecoveryAdjustment({
-    id: 'adj_race', user_id: 7, status: 'provider_updating', subscription_plan: 'monthly', paddle_environment: 'sandbox',
+    id: 'adj_race', user_id: 7, status: 'provider_updating', subscription_plan: 'monthly', paddle_environment: 'sandbox', recovery_transaction_id: 'txn_1',
     paddle_customer_id: 'ctm_1', paddle_subscription_id: 'sub_1', captured_at: captured, target_next_billed_at: confirmed,
   }, {
     db, paddle: { environment: 'sandbox', priceIdsByPlan: { monthly: 'pri_month' }, noTrialPriceIdsByPlan: {}, legacyPriceIdsByPlan: {} },
-    getSubscription: async () => ({ id: 'sub_1', customer_id: 'ctm_1', status: 'active', scheduled_change: null, next_billed_at: confirmed, items: [{ price: { id: 'pri_month' } }] }),
+    getTransaction: async () => recurringTransaction(), getSubscription: async () => ({ id: 'sub_1', customer_id: 'ctm_1', status: 'active', scheduled_change: null, next_billed_at: confirmed, items: [{ price: { id: 'pri_month' } }] }),
     logError: async () => {},
   })
   assert.equal(status, 'confirmed')
@@ -254,15 +296,135 @@ test('zero-row adjustment confirmation rolls back local billing dates and preser
     },
   }
   const status = await processRecoveryAdjustment({
-    id: 'adj_superseded', user_id: 7, status: 'provider_updating', subscription_plan: 'monthly', paddle_environment: 'sandbox',
+    id: 'adj_superseded', user_id: 7, status: 'provider_updating', subscription_plan: 'monthly', paddle_environment: 'sandbox', recovery_transaction_id: 'txn_1',
     paddle_customer_id: 'ctm_1', paddle_subscription_id: 'sub_1', captured_at: '2026-07-27T00:00:00Z',
     target_next_billed_at: '2026-08-27T00:00:00Z',
   }, {
     db, paddle: { environment: 'sandbox', priceIdsByPlan: { monthly: 'pri_month' }, noTrialPriceIdsByPlan: {}, legacyPriceIdsByPlan: {} },
-    getSubscription: async () => ({ id: 'sub_1', customer_id: 'ctm_1', status: 'active', scheduled_change: null, next_billed_at: '2026-08-27T00:00:00Z', items: [{ price: { id: 'pri_month' } }] }),
+    getTransaction: async () => recurringTransaction(), getSubscription: async () => ({ id: 'sub_1', customer_id: 'ctm_1', status: 'active', scheduled_change: null, next_billed_at: '2026-08-27T00:00:00Z', items: [{ price: { id: 'pri_month' } }] }),
     logError: async () => {},
   })
   assert.equal(status, 'superseded')
   assert.ok(calls.includes('ROLLBACK'))
   assert.equal(calls.includes('COMMIT'), false)
+})
+
+async function processRecoveredRenewals(order) {
+  const providerNext = '2026-09-22T09:30:00Z'
+  const state = {
+    anchor: null,
+    current_period_end: null,
+    subscription_renewal_date: null,
+    next_billing_date: null,
+  }
+  const statuses = []
+  const db = {
+    async connect() {
+      return {
+        async query(sql, params) {
+          if (/UPDATE users/.test(sql)) {
+            const capturedAt = params[2]
+            if (state.anchor && new Date(state.anchor) > new Date(capturedAt)) return { rowCount: 0, rows: [] }
+            state.anchor = capturedAt
+            state.current_period_end = params[1]
+            state.subscription_renewal_date = params[1]
+            state.next_billing_date = params[1]
+            return { rowCount: 1, rows: [{ id: 7 }] }
+          }
+          if (/UPDATE recovery_billing_adjustments/.test(sql)) return { rowCount: 1, rows: [] }
+          return { rowCount: 0, rows: [] }
+        },
+        release() {},
+      }
+    },
+    async query(sql) {
+      if (/SELECT a\.status/.test(sql)) return { rows: [{
+        status: 'provider_updating', subscription_status: 'active', subscription_plan: 'monthly',
+        paddle_customer_id: 'ctm_1', paddle_subscription_id: 'sub_1', paddle_environment: 'sandbox', cancellation_effective_at: null,
+        current_period_end: state.current_period_end, subscription_renewal_date: state.subscription_renewal_date,
+        next_billing_date: state.next_billing_date, quota_anchor_at: state.anchor,
+      }] }
+      return { rowCount: 1, rows: [] }
+    },
+  }
+  for (const capturedAt of order) {
+    const transactionId = `txn_${capturedAt.slice(5, 10)}`
+    statuses.push(await processRecoveryAdjustment({
+      id: `adj_${capturedAt}`, user_id: 7, status: 'provider_updating', subscription_plan: 'monthly', paddle_environment: 'sandbox',
+      recovery_transaction_id: transactionId, paddle_customer_id: 'ctm_1', paddle_subscription_id: 'sub_1', captured_at: capturedAt,
+      target_next_billed_at: addBillingInterval(capturedAt, 'monthly').toISOString(),
+    }, {
+      db, paddle: { environment: 'sandbox', priceIdsByPlan: { monthly: 'pri_month' }, noTrialPriceIdsByPlan: {}, legacyPriceIdsByPlan: {} },
+      getTransaction: async () => recurringTransaction({ id: transactionId, capturedAt }),
+      getSubscription: async () => ({ id: 'sub_1', customer_id: 'ctm_1', status: 'active', scheduled_change: null, next_billed_at: providerNext, items: [{ price: { id: 'pri_month' } }] }),
+      logError: async () => {},
+    }))
+  }
+  return { state, statuses }
+}
+
+test('two recovered renewals processed oldest-first advance quota anchor monotonically', async () => {
+  const result = await processRecoveredRenewals(['2026-07-22T09:30:00Z', '2026-08-22T09:30:00Z'])
+  assert.deepEqual(result.statuses, ['already_satisfied', 'already_satisfied'])
+  assert.equal(new Date(result.state.anchor).toISOString(), '2026-08-22T09:30:00.000Z')
+})
+
+test('two recovered renewals processed newest-first supersede the older adjustment without resetting quota', async () => {
+  const result = await processRecoveredRenewals(['2026-08-22T09:30:00Z', '2026-07-22T09:30:00Z'])
+  assert.deepEqual(result.statuses, ['already_satisfied', 'superseded'])
+  assert.equal(new Date(result.state.anchor).toISOString(), '2026-08-22T09:30:00.000Z')
+})
+
+test('historical Monthly recovery is superseded after the same subscription changes to Annual', async () => {
+  let patched = false
+  const db = { async query() { return { rowCount: 1, rows: [] } } }
+  const status = await processRecoveryAdjustment({
+    id: 'adj_old_monthly', user_id: 7, status: 'provider_updating', subscription_plan: 'annual', paddle_environment: 'sandbox',
+    recovery_transaction_id: 'txn_monthly', paddle_customer_id: 'ctm_1', paddle_subscription_id: 'sub_1',
+    captured_at: '2026-07-22T09:30:00Z', target_next_billed_at: '2026-08-22T09:30:00Z',
+  }, {
+    db, paddle: { environment: 'sandbox', priceIdsByPlan: { monthly: 'pri_month', annual: 'pri_year' }, noTrialPriceIdsByPlan: {}, legacyPriceIdsByPlan: {} },
+    getTransaction: async () => recurringTransaction({ id: 'txn_monthly', plan: 'monthly', capturedAt: '2026-07-22T09:30:00Z' }),
+    getSubscription: async () => ({ id: 'sub_1', customer_id: 'ctm_1', status: 'active', scheduled_change: null, next_billed_at: '2027-08-22T09:30:00Z', items: [{ price: { id: 'pri_year' } }] }),
+    patchSubscription: async () => { patched = true },
+  })
+  assert.equal(status, 'superseded')
+  assert.equal(patched, false)
+})
+
+test('historical Annual recovery is superseded after the same subscription changes to Monthly', async () => {
+  let patched = false
+  const status = await processRecoveryAdjustment({
+    id: 'adj_old_annual', user_id: 7, status: 'provider_updating', subscription_plan: 'monthly', paddle_environment: 'sandbox',
+    recovery_transaction_id: 'txn_annual', paddle_customer_id: 'ctm_1', paddle_subscription_id: 'sub_1',
+    captured_at: '2026-07-22T09:30:00Z', target_next_billed_at: '2027-07-22T09:30:00Z',
+  }, {
+    db: { async query() { return { rowCount: 1, rows: [] } } },
+    paddle: { environment: 'sandbox', priceIdsByPlan: { monthly: 'pri_month', annual: 'pri_year' }, noTrialPriceIdsByPlan: {}, legacyPriceIdsByPlan: {} },
+    getTransaction: async () => recurringTransaction({ id: 'txn_annual', plan: 'annual', capturedAt: '2026-07-22T09:30:00Z' }),
+    getSubscription: async () => ({ id: 'sub_1', customer_id: 'ctm_1', status: 'active', scheduled_change: null, next_billed_at: '2026-08-22T09:30:00Z', items: [{ price: { id: 'pri_month' } }] }),
+    patchSubscription: async () => { patched = true },
+  })
+  assert.equal(status, 'superseded')
+  assert.equal(patched, false)
+})
+
+test('candidate creation rejects a historical Monthly renewal after an Annual plan change', async () => {
+  const writes = []
+  const db = { async query(sql) {
+    writes.push(sql)
+    if (/FROM users/.test(sql)) return { rows: [{
+      id: 7, subscription_status: 'active', subscription_plan: 'annual', paddle_environment: 'sandbox',
+      paddle_customer_id: 'ctm_1', paddle_subscription_id: 'sub_1', cancellation_effective_at: null,
+    }] }
+    return { rows: [], rowCount: 0 }
+  } }
+  const result = await createRecoveryAdjustmentForAttempt({ id: 1, user_id: 7, transaction_id: 'txn_monthly', paddle_environment: 'sandbox' }, {
+    db, env: { PADDLE_PAST_DUE_RECOVERY_BILLING_ADJUSTMENT_ENVIRONMENTS: 'sandbox' },
+    paddle: { environment: 'sandbox', priceIdsByPlan: { monthly: 'pri_month', annual: 'pri_year' }, noTrialPriceIdsByPlan: {}, legacyPriceIdsByPlan: {} },
+    getTransaction: async () => recurringTransaction({ id: 'txn_monthly', plan: 'monthly' }),
+    getSubscription: async () => ({ id: 'sub_1', customer_id: 'ctm_1', status: 'active', scheduled_change: null, next_billed_at: '2027-08-27T00:00:00Z', items: [{ price: { id: 'pri_year' } }] }),
+  })
+  assert.equal(result, null)
+  assert.equal(writes.some((sql) => /INSERT INTO recovery_billing_adjustments/.test(sql)), false)
 })

@@ -11,6 +11,10 @@ function enabledEnvironments(env) {
     .filter((value) => ['sandbox', 'production'].includes(value)))]
 }
 
+function normalizedEnvironment(value) {
+  return String(value || '').trim().toLowerCase() === 'sandbox' ? 'sandbox' : 'production'
+}
+
 export function isRecoveryBillingAdjustmentEnabled(environment, env = process.env) {
   return enabledEnvironments(env).includes(environment)
 }
@@ -48,6 +52,18 @@ function transactionIsRecurringRenewal(transaction) {
     && transaction?.status === 'completed'
     && Boolean(transaction?.subscription_id)
     && Number(transaction?.details?.totals?.grand_total ?? transaction?.details?.totals?.total ?? 0) > 0
+}
+
+function transactionMatchesPlan(transaction, paddle, plan) {
+  const expectedInterval = plan === 'annual' ? 'year' : 'month'
+  const items = Array.isArray(transaction?.items) ? transaction.items : []
+  return inferPlanFromPaddlePayload(transaction, paddle) === plan
+    && items.some((item) => {
+      const interval = item?.price?.billing_cycle?.interval || item?.price?.billingCycle?.interval
+      return inferPlanFromPaddlePayload({ items: [item] }, paddle) === plan
+        && interval === expectedInterval
+        && Number(item?.quantity ?? 1) > 0
+    })
 }
 
 async function paddleRequest(paddle, path, options = {}) {
@@ -90,9 +106,10 @@ export async function createRecoveryAdjustmentForAttempt(attempt, dependencies =
     : paddleRequest(paddle, `/subscriptions/${encodeURIComponent(transaction?.subscription_id || '')}`))
   const plan = inferPlanFromPaddlePayload(subscription, paddle)
   const safe = user && transactionIsRecurringRenewal(transaction) && capture
+    && transactionMatchesPlan(transaction, paddle, plan)
     && attempt.transaction_id === transaction.id
-    && attempt.paddle_environment === paddle.environment
-    && user.paddle_environment === paddle.environment
+    && normalizedEnvironment(attempt.paddle_environment) === paddle.environment
+    && normalizedEnvironment(user.paddle_environment) === paddle.environment
     && transaction.customer_id === user.paddle_customer_id
     && transaction.subscription_id === user.paddle_subscription_id
     && subscription.id === user.paddle_subscription_id
@@ -107,6 +124,14 @@ export async function createRecoveryAdjustmentForAttempt(attempt, dependencies =
     console.warn('[recovery-billing-adjustment] ownership/security rejection', {
       userId: attempt.user_id, environment: paddle.environment, reasonCode: 'ineligible_recovery',
     })
+    if (transaction && !transactionIsRecurringRenewal(transaction)) {
+      await db.query(
+        `UPDATE payment_attempts SET metadata=COALESCE(metadata, '{}'::jsonb)
+           || '{"recovery_adjustment_ineligible":"non_recurring"}'::jsonb, updated_at=NOW()
+         WHERE id=$1`,
+        [attempt.id],
+      )
+    }
     return null
   }
 
@@ -160,6 +185,14 @@ async function classifyLocalRace(db, adjustment, confirmed, plan, paddle) {
     )
     return 'superseded'
   }
+  if (validDate(state.quota_anchor_at) > validDate(adjustment.captured_at)) {
+    await db.query(
+      `UPDATE recovery_billing_adjustments SET status='superseded', safe_error_code='newer_recovery_applied',
+         next_retry_at=NULL, updated_at=NOW() WHERE id=$1 AND status='provider_updating'`,
+      [adjustment.id],
+    )
+    return 'superseded'
+  }
   const sameInstant = (value, expected) => validDate(value)?.getTime() === validDate(expected)?.getTime()
   if (sameInstant(state.current_period_end, confirmed)
     && sameInstant(state.subscription_renewal_date, confirmed)
@@ -182,15 +215,25 @@ export async function processRecoveryAdjustment(adjustment, dependencies = {}) {
   const paddle = dependencies.paddle || resolvePaddleConfig(process.env, adjustment.paddle_environment)
   const getSubscription = dependencies.getSubscription
     || ((id) => paddleRequest(paddle, `/subscriptions/${encodeURIComponent(id)}`))
+  const getTransaction = dependencies.getTransaction
+    || ((id) => paddleRequest(paddle, `/transactions/${encodeURIComponent(id)}`))
   let transactionClient = null
   let transactionStarted = false
   let subscription
   try {
+    const transaction = await getTransaction(adjustment.recovery_transaction_id)
     subscription = await getSubscription(adjustment.paddle_subscription_id)
     const target = validDate(adjustment.target_next_billed_at)
     const current = validDate(subscription?.next_billed_at)
     const plan = inferPlanFromPaddlePayload(subscription, paddle)
-    if (!target || !current || target <= new Date() || subscription.id !== adjustment.paddle_subscription_id
+    const capture = selectAuthoritativeCapture(transaction?.payments)
+    if (!target || !current || target <= new Date() || !transactionIsRecurringRenewal(transaction)
+      || transaction.id !== adjustment.recovery_transaction_id
+      || transaction.customer_id !== adjustment.paddle_customer_id
+      || transaction.subscription_id !== adjustment.paddle_subscription_id
+      || !capture || validDate(capture.captured_at)?.getTime() !== validDate(adjustment.captured_at)?.getTime()
+      || !transactionMatchesPlan(transaction, paddle, adjustment.subscription_plan)
+      || subscription.id !== adjustment.paddle_subscription_id
       || subscription.customer_id !== adjustment.paddle_customer_id || subscription.status !== 'active'
       || plan !== adjustment.subscription_plan && adjustment.subscription_plan
       || subscription.scheduled_change) {
@@ -229,7 +272,8 @@ export async function processRecoveryAdjustment(adjustment, dependencies = {}) {
        WHERE id=$1 AND subscription_status='active' AND paddle_subscription_id=$4
          AND paddle_customer_id=$5 AND subscription_plan=$6
          AND COALESCE(NULLIF(LOWER(paddle_environment),''),'production')=$7
-         AND cancellation_effective_at IS NULL RETURNING id`,
+         AND cancellation_effective_at IS NULL
+         AND (quota_anchor_at IS NULL OR quota_anchor_at <= $3) RETURNING id`,
       [adjustment.user_id, confirmed, adjustment.captured_at, adjustment.paddle_subscription_id,
         adjustment.paddle_customer_id, plan, paddle.environment],
     )
@@ -287,9 +331,13 @@ export async function runRecoveryBillingAdjustments(dependencies = {}) {
     `SELECT pa.* FROM payment_attempts pa JOIN users u ON u.id=pa.user_id
      WHERE pa.status='succeeded' AND pa.transaction_id IS NOT NULL
        AND COALESCE(pa.metadata->>'resolved_by','') <> ''
+       AND COALESCE(pa.metadata->>'recovery_adjustment_ineligible','') = ''
+       AND COALESCE(pa.payload->'data'->>'origin', pa.payload->>'origin','') = 'subscription_recurring'
        AND COALESCE(NULLIF(LOWER(pa.paddle_environment),''),'production') = ANY($1::text[])
        AND NOT EXISTS (SELECT 1 FROM recovery_billing_adjustments a
-         WHERE a.paddle_environment=pa.paddle_environment AND a.recovery_transaction_id=pa.transaction_id)
+         WHERE COALESCE(NULLIF(LOWER(a.paddle_environment),''),'production')
+             = COALESCE(NULLIF(LOWER(pa.paddle_environment),''),'production')
+           AND a.recovery_transaction_id=pa.transaction_id)
      ORDER BY pa.updated_at DESC LIMIT 20`, [enabled],
   )
   for (const attempt of candidates.rows) {
@@ -307,7 +355,7 @@ export async function runRecoveryBillingAdjustments(dependencies = {}) {
          AND (a.status='pending'
            OR (a.status='retryable_failed' AND a.next_retry_at<=NOW())
            OR (a.status='provider_updating' AND a.updated_at<=NOW()-INTERVAL '15 minutes'))
-       ORDER BY a.created_at LIMIT 20 FOR UPDATE OF a SKIP LOCKED
+       ORDER BY a.captured_at DESC, a.created_at LIMIT 20 FOR UPDATE OF a SKIP LOCKED
      )
      UPDATE recovery_billing_adjustments a
      SET status='provider_updating', attempt_count=attempt_count+1, next_retry_at=NULL, updated_at=NOW()
