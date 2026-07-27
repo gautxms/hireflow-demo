@@ -5,10 +5,14 @@ import { inferPlanFromPaddlePayload } from './paddlePlanChangeRecovery.js'
 
 const TERMINAL = new Set(['confirmed', 'already_satisfied', 'manual_required', 'superseded'])
 
+function enabledEnvironments(env) {
+  return [...new Set(String(env.PADDLE_PAST_DUE_RECOVERY_BILLING_ADJUSTMENT_ENVIRONMENTS || '')
+    .split(',').map((value) => value.trim().toLowerCase())
+    .filter((value) => ['sandbox', 'production'].includes(value)))]
+}
+
 export function isRecoveryBillingAdjustmentEnabled(environment, env = process.env) {
-  const enabled = String(env.PADDLE_PAST_DUE_RECOVERY_BILLING_ADJUSTMENT_ENVIRONMENTS || '')
-    .split(',').map((value) => value.trim().toLowerCase()).filter(Boolean)
-  return enabled.includes(environment)
+  return enabledEnvironments(env).includes(environment)
 }
 
 function validDate(value) {
@@ -123,6 +127,55 @@ function stableIdempotencyKey(adjustment) {
   return crypto.createHash('sha256').update(`recovery-billing-adjustment:${adjustment.id}`).digest('hex')
 }
 
+function subscriptionMatchesAdjustment(subscription, adjustment, paddle, plan) {
+  return subscription?.id === adjustment.paddle_subscription_id
+    && subscription?.customer_id === adjustment.paddle_customer_id
+    && subscription?.status === 'active'
+    && !subscription?.scheduled_change
+    && inferPlanFromPaddlePayload(subscription, paddle) === plan
+}
+
+async function classifyLocalRace(db, adjustment, confirmed, plan, paddle) {
+  const result = await db.query(
+    `SELECT a.status, u.subscription_status, u.subscription_plan, u.paddle_customer_id,
+            u.paddle_subscription_id, u.paddle_environment, u.cancellation_effective_at,
+            u.current_period_end, u.subscription_renewal_date, u.next_billing_date, u.quota_anchor_at
+     FROM recovery_billing_adjustments a JOIN users u ON u.id=a.user_id
+     WHERE a.id=$1`,
+    [adjustment.id],
+  )
+  const state = result.rows[0]
+  if (TERMINAL.has(state?.status)) return state.status
+  const lifecycleMatches = state?.subscription_status === 'active'
+    && state.subscription_plan === plan
+    && state.paddle_customer_id === adjustment.paddle_customer_id
+    && state.paddle_subscription_id === adjustment.paddle_subscription_id
+    && String(state.paddle_environment || 'production').toLowerCase() === paddle.environment
+    && !state.cancellation_effective_at
+  if (!lifecycleMatches) {
+    await db.query(
+      `UPDATE recovery_billing_adjustments SET status='superseded', safe_error_code='lifecycle_changed',
+         next_retry_at=NULL, updated_at=NOW() WHERE id=$1 AND status='provider_updating'`,
+      [adjustment.id],
+    )
+    return 'superseded'
+  }
+  const sameInstant = (value, expected) => validDate(value)?.getTime() === validDate(expected)?.getTime()
+  if (sameInstant(state.current_period_end, confirmed)
+    && sameInstant(state.subscription_renewal_date, confirmed)
+    && sameInstant(state.next_billing_date, confirmed)
+    && sameInstant(state.quota_anchor_at, adjustment.captured_at)) {
+    const healed = await db.query(
+      `UPDATE recovery_billing_adjustments SET status='confirmed', provider_confirmed_next_billed_at=$2,
+         confirmed_at=NOW(), next_retry_at=NULL, safe_error_code=NULL, updated_at=NOW()
+       WHERE id=$1 AND status='provider_updating'`,
+      [adjustment.id, confirmed],
+    )
+    return healed.rowCount === 1 ? 'confirmed' : 'conflict'
+  }
+  return 'conflict'
+}
+
 export async function processRecoveryAdjustment(adjustment, dependencies = {}) {
   if (!adjustment || TERMINAL.has(adjustment.status)) return adjustment?.status || null
   const db = dependencies.db || pool
@@ -141,7 +194,7 @@ export async function processRecoveryAdjustment(adjustment, dependencies = {}) {
       || subscription.customer_id !== adjustment.paddle_customer_id || subscription.status !== 'active'
       || plan !== adjustment.subscription_plan && adjustment.subscription_plan
       || subscription.scheduled_change) {
-      await db.query(`UPDATE recovery_billing_adjustments SET status='superseded', safe_error_code='lifecycle_changed', updated_at=NOW() WHERE id=$1`, [adjustment.id])
+      await db.query(`UPDATE recovery_billing_adjustments SET status='superseded', safe_error_code='lifecycle_changed', updated_at=NOW() WHERE id=$1 AND status='provider_updating'`, [adjustment.id])
       return 'superseded'
     }
     if (current < target) {
@@ -155,8 +208,15 @@ export async function processRecoveryAdjustment(adjustment, dependencies = {}) {
       subscription = await getSubscription(adjustment.paddle_subscription_id)
     }
     const confirmed = validDate(subscription?.next_billed_at)
-    if (!confirmed || confirmed < target || subscription.status !== 'active'
-      || subscription.id !== adjustment.paddle_subscription_id || subscription.customer_id !== adjustment.paddle_customer_id) {
+    if (!subscriptionMatchesAdjustment(subscription, adjustment, paddle, plan)) {
+      await db.query(
+        `UPDATE recovery_billing_adjustments SET status='superseded', safe_error_code='lifecycle_changed',
+           next_retry_at=NULL, updated_at=NOW() WHERE id=$1 AND status='provider_updating'`,
+        [adjustment.id],
+      )
+      return 'superseded'
+    }
+    if (!confirmed || confirmed < target) {
       throw Object.assign(new Error('Provider state did not confirm target'), { providerCode: 'verification_failed' })
     }
     const status = current >= target ? 'already_satisfied' : 'confirmed'
@@ -173,12 +233,18 @@ export async function processRecoveryAdjustment(adjustment, dependencies = {}) {
       [adjustment.user_id, confirmed, adjustment.captured_at, adjustment.paddle_subscription_id,
         adjustment.paddle_customer_id, plan, paddle.environment],
     )
-    if (userUpdate.rowCount !== 1) throw Object.assign(new Error('Local lifecycle changed'), { providerCode: 'local_cas_conflict' })
-    await transactionClient.query(
+    if (userUpdate.rowCount !== 1) {
+      throw Object.assign(new Error('Local lifecycle changed'), { providerCode: 'local_cas_conflict', localRace: true })
+    }
+    const adjustmentUpdate = await transactionClient.query(
       `UPDATE recovery_billing_adjustments SET status=$2, provider_confirmed_next_billed_at=$3,
-         confirmed_at=NOW(), updated_at=NOW(), safe_error_code=NULL WHERE id=$1 AND status NOT IN ('superseded','manual_required')`,
+         confirmed_at=NOW(), updated_at=NOW(), safe_error_code=NULL
+       WHERE id=$1 AND status='provider_updating'`,
       [adjustment.id, status, confirmed],
     )
+    if (adjustmentUpdate.rowCount !== 1) {
+      throw Object.assign(new Error('Adjustment claim lost'), { providerCode: 'adjustment_cas_conflict', localRace: true })
+    }
     await transactionClient.query('COMMIT')
     transactionStarted = false
     console.info(`[recovery-billing-adjustment] ${status}`, { adjustmentId: adjustment.id, userId: adjustment.user_id, environment: paddle.environment })
@@ -190,16 +256,20 @@ export async function processRecoveryAdjustment(adjustment, dependencies = {}) {
     }
     transactionClient?.release?.()
     transactionClient = null
+    if (error.localRace && subscription) {
+      const raceStatus = await classifyLocalRace(db, adjustment, subscription.next_billed_at, adjustment.subscription_plan, paddle)
+      if (raceStatus !== 'conflict') return raceStatus
+    }
     const code = String(error.providerCode || '')
     const manual = error.status === 422 && /billing|30_minute|too_close/i.test(code)
     const status = manual ? 'manual_required' : 'retryable_failed'
     await db.query(
-      `UPDATE recovery_billing_adjustments SET status=$2, attempt_count=attempt_count+1,
+      `UPDATE recovery_billing_adjustments SET status=$2,
          next_retry_at=CASE WHEN $2='retryable_failed' THEN NOW()+INTERVAL '15 minutes' ELSE NULL END,
-         safe_error_code=$3, updated_at=NOW() WHERE id=$1`,
+         safe_error_code=$3, updated_at=NOW() WHERE id=$1 AND status='provider_updating'`,
       [adjustment.id, status, manual ? 'next_billing_within_30_minutes' : (code || `provider_${error.status || 'unknown'}`)],
     )
-    await logErrorToDatabase('recovery_billing_adjustment.failed', error, { adjustmentId: adjustment.id, userId: adjustment.user_id, environment: paddle.environment, status })
+    await (dependencies.logError || logErrorToDatabase)('recovery_billing_adjustment.failed', error, { adjustmentId: adjustment.id, userId: adjustment.user_id, environment: paddle.environment, status })
     return status
   } finally {
     transactionClient?.release?.()
@@ -211,23 +281,46 @@ export async function runRecoveryBillingAdjustments(dependencies = {}) {
   const env = dependencies.env || process.env
   const createAdjustment = dependencies.createAdjustment || createRecoveryAdjustmentForAttempt
   const processAdjustment = dependencies.processAdjustment || processRecoveryAdjustment
+  const enabled = enabledEnvironments(env)
+  if (enabled.length === 0) return 0
   const candidates = await db.query(
     `SELECT pa.* FROM payment_attempts pa JOIN users u ON u.id=pa.user_id
      WHERE pa.status='succeeded' AND pa.transaction_id IS NOT NULL
        AND COALESCE(pa.metadata->>'resolved_by','') <> ''
+       AND COALESCE(NULLIF(LOWER(pa.paddle_environment),''),'production') = ANY($1::text[])
        AND NOT EXISTS (SELECT 1 FROM recovery_billing_adjustments a
          WHERE a.paddle_environment=pa.paddle_environment AND a.recovery_transaction_id=pa.transaction_id)
-     ORDER BY pa.updated_at DESC LIMIT 20`,
+     ORDER BY pa.updated_at DESC LIMIT 20`, [enabled],
   )
-  for (const attempt of candidates.rows) await createAdjustment(attempt, { ...dependencies, db, env })
+  for (const attempt of candidates.rows) {
+    try {
+      await createAdjustment(attempt, { ...dependencies, db, env })
+    } catch (error) {
+      await (dependencies.logError || logErrorToDatabase)('recovery_billing_adjustment.discovery_failed', error, { attemptId: attempt.id })
+    }
+  }
   const due = await db.query(
-    `SELECT a.*, u.subscription_plan FROM recovery_billing_adjustments a JOIN users u ON u.id=a.user_id
-     WHERE a.status='pending' OR (a.status='retryable_failed' AND a.next_retry_at<=NOW())
-     ORDER BY a.created_at LIMIT 20`,
+    `WITH claimable AS (
+       SELECT a.id, u.subscription_plan
+       FROM recovery_billing_adjustments a JOIN users u ON u.id=a.user_id
+       WHERE a.paddle_environment = ANY($1::text[])
+         AND (a.status='pending'
+           OR (a.status='retryable_failed' AND a.next_retry_at<=NOW())
+           OR (a.status='provider_updating' AND a.updated_at<=NOW()-INTERVAL '15 minutes'))
+       ORDER BY a.created_at LIMIT 20 FOR UPDATE OF a SKIP LOCKED
+     )
+     UPDATE recovery_billing_adjustments a
+     SET status='provider_updating', attempt_count=attempt_count+1, next_retry_at=NULL, updated_at=NOW()
+     FROM claimable c WHERE a.id=c.id
+     RETURNING a.*, c.subscription_plan`, [enabled],
   )
   for (const adjustment of due.rows) {
     if (!isRecoveryBillingAdjustmentEnabled(adjustment.paddle_environment, env)) continue
-    await processAdjustment(adjustment, { ...dependencies, db, env })
+    try {
+      await processAdjustment(adjustment, { ...dependencies, db, env })
+    } catch (error) {
+      await (dependencies.logError || logErrorToDatabase)('recovery_billing_adjustment.processing_failed', error, { adjustmentId: adjustment.id })
+    }
   }
   return candidates.rowCount + due.rowCount
 }
