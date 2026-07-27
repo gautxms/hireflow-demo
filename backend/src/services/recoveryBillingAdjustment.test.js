@@ -4,6 +4,7 @@ import {
   addBillingInterval,
   isRecoveryBillingAdjustmentEnabled,
   processRecoveryAdjustment,
+  runRecoveryBillingAdjustments,
   selectAuthoritativeCapture,
 } from './recoveryBillingAdjustment.js'
 
@@ -32,7 +33,18 @@ test('environment kill switch is disabled by default and supports sandbox-only r
 
 test('monthly recovery PATCHes only next_billed_at with do_not_bill then confirms local dates and anchor', async () => {
   const calls = []
-  const db = { async query(sql, params) { calls.push({ sql, params }); return { rowCount: /UPDATE users/.test(sql) ? 1 : 0, rows: [] } } }
+  let released = false
+  const client = {
+    async query(sql, params) {
+      calls.push({ sql, params })
+      return { rowCount: /UPDATE users/.test(sql) ? 1 : 0, rows: [] }
+    },
+    release() { released = true },
+  }
+  const db = {
+    async connect() { return client },
+    async query() { assert.fail('transaction queries must use the checked-out client') },
+  }
   const subscriptions = [
     { id: 'sub_1', customer_id: 'ctm_1', status: 'active', scheduled_change: null, next_billed_at: '2026-08-23T00:00:00Z', items: [{ price: { id: 'pri_month' } }] },
     { id: 'sub_1', customer_id: 'ctm_1', status: 'active', scheduled_change: null, next_billed_at: '2026-08-27T00:00:00Z', items: [{ price: { id: 'pri_month' } }] },
@@ -51,6 +63,8 @@ test('monthly recovery PATCHes only next_billed_at with do_not_bill then confirm
   assert.deepEqual(patches[0].body, { next_billed_at: '2026-08-27T00:00:00.000Z', proration_billing_mode: 'do_not_bill' })
   assert.equal(Object.hasOwn(patches[0].body, 'items'), false)
   assert.match(calls.find((call) => /UPDATE users/.test(call.sql)).sql, /quota_anchor_at=\$3/)
+  assert.deepEqual(calls.filter((call) => ['BEGIN', 'COMMIT'].includes(call.sql)).map((call) => call.sql), ['BEGIN', 'COMMIT'])
+  assert.equal(released, true)
 })
 
 test('already favorable provider date is never shortened', async () => {
@@ -67,4 +81,23 @@ test('already favorable provider date is never shortened', async () => {
   })
   assert.equal(result, 'already_satisfied')
   assert.equal(patched, false)
+})
+
+test('due adjustments are not processed when their environment kill switch is disabled', async () => {
+  const queries = [
+    { rows: [], rowCount: 0 },
+    { rows: [
+      { id: 'adj_sandbox', paddle_environment: 'sandbox' },
+      { id: 'adj_production', paddle_environment: 'production' },
+    ], rowCount: 2 },
+  ]
+  const processed = []
+  const count = await runRecoveryBillingAdjustments({
+    db: { async query() { return queries.shift() } },
+    env: { PADDLE_PAST_DUE_RECOVERY_BILLING_ADJUSTMENT_ENVIRONMENTS: 'sandbox' },
+    processAdjustment: async (adjustment) => processed.push(adjustment.id),
+  })
+
+  assert.equal(count, 2)
+  assert.deepEqual(processed, ['adj_sandbox'])
 })

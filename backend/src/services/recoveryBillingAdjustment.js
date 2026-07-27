@@ -129,6 +129,8 @@ export async function processRecoveryAdjustment(adjustment, dependencies = {}) {
   const paddle = dependencies.paddle || resolvePaddleConfig(process.env, adjustment.paddle_environment)
   const getSubscription = dependencies.getSubscription
     || ((id) => paddleRequest(paddle, `/subscriptions/${encodeURIComponent(id)}`))
+  let transactionClient = null
+  let transactionStarted = false
   let subscription
   try {
     subscription = await getSubscription(adjustment.paddle_subscription_id)
@@ -158,8 +160,10 @@ export async function processRecoveryAdjustment(adjustment, dependencies = {}) {
       throw Object.assign(new Error('Provider state did not confirm target'), { providerCode: 'verification_failed' })
     }
     const status = current >= target ? 'already_satisfied' : 'confirmed'
-    await db.query('BEGIN')
-    const userUpdate = await db.query(
+    transactionClient = typeof db.connect === 'function' ? await db.connect() : db
+    await transactionClient.query('BEGIN')
+    transactionStarted = true
+    const userUpdate = await transactionClient.query(
       `UPDATE users SET current_period_end=$2, subscription_renewal_date=$2, next_billing_date=$2,
          quota_anchor_at=$3, updated_at=NOW()
        WHERE id=$1 AND subscription_status='active' AND paddle_subscription_id=$4
@@ -170,16 +174,22 @@ export async function processRecoveryAdjustment(adjustment, dependencies = {}) {
         adjustment.paddle_customer_id, plan, paddle.environment],
     )
     if (userUpdate.rowCount !== 1) throw Object.assign(new Error('Local lifecycle changed'), { providerCode: 'local_cas_conflict' })
-    await db.query(
+    await transactionClient.query(
       `UPDATE recovery_billing_adjustments SET status=$2, provider_confirmed_next_billed_at=$3,
          confirmed_at=NOW(), updated_at=NOW(), safe_error_code=NULL WHERE id=$1 AND status NOT IN ('superseded','manual_required')`,
       [adjustment.id, status, confirmed],
     )
-    await db.query('COMMIT')
+    await transactionClient.query('COMMIT')
+    transactionStarted = false
     console.info(`[recovery-billing-adjustment] ${status}`, { adjustmentId: adjustment.id, userId: adjustment.user_id, environment: paddle.environment })
     return status
   } catch (error) {
-    try { await db.query('ROLLBACK') } catch { /* no open transaction */ }
+    if (transactionStarted) {
+      try { await transactionClient.query('ROLLBACK') } catch { /* preserve the original failure */ }
+      transactionStarted = false
+    }
+    transactionClient?.release?.()
+    transactionClient = null
     const code = String(error.providerCode || '')
     const manual = error.status === 422 && /billing|30_minute|too_close/i.test(code)
     const status = manual ? 'manual_required' : 'retryable_failed'
@@ -191,11 +201,17 @@ export async function processRecoveryAdjustment(adjustment, dependencies = {}) {
     )
     await logErrorToDatabase('recovery_billing_adjustment.failed', error, { adjustmentId: adjustment.id, userId: adjustment.user_id, environment: paddle.environment, status })
     return status
+  } finally {
+    transactionClient?.release?.()
   }
 }
 
-export async function runRecoveryBillingAdjustments() {
-  const candidates = await pool.query(
+export async function runRecoveryBillingAdjustments(dependencies = {}) {
+  const db = dependencies.db || pool
+  const env = dependencies.env || process.env
+  const createAdjustment = dependencies.createAdjustment || createRecoveryAdjustmentForAttempt
+  const processAdjustment = dependencies.processAdjustment || processRecoveryAdjustment
+  const candidates = await db.query(
     `SELECT pa.* FROM payment_attempts pa JOIN users u ON u.id=pa.user_id
      WHERE pa.status='succeeded' AND pa.transaction_id IS NOT NULL
        AND COALESCE(pa.metadata->>'resolved_by','') <> ''
@@ -203,12 +219,15 @@ export async function runRecoveryBillingAdjustments() {
          WHERE a.paddle_environment=pa.paddle_environment AND a.recovery_transaction_id=pa.transaction_id)
      ORDER BY pa.updated_at DESC LIMIT 20`,
   )
-  for (const attempt of candidates.rows) await createRecoveryAdjustmentForAttempt(attempt)
-  const due = await pool.query(
+  for (const attempt of candidates.rows) await createAdjustment(attempt, { ...dependencies, db, env })
+  const due = await db.query(
     `SELECT a.*, u.subscription_plan FROM recovery_billing_adjustments a JOIN users u ON u.id=a.user_id
      WHERE a.status='pending' OR (a.status='retryable_failed' AND a.next_retry_at<=NOW())
      ORDER BY a.created_at LIMIT 20`,
   )
-  for (const adjustment of due.rows) await processRecoveryAdjustment(adjustment)
+  for (const adjustment of due.rows) {
+    if (!isRecoveryBillingAdjustmentEnabled(adjustment.paddle_environment, env)) continue
+    await processAdjustment(adjustment, { ...dependencies, db, env })
+  }
   return candidates.rowCount + due.rowCount
 }
