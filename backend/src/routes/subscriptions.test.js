@@ -2,7 +2,7 @@ import test, { after } from 'node:test'
 import assert from 'node:assert/strict'
 import jwt from 'jsonwebtoken'
 
-import subscriptionsRouter from './subscriptions.js'
+import subscriptionsRouter, { selectExactRecoveredTransaction } from './subscriptions.js'
 import { pool } from '../db/client.js'
 
 const BILLING_PROVIDER_MISSING_ERROR = 'Subscription cannot be changed because billing provider subscription is missing. Please contact support.'
@@ -58,6 +58,7 @@ function resetPaddleEnv() {
   delete process.env.PADDLE_TEST_UPGRADE_KEY
   delete process.env.PADDLE_TEST_ANNUAL_PRICE_ID
   delete process.env.PADDLE_TEST_MONTHLY_PRICE_ID
+  delete process.env.PADDLE_PAST_DUE_RECOVERY_BILLING_ADJUSTMENT_ENVIRONMENTS
 }
 
 function activeMonthlyUser() {
@@ -636,6 +637,34 @@ function authoritativeMonthlyRecovery() {
   } }
 }
 
+test('GET reconciliation selects the latest exact completed local recovery transaction', () => {
+  const user = recoverableMonthlyUser()
+  const paddle = {
+    priceIdsByPlan: { monthly: 'pri_monthly', annual: 'pri_annual' },
+    noTrialPriceIdsByPlan: {},
+    legacyPriceIdsByPlan: {},
+  }
+  const transaction = (id, capturedAt, overrides = {}) => ({
+    id,
+    origin: 'subscription_recurring',
+    status: 'completed',
+    customer_id: 'ctm_123',
+    subscription_id: 'sub_123',
+    details: { totals: { grand_total: '9900' } },
+    payments: [{ status: 'captured', captured_at: capturedAt }],
+    items: [{ quantity: 1, price: { id: 'pri_monthly', billing_cycle: { interval: 'month' } } }],
+    ...overrides,
+  })
+  const selected = selectExactRecoveredTransaction([
+    transaction('txn_old', '2026-06-27T00:00:00Z'),
+    transaction('txn_recovered', '2026-07-27T00:00:00Z'),
+    transaction('txn_unrecorded', '2026-07-28T00:00:00Z'),
+    transaction('txn_wrong_customer', '2026-07-29T00:00:00Z', { customer_id: 'ctm_other' }),
+  ], ['txn_old', 'txn_recovered', 'txn_wrong_customer'], user, paddle)
+
+  assert.equal(selected.id, 'txn_recovered')
+})
+
 test('GET /api/subscriptions/current atomically recovers the same Past Due lifecycle and resolves retries', async () => {
   resetPaddleEnv()
   const user = recoverableMonthlyUser()
@@ -652,6 +681,83 @@ test('GET /api/subscriptions/current atomically recovers the same Past Due lifec
   assert.match(recovery.sql, /last_paddle_event_at IS NOT DISTINCT FROM \$12::timestamptz/)
   assert.match(recovery.sql, /WHEN \$9 THEN GREATEST\(COALESCE\(last_paddle_event_at, NOW\(\)\), NOW\(\)\)/)
   assert.match(recovery.sql, /EXISTS \(SELECT 1 FROM reconciled_user\)/)
+  assert.match(recovery.sql, /status = CASE WHEN transaction_id=\$14 THEN 'succeeded' ELSE status END/)
+  assert.match(recovery.sql, /next_retry_at = NULL/)
+  assert.match(recovery.sql, /WHEN \$14::text IS NULL[\s\S]*subscription_get_reconciliation_pending/)
+})
+
+test('GET reconciliation reports a new recovery as pending instead of reusing an older terminal state', async () => {
+  resetPaddleEnv()
+  process.env.PADDLE_PAST_DUE_RECOVERY_BILLING_ADJUSTMENT_ENVIRONMENTS = 'production'
+  const user = recoverableMonthlyUser({
+    recovery_adjustment_status: 'confirmed',
+    recovery_adjustment_reference: 'old-adjustment',
+  })
+  const { calls } = installDbMock(user)
+  mockPaddleResponse({ payload: authoritativeMonthlyRecovery() })
+
+  const res = await invokeRoute('/current')
+
+  assert.equal(res.statusCode, 200)
+  assert.equal(res.payload.subscription.status, 'active')
+  assert.equal(res.payload.subscription.recoveryAdjustmentStatus, 'pending')
+  assert.equal(res.payload.subscription.recoveryAdjustmentReference, null)
+  assert.match(calls[0].sql, /SELECT 'pending' AS status/)
+  assert.match(calls[0].sql, /subscription_get_reconciliation_pending/)
+  assert.match(calls[0].sql, /NOT EXISTS \([\s\S]*recovery_billing_adjustments adjustment/)
+})
+
+test('GET /api/subscriptions/current records only the exact provider-confirmed recovered attempt', async () => {
+  resetPaddleEnv()
+  process.env.PADDLE_PAST_DUE_RECOVERY_BILLING_ADJUSTMENT_ENVIRONMENTS = 'production'
+  const user = recoverableMonthlyUser()
+  let reconciliationParams = null
+  const dbCalls = []
+  pool.connect = async () => { throw new Error('pool.connect should not be called') }
+  pool.query = async (sql, params) => {
+    dbCalls.push({ sql: String(sql), params })
+    if (/SELECT transaction_id\s+FROM payment_attempts/.test(String(sql))) {
+      return { rows: [{ transaction_id: 'txn_old' }, { transaction_id: 'txn_recovered' }], rowCount: 2 }
+    }
+    if (String(sql).includes('WITH reconciled_user AS')) {
+      reconciliationParams = params
+      return { rows: [], rowCount: 1 }
+    }
+    if (String(sql).includes('FROM subscriptions')) return { rows: [], rowCount: 0 }
+    if (String(sql).includes('FROM users')) return { rows: [user], rowCount: 1 }
+    return { rows: [], rowCount: 0 }
+  }
+  const transaction = (id, capturedAt) => ({
+    id,
+    origin: 'subscription_recurring',
+    status: 'completed',
+    customer_id: 'ctm_123',
+    subscription_id: 'sub_123',
+    details: { totals: { grand_total: '9900' } },
+    payments: [{ status: 'captured', captured_at: capturedAt }],
+    items: [{ quantity: 1, price: { id: 'pri_monthly', billing_cycle: { interval: 'month' } } }],
+  })
+  const paddleCalls = mockPaddleSequence([
+    { payload: authoritativeMonthlyRecovery() },
+    { payload: { data: [
+      transaction('txn_old', '2026-06-27T00:00:00Z'),
+      transaction('txn_recovered', '2026-07-27T00:00:00Z'),
+    ] } },
+  ])
+
+  const res = await invokeRoute('/current')
+
+  assert.equal(res.statusCode, 200)
+  assert.equal(reconciliationParams[13], 'txn_recovered')
+  assert.deepEqual(JSON.parse(reconciliationParams[14]), {
+    resolved_by: 'subscription_get_reconciliation',
+    transaction_id: 'txn_recovered',
+  })
+  assert.match(paddleCalls[1].url, /transactions\?subscription_id=sub_123&customer_id=ctm_123&per_page=30/)
+  const immediateDiscovery = dbCalls.find(({ sql }) => /SELECT pa\.\*/.test(sql))
+  const immediateClaim = dbCalls.find(({ sql }) => /WITH claimable AS/.test(sql))
+  assert.deepEqual(immediateDiscovery.params, [['production'], true, 123, 'txn_recovered'])
+  assert.deepEqual(immediateClaim.params, [['production'], true, 123, 'txn_recovered'])
 })
 
 test('GET /api/subscriptions/current does not revive a cancellation committed during Paddle refresh', async () => {
@@ -709,6 +815,45 @@ test('GET /api/subscriptions/current preserves a newer failure committed during 
   assert.equal(res.statusCode, 200)
   assert.equal(res.payload.subscription.status, 'payment_failed')
   assert.equal(res.payload.subscription.nextRetryAt, '2026-07-22T10:00:00.000Z')
+})
+
+test('GET /api/subscriptions/current exposes durable missing-capture manual review state', async () => {
+  resetPaddleEnv()
+  const { calls } = installDbMock({
+    ...activeMonthlyUser(),
+    paddle_customer_id: 'ctm_123',
+    paddle_environment: 'production',
+    recovery_adjustment_status: 'manual_required',
+    recovery_adjustment_reference: 'payment_attempt:42',
+  })
+  mockPaddleResponse()
+
+  const res = await invokeRoute('/current')
+
+  assert.equal(res.statusCode, 200)
+  assert.equal(res.payload.subscription.recoveryAdjustmentStatus, 'manual_required')
+  assert.equal(res.payload.subscription.recoveryAdjustmentReference, 'payment_attempt:42')
+  assert.equal(res.payload.subscription.recoveryAdjustmentEnabled, false)
+  assert.match(calls[0].sql, /recovery_adjustment_capture_status/)
+  assert.match(calls[0].sql, /'superseded' AS status[\s\S]*recovery_adjustment_ineligible/)
+  assert.match(calls[0].sql, /COALESCE\(adjustment\.confirmed_at, adjustment\.updated_at, adjustment\.created_at\) AS occurred_at/)
+  assert.match(calls[0].sql, /ORDER BY recovery\.occurred_at DESC/)
+})
+
+test('GET /api/subscriptions/current exposes recovery adjustment rollout applicability', async () => {
+  resetPaddleEnv()
+  process.env.PADDLE_PAST_DUE_RECOVERY_BILLING_ADJUSTMENT_ENVIRONMENTS = 'production'
+  installDbMock({
+    ...activeMonthlyUser(),
+    paddle_customer_id: 'ctm_123',
+    paddle_environment: 'production',
+  })
+  mockPaddleResponse()
+
+  const res = await invokeRoute('/current')
+
+  assert.equal(res.statusCode, 200)
+  assert.equal(res.payload.subscription.recoveryAdjustmentEnabled, true)
 })
 
 test('POST /api/subscriptions/change-plan-preview uses gated test annual price for valid upgradeTestKey', async () => {

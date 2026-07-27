@@ -12,6 +12,11 @@ import {
   PLAN_CHANGE_RECOVERY_OUTCOME,
   recoverFailedPaddlePlanChange,
 } from '../services/paddlePlanChangeRecovery.js'
+import {
+  isRecoveryBillingAdjustmentEnabled,
+  runRecoveryBillingAdjustments,
+  selectAuthoritativeCapture,
+} from '../services/recoveryBillingAdjustment.js'
 
 const router = Router()
 
@@ -342,6 +347,111 @@ async function resolveCurrentPlanCost(user, planKey, plan) {
   }
 }
 
+export function selectExactRecoveredTransaction(transactions, transactionIds, user, paddle) {
+  const localIds = new Set(transactionIds.filter(Boolean))
+  return transactions
+    .map((transaction) => ({ transaction, capture: selectAuthoritativeCapture(transaction?.payments) }))
+    .filter(({ transaction, capture }) => (
+      localIds.has(transaction?.id)
+      && transaction?.origin === 'subscription_recurring'
+      && transaction?.status === 'completed'
+      && transaction?.customer_id === user.paddle_customer_id
+      && transaction?.subscription_id === user.paddle_subscription_id
+      && inferPlanFromPaddlePayload(transaction, paddle) === user.subscription_plan
+      && Number(transaction?.details?.totals?.grand_total ?? transaction?.details?.totals?.total ?? 0) > 0
+      && capture
+    ))
+    .sort((left, right) => (
+      new Date(right.capture.captured_at) - new Date(left.capture.captured_at)
+      || String(right.transaction.id).localeCompare(String(left.transaction.id))
+    ))[0]?.transaction || null
+}
+
+async function resolveExactRecoveredTransactionId(user, paddle, { pendingOnly = false } = {}) {
+  const attempts = await pool.query(
+    `SELECT transaction_id
+     FROM payment_attempts
+     WHERE user_id=$1
+       AND COALESCE(NULLIF(LOWER(paddle_environment), ''), 'production')=$2
+       AND status IN ('pending', 'failed', 'retrying')
+       AND COALESCE(
+         payload->'data'->>'subscription_id', payload->'data'->>'subscriptionId',
+         payload->>'subscription_id', payload->>'subscriptionId'
+       )=$3
+       AND transaction_id IS NOT NULL
+       AND (NOT $4 OR metadata->>'resolved_by'='subscription_get_reconciliation_pending')`,
+    [user.id, paddle.environment, user.paddle_subscription_id, pendingOnly],
+  )
+  const transactionIds = attempts.rows.map((attempt) => attempt.transaction_id)
+  if (transactionIds.length === 0) return null
+  try {
+    const payload = await paddleRequest(
+      `/transactions?subscription_id=${encodeURIComponent(user.paddle_subscription_id)}&customer_id=${encodeURIComponent(user.paddle_customer_id)}&per_page=30`,
+      {},
+      paddle,
+    )
+    return selectExactRecoveredTransaction(
+      Array.isArray(payload?.data) ? payload.data : [],
+      transactionIds,
+      user,
+      paddle,
+    )?.id || null
+  } catch (error) {
+    console.warn('[subscriptions.current] Exact recovery transaction lookup is not available yet', {
+      userId: user.id,
+      paddleSubscriptionId: user.paddle_subscription_id,
+      code: error.code || 'UNKNOWN',
+    })
+    return null
+  }
+}
+
+async function resolveHeldGetRecoveryAttempts(user, paddle) {
+  const transactionId = await resolveExactRecoveredTransactionId(user, paddle, { pendingOnly: true })
+  if (!transactionId) return null
+  await pool.query(
+    `UPDATE payment_attempts
+     SET status=CASE WHEN transaction_id=$4 THEN 'succeeded' ELSE status END,
+         next_retry_at=NULL,
+         metadata=COALESCE(metadata, '{}'::jsonb) || CASE
+           WHEN transaction_id=$4 THEN $5::jsonb
+           ELSE '{"resolved_by":"subscription_get_reconciliation","recovery_adjustment_ineligible":"superseded_by_exact_recovery"}'::jsonb
+         END,
+         updated_at=NOW()
+     WHERE user_id=$1
+       AND COALESCE(NULLIF(LOWER(paddle_environment), ''), 'production')=$2
+       AND COALESCE(
+         payload->'data'->>'subscription_id', payload->'data'->>'subscriptionId',
+         payload->>'subscription_id', payload->>'subscriptionId'
+       )=$3
+       AND metadata->>'resolved_by'='subscription_get_reconciliation_pending'`,
+    [
+      user.id,
+      paddle.environment,
+      user.paddle_subscription_id,
+      transactionId,
+      JSON.stringify({ resolved_by: 'subscription_get_reconciliation', transaction_id: transactionId }),
+    ],
+  )
+  return transactionId
+}
+
+async function processRecoveredTransactionImmediately(userId, transactionId, paddle) {
+  if (!transactionId || !isRecoveryBillingAdjustmentEnabled(paddle.environment)) return
+  try {
+    await runRecoveryBillingAdjustments({
+      candidateUserId: userId,
+      candidateTransactionId: transactionId,
+    })
+  } catch (error) {
+    await logErrorToDatabase('recovery_billing_adjustment.immediate_failed', error, {
+      userId,
+      transactionId,
+      environment: paddle.environment,
+    })
+  }
+}
+
 function extractBillingDates(paddlePayload = {}) {
   const data = paddlePayload.data || paddlePayload
   return {
@@ -458,6 +568,8 @@ router.get('/current', requireAuth, async (req, res) => {
               trial_ends_at, trial_consumed_at,
               payment_method_brand, payment_method_last4, paddle_customer_id, paddle_subscription_id,
               paddle_environment, last_paddle_event_at,
+              latest_recovery.status AS recovery_adjustment_status,
+              latest_recovery.reference AS recovery_adjustment_reference,
               EXISTS (SELECT 1 FROM payment_attempts attempt WHERE attempt.user_id = users.id) AS has_payment_attempts,
               (
                 SELECT attempt.next_retry_at
@@ -480,7 +592,85 @@ router.get('/current', requireAuth, async (req, res) => {
                 LIMIT 1
               ) AS next_payment_retry_at
        FROM users
-       WHERE id = $1`,
+       LEFT JOIN LATERAL (
+         SELECT recovery.status, recovery.reference
+         FROM (
+           SELECT adjustment.status, adjustment.id::text AS reference,
+                  COALESCE(adjustment.confirmed_at, adjustment.updated_at, adjustment.created_at) AS occurred_at
+           FROM recovery_billing_adjustments adjustment
+           WHERE adjustment.user_id = users.id
+             AND adjustment.paddle_environment = COALESCE(NULLIF(LOWER(users.paddle_environment), ''), 'production')
+             AND adjustment.paddle_subscription_id = users.paddle_subscription_id
+           UNION ALL
+           SELECT attempt.metadata->>'recovery_adjustment_capture_status' AS status,
+                  'payment_attempt:' || attempt.id::text AS reference,
+                  attempt.updated_at AS occurred_at
+           FROM payment_attempts attempt
+           WHERE attempt.user_id = users.id
+             AND attempt.metadata->>'recovery_adjustment_capture_status' IN ('retryable_failed', 'manual_required')
+             AND COALESCE(attempt.metadata->>'recovery_adjustment_ineligible', '') = ''
+             AND COALESCE(NULLIF(LOWER(attempt.paddle_environment), ''), 'production')
+               = COALESCE(NULLIF(LOWER(users.paddle_environment), ''), 'production')
+             AND COALESCE(
+               attempt.payload->'data'->>'subscription_id',
+               attempt.payload->'data'->>'subscriptionId',
+               attempt.payload->>'subscription_id',
+               attempt.payload->>'subscriptionId'
+             ) = users.paddle_subscription_id
+           UNION ALL
+           SELECT 'superseded' AS status,
+                  'payment_attempt:' || attempt.id::text AS reference,
+                  attempt.updated_at AS occurred_at
+           FROM payment_attempts attempt
+           WHERE attempt.user_id = users.id
+             AND COALESCE(attempt.metadata->>'recovery_adjustment_ineligible', '') <> ''
+             AND COALESCE(NULLIF(LOWER(attempt.paddle_environment), ''), 'production')
+               = COALESCE(NULLIF(LOWER(users.paddle_environment), ''), 'production')
+             AND COALESCE(
+               attempt.payload->'data'->>'subscription_id',
+               attempt.payload->'data'->>'subscriptionId',
+               attempt.payload->>'subscription_id',
+               attempt.payload->>'subscriptionId'
+             ) = users.paddle_subscription_id
+           UNION ALL
+           SELECT 'pending' AS status,
+                  'payment_attempt:' || attempt.id::text AS reference,
+                  attempt.updated_at AS occurred_at
+           FROM payment_attempts attempt
+           WHERE attempt.user_id = users.id
+             AND (
+               attempt.metadata->>'resolved_by' = 'subscription_get_reconciliation_pending'
+               OR (
+                 attempt.status = 'succeeded'
+                 AND (
+                   attempt.metadata->>'resolved_by' IN ('webhook', 'automatic_retry', 'admin_retry')
+                   OR (
+                     attempt.metadata->>'resolved_by' IN ('authoritative_reconciliation', 'subscription_get_reconciliation')
+                     AND attempt.metadata->>'transaction_id' = attempt.transaction_id
+                   )
+                 )
+               )
+             )
+             AND COALESCE(attempt.metadata->>'recovery_adjustment_ineligible', '') = ''
+             AND COALESCE(NULLIF(LOWER(attempt.paddle_environment), ''), 'production')
+               = COALESCE(NULLIF(LOWER(users.paddle_environment), ''), 'production')
+             AND COALESCE(
+               attempt.payload->'data'->>'subscription_id',
+               attempt.payload->'data'->>'subscriptionId',
+               attempt.payload->>'subscription_id',
+               attempt.payload->>'subscriptionId'
+             ) = users.paddle_subscription_id
+             AND NOT EXISTS (
+               SELECT 1 FROM recovery_billing_adjustments adjustment
+               WHERE adjustment.paddle_environment
+                 = COALESCE(NULLIF(LOWER(attempt.paddle_environment), ''), 'production')
+                 AND adjustment.recovery_transaction_id = attempt.transaction_id
+             )
+         ) recovery
+         ORDER BY recovery.occurred_at DESC
+         LIMIT 1
+       ) latest_recovery ON TRUE
+       WHERE users.id = $1`,
       [req.userId],
     )
 
@@ -519,6 +709,10 @@ router.get('/current', requireAuth, async (req, res) => {
     const isPastDueRecovery = ['past_due', 'payment_failed'].includes(normalizeStatus(user.subscription_status))
     const hasValidPaddleDates = [paddleCurrentPeriodStart, paddleCurrentPeriodEnd, paddleNextBillingDate]
       .every((value) => value && !Number.isNaN(new Date(value).getTime()))
+    if (!isPastDueRecovery && paddleStatus === 'active') {
+      const heldRecoveryTransactionId = await resolveHeldGetRecoveryAttempts(user, paddle)
+      await processRecoveredTransactionImmediately(user.id, heldRecoveryTransactionId, paddle)
+    }
 
     if (
       paddleSubscription.id === user.paddle_subscription_id
@@ -534,6 +728,9 @@ router.get('/current', requireAuth, async (req, res) => {
         || isoOrNull(user.next_billing_date) !== isoOrNull(paddleNextBillingDate)
       )
     ) {
+      const exactRecoveryTransactionId = isPastDueRecovery
+        ? await resolveExactRecoveredTransactionId(user, paddle)
+        : null
       const reconciliation = await pool.query(
         `WITH reconciled_user AS (
            UPDATE users
@@ -565,8 +762,15 @@ router.get('/current', requireAuth, async (req, res) => {
            RETURNING id
          ), resolved_attempts AS (
            UPDATE payment_attempts
-           SET status = 'succeeded', next_retry_at = NULL, updated_at = NOW(),
-               metadata = COALESCE(metadata, '{}'::jsonb) || '{"resolved_by":"subscription_get_reconciliation"}'::jsonb
+           SET status = CASE WHEN transaction_id=$14 THEN 'succeeded' ELSE status END,
+               next_retry_at = NULL,
+               updated_at = NOW(),
+               metadata = COALESCE(metadata, '{}'::jsonb) || CASE
+                 WHEN $14::text IS NULL
+                   THEN '{"resolved_by":"subscription_get_reconciliation_pending"}'::jsonb
+                 WHEN transaction_id=$14 THEN $15::jsonb
+                 ELSE '{"resolved_by":"subscription_get_reconciliation","recovery_adjustment_ineligible":"superseded_by_exact_recovery"}'::jsonb
+               END
            WHERE $9
              AND EXISTS (SELECT 1 FROM reconciled_user)
              AND user_id = $1
@@ -603,6 +807,11 @@ router.get('/current', requireAuth, async (req, res) => {
           user.cancellation_effective_at || null,
           user.last_paddle_event_at || null,
           user.paddle_customer_id,
+          exactRecoveryTransactionId,
+          JSON.stringify({
+            resolved_by: 'subscription_get_reconciliation',
+            transaction_id: exactRecoveryTransactionId,
+          }),
         ],
       )
 
@@ -614,6 +823,13 @@ router.get('/current', requireAuth, async (req, res) => {
           user.subscription_status = paddleStatus
           user.next_payment_retry_at = null
           user.cancellation_effective_at = null
+          if (isRecoveryBillingAdjustmentEnabled(paddle.environment)) {
+            user.recovery_adjustment_status = 'pending'
+            user.recovery_adjustment_reference = exactRecoveryTransactionId
+              ? `transaction:${exactRecoveryTransactionId}`
+              : null
+          }
+          await processRecoveredTransactionImmediately(user.id, exactRecoveryTransactionId, paddle)
         }
       } else if (isPastDueRecovery) {
         const currentResult = await pool.query(
@@ -679,6 +895,9 @@ router.get('/current', requireAuth, async (req, res) => {
         nextRetryAt: ['past_due', 'payment_failed'].includes(normalizeStatus(user.subscription_status))
           ? isoOrNull(user.next_payment_retry_at)
           : null,
+        recoveryAdjustmentStatus: user.recovery_adjustment_status || null,
+        recoveryAdjustmentReference: user.recovery_adjustment_reference || null,
+        recoveryAdjustmentEnabled: isRecoveryBillingAdjustmentEnabled(paddle.environment),
         cancellationEffectiveAt,
         cancelAtPeriodEnd: hasScheduledCancellation,
         paymentMethod: isFinalCancellation ? null : user.payment_method_last4
