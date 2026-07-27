@@ -12,7 +12,7 @@ import {
   PLAN_CHANGE_RECOVERY_OUTCOME,
   recoverFailedPaddlePlanChange,
 } from '../services/paddlePlanChangeRecovery.js'
-import { isRecoveryBillingAdjustmentEnabled } from '../services/recoveryBillingAdjustment.js'
+import { isRecoveryBillingAdjustmentEnabled, selectAuthoritativeCapture } from '../services/recoveryBillingAdjustment.js'
 
 const router = Router()
 
@@ -343,6 +343,64 @@ async function resolveCurrentPlanCost(user, planKey, plan) {
   }
 }
 
+export function selectExactRecoveredTransaction(transactions, transactionIds, user, paddle) {
+  const localIds = new Set(transactionIds.filter(Boolean))
+  return transactions
+    .map((transaction) => ({ transaction, capture: selectAuthoritativeCapture(transaction?.payments) }))
+    .filter(({ transaction, capture }) => (
+      localIds.has(transaction?.id)
+      && transaction?.origin === 'subscription_recurring'
+      && transaction?.status === 'completed'
+      && transaction?.customer_id === user.paddle_customer_id
+      && transaction?.subscription_id === user.paddle_subscription_id
+      && inferPlanFromPaddlePayload(transaction, paddle) === user.subscription_plan
+      && Number(transaction?.details?.totals?.grand_total ?? transaction?.details?.totals?.total ?? 0) > 0
+      && capture
+    ))
+    .sort((left, right) => (
+      new Date(right.capture.captured_at) - new Date(left.capture.captured_at)
+      || String(right.transaction.id).localeCompare(String(left.transaction.id))
+    ))[0]?.transaction || null
+}
+
+async function resolveExactRecoveredTransactionId(user, paddle) {
+  const attempts = await pool.query(
+    `SELECT transaction_id
+     FROM payment_attempts
+     WHERE user_id=$1
+       AND COALESCE(NULLIF(LOWER(paddle_environment), ''), 'production')=$2
+       AND status IN ('pending', 'failed', 'retrying')
+       AND COALESCE(
+         payload->'data'->>'subscription_id', payload->'data'->>'subscriptionId',
+         payload->>'subscription_id', payload->>'subscriptionId'
+       )=$3
+       AND transaction_id IS NOT NULL`,
+    [user.id, paddle.environment, user.paddle_subscription_id],
+  )
+  const transactionIds = attempts.rows.map((attempt) => attempt.transaction_id)
+  if (transactionIds.length === 0) return null
+  try {
+    const payload = await paddleRequest(
+      `/transactions?subscription_id=${encodeURIComponent(user.paddle_subscription_id)}&customer_id=${encodeURIComponent(user.paddle_customer_id)}&per_page=30`,
+      {},
+      paddle,
+    )
+    return selectExactRecoveredTransaction(
+      Array.isArray(payload?.data) ? payload.data : [],
+      transactionIds,
+      user,
+      paddle,
+    )?.id || null
+  } catch (error) {
+    console.warn('[subscriptions.current] Exact recovery transaction lookup is not available yet', {
+      userId: user.id,
+      paddleSubscriptionId: user.paddle_subscription_id,
+      code: error.code || 'UNKNOWN',
+    })
+    return null
+  }
+}
+
 function extractBillingDates(paddlePayload = {}) {
   const data = paddlePayload.data || paddlePayload
   return {
@@ -507,6 +565,21 @@ router.get('/current', requireAuth, async (req, res) => {
                attempt.payload->>'subscription_id',
                attempt.payload->>'subscriptionId'
              ) = users.paddle_subscription_id
+           UNION ALL
+           SELECT 'superseded' AS status,
+                  'payment_attempt:' || attempt.id::text AS reference,
+                  attempt.updated_at AS occurred_at
+           FROM payment_attempts attempt
+           WHERE attempt.user_id = users.id
+             AND COALESCE(attempt.metadata->>'recovery_adjustment_ineligible', '') <> ''
+             AND COALESCE(NULLIF(LOWER(attempt.paddle_environment), ''), 'production')
+               = COALESCE(NULLIF(LOWER(users.paddle_environment), ''), 'production')
+             AND COALESCE(
+               attempt.payload->'data'->>'subscription_id',
+               attempt.payload->'data'->>'subscriptionId',
+               attempt.payload->>'subscription_id',
+               attempt.payload->>'subscriptionId'
+             ) = users.paddle_subscription_id
          ) recovery
          ORDER BY recovery.occurred_at DESC
          LIMIT 1
@@ -565,6 +638,9 @@ router.get('/current', requireAuth, async (req, res) => {
         || isoOrNull(user.next_billing_date) !== isoOrNull(paddleNextBillingDate)
       )
     ) {
+      const exactRecoveryTransactionId = isPastDueRecovery
+        ? await resolveExactRecoveredTransactionId(user, paddle)
+        : null
       const reconciliation = await pool.query(
         `WITH reconciled_user AS (
            UPDATE users
@@ -597,8 +673,9 @@ router.get('/current', requireAuth, async (req, res) => {
          ), resolved_attempts AS (
            UPDATE payment_attempts
            SET status = 'succeeded', next_retry_at = NULL, updated_at = NOW(),
-               metadata = COALESCE(metadata, '{}'::jsonb) || '{"resolved_by":"subscription_get_reconciliation"}'::jsonb
+               metadata = COALESCE(metadata, '{}'::jsonb) || $15::jsonb
            WHERE $9
+             AND $14::text IS NOT NULL
              AND EXISTS (SELECT 1 FROM reconciled_user)
              AND user_id = $1
              AND COALESCE(NULLIF(LOWER(paddle_environment), ''), 'production') = $8
@@ -607,6 +684,7 @@ router.get('/current', requireAuth, async (req, res) => {
                payload->'data'->>'subscription_id', payload->'data'->>'subscriptionId',
                payload->>'subscription_id', payload->>'subscriptionId'
              ) = $4
+             AND transaction_id = $14
            RETURNING id
          )
          INSERT INTO subscriptions (paddle_subscription_id, user_id, status, latest_event_type, latest_event_payload, paddle_environment)
@@ -634,6 +712,11 @@ router.get('/current', requireAuth, async (req, res) => {
           user.cancellation_effective_at || null,
           user.last_paddle_event_at || null,
           user.paddle_customer_id,
+          exactRecoveryTransactionId,
+          JSON.stringify({
+            resolved_by: 'subscription_get_reconciliation',
+            transaction_id: exactRecoveryTransactionId,
+          }),
         ],
       )
 

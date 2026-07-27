@@ -2,7 +2,7 @@ import test, { after } from 'node:test'
 import assert from 'node:assert/strict'
 import jwt from 'jsonwebtoken'
 
-import subscriptionsRouter from './subscriptions.js'
+import subscriptionsRouter, { selectExactRecoveredTransaction } from './subscriptions.js'
 import { pool } from '../db/client.js'
 
 const BILLING_PROVIDER_MISSING_ERROR = 'Subscription cannot be changed because billing provider subscription is missing. Please contact support.'
@@ -637,6 +637,34 @@ function authoritativeMonthlyRecovery() {
   } }
 }
 
+test('GET reconciliation selects the latest exact completed local recovery transaction', () => {
+  const user = recoverableMonthlyUser()
+  const paddle = {
+    priceIdsByPlan: { monthly: 'pri_monthly', annual: 'pri_annual' },
+    noTrialPriceIdsByPlan: {},
+    legacyPriceIdsByPlan: {},
+  }
+  const transaction = (id, capturedAt, overrides = {}) => ({
+    id,
+    origin: 'subscription_recurring',
+    status: 'completed',
+    customer_id: 'ctm_123',
+    subscription_id: 'sub_123',
+    details: { totals: { grand_total: '9900' } },
+    payments: [{ status: 'captured', captured_at: capturedAt }],
+    items: [{ quantity: 1, price: { id: 'pri_monthly', billing_cycle: { interval: 'month' } } }],
+    ...overrides,
+  })
+  const selected = selectExactRecoveredTransaction([
+    transaction('txn_old', '2026-06-27T00:00:00Z'),
+    transaction('txn_recovered', '2026-07-27T00:00:00Z'),
+    transaction('txn_unrecorded', '2026-07-28T00:00:00Z'),
+    transaction('txn_wrong_customer', '2026-07-29T00:00:00Z', { customer_id: 'ctm_other' }),
+  ], ['txn_old', 'txn_recovered', 'txn_wrong_customer'], user, paddle)
+
+  assert.equal(selected.id, 'txn_recovered')
+})
+
 test('GET /api/subscriptions/current atomically recovers the same Past Due lifecycle and resolves retries', async () => {
   resetPaddleEnv()
   const user = recoverableMonthlyUser()
@@ -653,6 +681,54 @@ test('GET /api/subscriptions/current atomically recovers the same Past Due lifec
   assert.match(recovery.sql, /last_paddle_event_at IS NOT DISTINCT FROM \$12::timestamptz/)
   assert.match(recovery.sql, /WHEN \$9 THEN GREATEST\(COALESCE\(last_paddle_event_at, NOW\(\)\), NOW\(\)\)/)
   assert.match(recovery.sql, /EXISTS \(SELECT 1 FROM reconciled_user\)/)
+  assert.match(recovery.sql, /\$14::text IS NOT NULL/)
+  assert.match(recovery.sql, /transaction_id = \$14/)
+})
+
+test('GET /api/subscriptions/current records only the exact provider-confirmed recovered attempt', async () => {
+  resetPaddleEnv()
+  const user = recoverableMonthlyUser()
+  let reconciliationParams = null
+  pool.connect = async () => { throw new Error('pool.connect should not be called') }
+  pool.query = async (sql, params) => {
+    if (/SELECT transaction_id\s+FROM payment_attempts/.test(String(sql))) {
+      return { rows: [{ transaction_id: 'txn_old' }, { transaction_id: 'txn_recovered' }], rowCount: 2 }
+    }
+    if (String(sql).includes('WITH reconciled_user AS')) {
+      reconciliationParams = params
+      return { rows: [], rowCount: 1 }
+    }
+    if (String(sql).includes('FROM subscriptions')) return { rows: [], rowCount: 0 }
+    if (String(sql).includes('FROM users')) return { rows: [user], rowCount: 1 }
+    return { rows: [], rowCount: 0 }
+  }
+  const transaction = (id, capturedAt) => ({
+    id,
+    origin: 'subscription_recurring',
+    status: 'completed',
+    customer_id: 'ctm_123',
+    subscription_id: 'sub_123',
+    details: { totals: { grand_total: '9900' } },
+    payments: [{ status: 'captured', captured_at: capturedAt }],
+    items: [{ quantity: 1, price: { id: 'pri_monthly', billing_cycle: { interval: 'month' } } }],
+  })
+  const paddleCalls = mockPaddleSequence([
+    { payload: authoritativeMonthlyRecovery() },
+    { payload: { data: [
+      transaction('txn_old', '2026-06-27T00:00:00Z'),
+      transaction('txn_recovered', '2026-07-27T00:00:00Z'),
+    ] } },
+  ])
+
+  const res = await invokeRoute('/current')
+
+  assert.equal(res.statusCode, 200)
+  assert.equal(reconciliationParams[13], 'txn_recovered')
+  assert.deepEqual(JSON.parse(reconciliationParams[14]), {
+    resolved_by: 'subscription_get_reconciliation',
+    transaction_id: 'txn_recovered',
+  })
+  assert.match(paddleCalls[1].url, /transactions\?subscription_id=sub_123&customer_id=ctm_123&per_page=30/)
 })
 
 test('GET /api/subscriptions/current does not revive a cancellation committed during Paddle refresh', async () => {
@@ -730,6 +806,7 @@ test('GET /api/subscriptions/current exposes durable missing-capture manual revi
   assert.equal(res.payload.subscription.recoveryAdjustmentReference, 'payment_attempt:42')
   assert.equal(res.payload.subscription.recoveryAdjustmentEnabled, false)
   assert.match(calls[0].sql, /recovery_adjustment_capture_status/)
+  assert.match(calls[0].sql, /'superseded' AS status[\s\S]*recovery_adjustment_ineligible/)
   assert.match(calls[0].sql, /ORDER BY recovery\.occurred_at DESC/)
 })
 

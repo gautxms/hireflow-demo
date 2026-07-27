@@ -487,7 +487,7 @@ export async function runRecoveryBillingAdjustments(dependencies = {}) {
        AND (
          COALESCE(pa.metadata->>'resolved_by','') IN ('webhook', 'automatic_retry', 'admin_retry')
          OR (
-           pa.metadata->>'resolved_by' = 'authoritative_reconciliation'
+           pa.metadata->>'resolved_by' IN ('authoritative_reconciliation', 'subscription_get_reconciliation')
            AND pa.metadata->>'transaction_id' = pa.transaction_id
          )
        )
