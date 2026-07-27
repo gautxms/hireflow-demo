@@ -303,7 +303,8 @@ async function classifyLocalRace(db, adjustment, confirmed, plan, paddle) {
   const result = await db.query(
     `SELECT a.status, u.subscription_status, u.subscription_plan, u.paddle_customer_id,
             u.paddle_subscription_id, u.paddle_environment, u.cancellation_effective_at,
-            u.current_period_end, u.subscription_renewal_date, u.next_billing_date, u.quota_anchor_at
+            u.current_period_end, u.subscription_renewal_date, u.next_billing_date, u.quota_anchor_at,
+            u.last_paddle_event_at
      FROM recovery_billing_adjustments a JOIN users u ON u.id=a.user_id
      WHERE a.id=$1`,
     [adjustment.id],
@@ -327,6 +328,23 @@ async function classifyLocalRace(db, adjustment, confirmed, plan, paddle) {
   if (validDate(state.quota_anchor_at) > validDate(adjustment.captured_at)) {
     await db.query(
       `UPDATE recovery_billing_adjustments SET status='superseded', safe_error_code='newer_recovery_applied',
+         next_retry_at=NULL, updated_at=NOW() WHERE id=$1 AND status='provider_updating'`,
+      [adjustment.id],
+    )
+    return 'superseded'
+  }
+  const observedEventAt = validDate(adjustment.observed_last_paddle_event_at)
+  const currentEventAt = validDate(state.last_paddle_event_at)
+  const providerEventChanged = observedEventAt?.getTime() !== currentEventAt?.getTime()
+  const confirmedAt = validDate(confirmed)
+  const newerBillingProjection = [
+    state.current_period_end,
+    state.subscription_renewal_date,
+    state.next_billing_date,
+  ].some((value) => validDate(value) > confirmedAt)
+  if (providerEventChanged && newerBillingProjection) {
+    await db.query(
+      `UPDATE recovery_billing_adjustments SET status='superseded', safe_error_code='newer_provider_event',
          next_retry_at=NULL, updated_at=NOW() WHERE id=$1 AND status='provider_updating'`,
       [adjustment.id],
     )
@@ -427,9 +445,17 @@ export async function processRecoveryAdjustment(adjustment, dependencies = {}) {
          AND paddle_customer_id=$5 AND subscription_plan=$6
          AND COALESCE(NULLIF(LOWER(paddle_environment),''),'production')=$7
          AND cancellation_effective_at IS NULL
+         AND last_paddle_event_at IS NOT DISTINCT FROM $8::timestamptz
+         AND current_period_end IS NOT DISTINCT FROM $9::timestamptz
+         AND subscription_renewal_date IS NOT DISTINCT FROM $10::timestamptz
+         AND next_billing_date IS NOT DISTINCT FROM $11::timestamptz
          AND (quota_anchor_at IS NULL OR quota_anchor_at <= $3) RETURNING id`,
       [adjustment.user_id, confirmed, adjustment.captured_at, adjustment.paddle_subscription_id,
-        adjustment.paddle_customer_id, plan, paddle.environment],
+        adjustment.paddle_customer_id, plan, paddle.environment,
+        adjustment.observed_last_paddle_event_at || null,
+        adjustment.observed_current_period_end || null,
+        adjustment.observed_subscription_renewal_date || null,
+        adjustment.observed_next_billing_date || null],
     )
     if (userUpdate.rowCount !== 1) {
       throw Object.assign(new Error('Local lifecycle changed'), { providerCode: 'local_cas_conflict', localRace: true })
@@ -520,7 +546,11 @@ export async function runRecoveryBillingAdjustments(dependencies = {}) {
   }
   const due = await db.query(
     `WITH claimable AS (
-       SELECT a.id, u.subscription_plan
+       SELECT a.id, u.subscription_plan,
+              u.last_paddle_event_at AS observed_last_paddle_event_at,
+              u.current_period_end AS observed_current_period_end,
+              u.subscription_renewal_date AS observed_subscription_renewal_date,
+              u.next_billing_date AS observed_next_billing_date
        FROM recovery_billing_adjustments a JOIN users u ON u.id=a.user_id
        WHERE a.paddle_environment = ANY($1::text[])
          AND (a.status='pending'
@@ -531,7 +561,9 @@ export async function runRecoveryBillingAdjustments(dependencies = {}) {
      UPDATE recovery_billing_adjustments a
      SET status='provider_updating', attempt_count=attempt_count+1, next_retry_at=NULL, updated_at=NOW()
      FROM claimable c WHERE a.id=c.id
-     RETURNING a.*, c.subscription_plan`, [enabled],
+     RETURNING a.*, c.subscription_plan, c.observed_last_paddle_event_at,
+               c.observed_current_period_end, c.observed_subscription_renewal_date,
+               c.observed_next_billing_date`, [enabled],
   )
   for (const adjustment of due.rows) {
     if (!isRecoveryBillingAdjustmentEnabled(adjustment.paddle_environment, env)) continue

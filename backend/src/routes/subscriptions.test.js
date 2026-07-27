@@ -686,6 +686,27 @@ test('GET /api/subscriptions/current atomically recovers the same Past Due lifec
   assert.match(recovery.sql, /WHEN \$14::text IS NULL[\s\S]*subscription_get_reconciliation_pending/)
 })
 
+test('GET reconciliation reports a new recovery as pending instead of reusing an older terminal state', async () => {
+  resetPaddleEnv()
+  process.env.PADDLE_PAST_DUE_RECOVERY_BILLING_ADJUSTMENT_ENVIRONMENTS = 'production'
+  const user = recoverableMonthlyUser({
+    recovery_adjustment_status: 'confirmed',
+    recovery_adjustment_reference: 'old-adjustment',
+  })
+  const { calls } = installDbMock(user)
+  mockPaddleResponse({ payload: authoritativeMonthlyRecovery() })
+
+  const res = await invokeRoute('/current')
+
+  assert.equal(res.statusCode, 200)
+  assert.equal(res.payload.subscription.status, 'active')
+  assert.equal(res.payload.subscription.recoveryAdjustmentStatus, 'pending')
+  assert.equal(res.payload.subscription.recoveryAdjustmentReference, null)
+  assert.match(calls[0].sql, /SELECT 'pending' AS status/)
+  assert.match(calls[0].sql, /subscription_get_reconciliation_pending/)
+  assert.match(calls[0].sql, /NOT EXISTS \([\s\S]*recovery_billing_adjustments adjustment/)
+})
+
 test('GET /api/subscriptions/current records only the exact provider-confirmed recovered attempt', async () => {
   resetPaddleEnv()
   const user = recoverableMonthlyUser()

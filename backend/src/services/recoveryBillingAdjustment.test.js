@@ -200,6 +200,8 @@ test('scheduler filters enabled environments before both limits and isolates can
   assert.match(sql[0].text, /recovery_adjustment_discovery_retry_at[\s\S]*ASC NULLS FIRST/)
   assert.match(sql[0].text, /authoritative_reconciliation', 'subscription_get_reconciliation'[\s\S]*metadata->>'transaction_id' = pa\.transaction_id/)
   assert.match(sql[1].text, /paddle_environment = ANY\(\$1::text\[\]\)[\s\S]*LIMIT 20 FOR UPDATE OF a SKIP LOCKED/)
+  assert.match(sql[1].text, /u\.last_paddle_event_at AS observed_last_paddle_event_at/)
+  assert.match(sql[1].text, /u\.current_period_end AS observed_current_period_end/)
   assert.deepEqual(sql.map(({ params }) => params), [[['sandbox']], [['sandbox']]])
 })
 
@@ -360,6 +362,83 @@ test('a lost local race after provider success self-heals an already-applied pro
   assert.equal(status, 'confirmed')
   assert.ok(transactionCalls.includes('ROLLBACK'))
   assert.equal(transactionCalls.includes('COMMIT'), false)
+})
+
+test('a newer Paddle event prevents stale local confirmation and supersedes the adjustment', async () => {
+  const transactionCalls = []
+  const client = {
+    async query(sql, params) {
+      transactionCalls.push({ sql, params })
+      return { rows: [], rowCount: /UPDATE users/.test(sql) ? 0 : 1 }
+    },
+    release() {},
+  }
+  const dbCalls = []
+  const db = {
+    async connect() { return client },
+    async query(sql) {
+      dbCalls.push(sql)
+      if (/SELECT a\.status/.test(sql)) {
+        return { rows: [{
+          status: 'provider_updating',
+          subscription_status: 'active',
+          subscription_plan: 'monthly',
+          paddle_customer_id: 'ctm_1',
+          paddle_subscription_id: 'sub_1',
+          paddle_environment: 'sandbox',
+          cancellation_effective_at: null,
+          current_period_end: '2026-09-27T00:00:00Z',
+          subscription_renewal_date: '2026-09-27T00:00:00Z',
+          next_billing_date: '2026-09-27T00:00:00Z',
+          quota_anchor_at: '2026-07-27T00:00:00Z',
+          last_paddle_event_at: '2026-08-27T00:00:00Z',
+        }] }
+      }
+      return { rows: [], rowCount: 1 }
+    },
+  }
+  const target = '2026-08-27T00:00:00Z'
+  const status = await processRecoveryAdjustment({
+    id: 'adj_newer_event',
+    user_id: 7,
+    status: 'provider_updating',
+    subscription_plan: 'monthly',
+    paddle_environment: 'sandbox',
+    recovery_transaction_id: 'txn_1',
+    paddle_customer_id: 'ctm_1',
+    paddle_subscription_id: 'sub_1',
+    captured_at: '2026-07-27T00:00:00Z',
+    target_next_billed_at: target,
+    observed_last_paddle_event_at: '2026-07-27T00:00:00Z',
+    observed_current_period_end: '2026-08-23T00:00:00Z',
+    observed_subscription_renewal_date: '2026-08-23T00:00:00Z',
+    observed_next_billing_date: '2026-08-23T00:00:00Z',
+  }, {
+    db,
+    paddle: {
+      environment: 'sandbox',
+      priceIdsByPlan: { monthly: 'pri_month' },
+      noTrialPriceIdsByPlan: {},
+      legacyPriceIdsByPlan: {},
+    },
+    getTransaction: async () => recurringTransaction(),
+    getSubscription: async () => ({
+      id: 'sub_1',
+      customer_id: 'ctm_1',
+      status: 'active',
+      scheduled_change: null,
+      next_billed_at: target,
+      items: [{ price: { id: 'pri_month' } }],
+    }),
+    logError: async () => {},
+  })
+
+  assert.equal(status, 'superseded')
+  const userUpdate = transactionCalls.find(({ sql }) => /UPDATE users/.test(sql))
+  assert.match(userUpdate.sql, /last_paddle_event_at IS NOT DISTINCT FROM \$8::timestamptz/)
+  assert.match(userUpdate.sql, /current_period_end IS NOT DISTINCT FROM \$9::timestamptz/)
+  assert.equal(userUpdate.params[7], '2026-07-27T00:00:00Z')
+  assert.ok(dbCalls.some((sql) => /safe_error_code='newer_provider_event'/.test(sql)))
 })
 
 test('zero-row adjustment confirmation rolls back local billing dates and preserves concurrent supersession', async () => {
