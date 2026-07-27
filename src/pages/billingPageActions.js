@@ -6,7 +6,15 @@ export function isPastDueBillingState(subscriptionState) {
 }
 
 export function getPastDueBillingNotice() {
-  return 'Paid workflow actions are read-only until the overdue payment succeeds. After recovery, HireFlow schedules the next renewal one billing interval from Paddle’s confirmed payment date.'
+  return 'Paid workflow actions are read-only until the overdue payment succeeds. After payment, HireFlow confirms the next renewal date with Paddle.'
+}
+
+export function isRecoveryAdjustmentTerminal(status) {
+  return ['confirmed', 'already_satisfied', 'manual_required'].includes(String(status || '').toLowerCase())
+}
+
+export function shouldPollRecoveryAdjustment(recoveryPending, subscription) {
+  return Boolean(recoveryPending && !isRecoveryAdjustmentTerminal(subscription?.recoveryAdjustmentStatus))
 }
 
 export function getBillingPlanAction(plan, subscriptionState = null) {

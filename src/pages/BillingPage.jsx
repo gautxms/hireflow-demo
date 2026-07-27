@@ -5,7 +5,7 @@ import StatePattern from '../components/state/StatePattern'
 import API_BASE from '../config/api'
 import { canRenderBillingPage, resolveSubscriptionState } from '../utils/subscriptionState'
 import { syncCompletedCheckout } from '../utils/paddleSubscriptionSync'
-import { canShowCancelAction, getBillingMetadataRows, getBillingPlanAction, getBillingStatusLabel, getCancelActionLabel, getCancellationAccessMessage, getCancellationSuccessMessage, getPastDueBillingNotice, shouldRenderBillingHistory } from './billingPageActions'
+import { canShowCancelAction, getBillingMetadataRows, getBillingPlanAction, getBillingStatusLabel, getCancelActionLabel, getCancellationAccessMessage, getCancellationSuccessMessage, getPastDueBillingNotice, isRecoveryAdjustmentTerminal, shouldPollRecoveryAdjustment, shouldRenderBillingHistory } from './billingPageActions'
 import '../styles/billing.css'
 import '../styles/checkout.css'
 
@@ -89,10 +89,13 @@ export default function BillingPage() {
   const [previewErrorCode, setPreviewErrorCode] = useState('')
   const [isCancelling, setIsCancelling] = useState(false)
   const [isKeepingSubscription, setIsKeepingSubscription] = useState(false)
+  const [recoveryPending, setRecoveryPending] = useState(() => (
+    typeof window !== 'undefined'
+      && new URLSearchParams(window.location.search).get('sync') === 'pending'
+  ))
   const recoveryPollRef = useRef(0)
   const recoveryTimerRef = useRef(null)
-  const recoveryPending = typeof window !== 'undefined'
-    && new URLSearchParams(window.location.search).get('sync') === 'pending'
+  const recoveryAccessConfirmedRef = useRef(false)
 
   const upgradeTestKey = useMemo(() => {
     if (typeof window === 'undefined') return ''
@@ -126,15 +129,24 @@ export default function BillingPage() {
         throw new Error(subPayload.error || 'Failed to load current subscription')
       }
 
-      const nextSubscription = subPayload.subscription || null
-      setSubscription(nextSubscription)
-
-      if (recoveryPending && ['active', 'trialing'].includes(String(nextSubscription?.status || '').toLowerCase())) {
+      let nextSubscription = subPayload.subscription || null
+      const accessIsActive = ['active', 'trialing'].includes(String(nextSubscription?.status || '').toLowerCase())
+      const adjustmentIsTerminal = isRecoveryAdjustmentTerminal(nextSubscription?.recoveryAdjustmentStatus)
+      if (recoveryPending && accessIsActive) {
         sessionStorage.removeItem(RECOVERY_TRANSACTION_KEY)
-        window.history.replaceState({}, '', '/billing')
-        setActionFeedback({ type: 'success', message: 'Payment confirmed. Your subscription and workspace access are active.' })
-        window.dispatchEvent(new CustomEvent('hireflow-auth-updated'))
+        if (!recoveryAccessConfirmedRef.current) {
+          recoveryAccessConfirmedRef.current = true
+          setActionFeedback({ type: 'success', message: 'Payment confirmed. Your subscription and workspace access are active.' })
+          window.dispatchEvent(new CustomEvent('hireflow-auth-updated'))
+        }
+        if (adjustmentIsTerminal) {
+          setRecoveryPending(false)
+          window.history.replaceState({}, '', '/billing')
+        } else if (!nextSubscription?.recoveryAdjustmentStatus) {
+          nextSubscription = { ...nextSubscription, recoveryAdjustmentStatus: 'pending' }
+        }
       }
+      setSubscription(nextSubscription)
 
       const subscriptionState = resolveSubscriptionState({ subscription: nextSubscription })
 
@@ -167,12 +179,14 @@ export default function BillingPage() {
   }, [])
 
   useEffect(() => {
-    if (!recoveryPending || loading || !subscriptionState.isPastDue || recoveryPollRef.current >= RECOVERY_POLL_LIMIT) return
+    if (!shouldPollRecoveryAdjustment(recoveryPending, subscription)
+      || loading
+      || recoveryPollRef.current >= RECOVERY_POLL_LIMIT) return
     recoveryPollRef.current += 1
     recoveryTimerRef.current = window.setTimeout(() => { void loadBilling() }, 1500)
     return () => window.clearTimeout(recoveryTimerRef.current)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [recoveryPending, loading, subscription?.status])
+  }, [recoveryPending, loading, subscription?.status, subscription?.recoveryAdjustmentStatus])
 
   const subscriptionState = resolveSubscriptionState({ subscription })
   const canShowBillingPage = canRenderBillingPage(subscriptionState)
@@ -191,6 +205,7 @@ export default function BillingPage() {
     formatDateTime,
   )
   const pastDueBillingNotice = subscriptionState.isPastDue ? getPastDueBillingNotice() : ''
+  const awaitingRecoveryAdjustment = shouldPollRecoveryAdjustment(recoveryPending, subscription)
   const hasBillingHistory = shouldRenderBillingHistory(history)
   const hasScheduledCancellation = subscriptionState.isCancellationScheduled
   const isFinalCancellation = subscriptionState.isCanceled && !hasScheduledCancellation
@@ -435,10 +450,10 @@ export default function BillingPage() {
                       {isKeepingSubscription ? 'Keeping subscription…' : 'Keep subscription'}
                     </button>
                   ) : null}
-                  {subscriptionState.isPastDue ? (
-                    recoveryPending ? (
-                      <button type="button" className="hf-btn hf-btn--primary" onClick={() => { recoveryPollRef.current = 0; void loadBilling() }}>Retry status check</button>
-                    ) : <a className="hf-btn hf-btn--primary" href="/account/payment-method">Update payment &amp; pay now</a>
+                  {awaitingRecoveryAdjustment ? (
+                    <button type="button" className="hf-btn hf-btn--primary" onClick={() => { recoveryPollRef.current = 0; void loadBilling() }}>Check recovery status</button>
+                  ) : subscriptionState.isPastDue ? (
+                    <a className="hf-btn hf-btn--primary" href="/account/payment-method">Update payment &amp; pay now</a>
                   ) : null}
                   {!hasScheduledCancellation && !isFinalCancellation && !subscriptionState.isPastDue && planAction?.isSelfServe ? (
                     <button type="button" className="hf-btn hf-btn--primary" onClick={() => openPlanModal(planAction.targetPlan)}>

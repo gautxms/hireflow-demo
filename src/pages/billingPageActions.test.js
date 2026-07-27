@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { canShowCancelAction, getBillingMetadataRows, getBillingPlanAction, getBillingStatusLabel, getCancelActionLabel, getCancellationAccessMessage, getCancellationSuccessMessage, getPastDueBillingNotice, hasScheduledCancellation, isFinalCancellationBillingState, isPastDueBillingState, shouldRenderBillingHistory } from './billingPageActions.js'
+import { canShowCancelAction, getBillingMetadataRows, getBillingPlanAction, getBillingStatusLabel, getCancelActionLabel, getCancellationAccessMessage, getCancellationSuccessMessage, getPastDueBillingNotice, hasScheduledCancellation, isFinalCancellationBillingState, isPastDueBillingState, isRecoveryAdjustmentTerminal, shouldPollRecoveryAdjustment, shouldRenderBillingHistory } from './billingPageActions.js'
 
 const NOW = new Date('2026-07-03T00:00:00Z')
 
@@ -18,7 +18,7 @@ test('payment_failed billing state is treated as past due and uses the compact s
 
   assert.equal(isPastDueBillingState(subscriptionState), true)
   assert.equal(getBillingPlanAction('monthly', subscriptionState), null)
-  assert.equal(getPastDueBillingNotice(), 'Paid workflow actions are read-only until the overdue payment succeeds. After recovery, HireFlow schedules the next renewal one billing interval from Paddle’s confirmed payment date.')
+  assert.equal(getPastDueBillingNotice(), 'Paid workflow actions are read-only until the overdue payment succeeds. After payment, HireFlow confirms the next renewal date with Paddle.')
 })
 
 test('past_due billing state shows payment-required support notice without a primary CTA action', () => {
@@ -26,7 +26,19 @@ test('past_due billing state shows payment-required support notice without a pri
 
   assert.equal(isPastDueBillingState(subscriptionState), true)
   assert.equal(getBillingPlanAction('monthly', subscriptionState), null)
-  assert.equal(getPastDueBillingNotice(), 'Paid workflow actions are read-only until the overdue payment succeeds. After recovery, HireFlow schedules the next renewal one billing interval from Paddle’s confirmed payment date.')
+  assert.equal(getPastDueBillingNotice(), 'Paid workflow actions are read-only until the overdue payment succeeds. After payment, HireFlow confirms the next renewal date with Paddle.')
+})
+
+test('recovery polling continues through activation until adjustment reaches a terminal state', () => {
+  assert.equal(shouldPollRecoveryAdjustment(true, { status: 'past_due' }), true)
+  assert.equal(shouldPollRecoveryAdjustment(true, { status: 'active' }), true)
+  assert.equal(shouldPollRecoveryAdjustment(true, { status: 'active', recoveryAdjustmentStatus: 'pending' }), true)
+  assert.equal(shouldPollRecoveryAdjustment(true, { status: 'active', recoveryAdjustmentStatus: 'retryable_failed' }), true)
+  for (const status of ['confirmed', 'already_satisfied', 'manual_required']) {
+    assert.equal(isRecoveryAdjustmentTerminal(status), true)
+    assert.equal(shouldPollRecoveryAdjustment(true, { status: 'active', recoveryAdjustmentStatus: status }), false)
+  }
+  assert.equal(shouldPollRecoveryAdjustment(false, { status: 'active' }), false)
 })
 
 test('past_due metadata shows the authoritative retry timestamp without workspace access duplication', () => {
@@ -316,6 +328,16 @@ test('BillingPage past-due copy is rendered only through the compact notice help
   assert.match(source, /pastDueBillingNotice \? <p className="billing-page__past-due-note">\{pastDueBillingNotice\}<\/p> : null/)
   assert.doesNotMatch(source, /Workspace access/)
   assert.doesNotMatch(source, /Read-only until billing is resolved/)
+})
+
+test('BillingPage keeps recovery state and polling until the adjustment is terminal', () => {
+  const source = readFileSync(new URL('./BillingPage.jsx', import.meta.url), 'utf8')
+
+  assert.match(source, /const \[recoveryPending, setRecoveryPending\] = useState/)
+  assert.match(source, /shouldPollRecoveryAdjustment\(recoveryPending, subscription\)/)
+  assert.match(source, /adjustmentIsTerminal[\s\S]*setRecoveryPending\(false\)[\s\S]*replaceState/)
+  assert.match(source, /recoveryAdjustmentStatus: 'pending'/)
+  assert.match(source, /Check recovery status/)
 })
 
 test('BillingPage offers state-specific keep, payment update, and subscribe-again actions', () => {
