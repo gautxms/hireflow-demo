@@ -484,7 +484,13 @@ export async function runRecoveryBillingAdjustments(dependencies = {}) {
   const candidates = await db.query(
     `SELECT pa.* FROM payment_attempts pa JOIN users u ON u.id=pa.user_id
      WHERE pa.status='succeeded' AND pa.transaction_id IS NOT NULL
-       AND COALESCE(pa.metadata->>'resolved_by','') <> ''
+       AND (
+         COALESCE(pa.metadata->>'resolved_by','') IN ('webhook', 'automatic_retry', 'admin_retry')
+         OR (
+           pa.metadata->>'resolved_by' = 'authoritative_reconciliation'
+           AND pa.metadata->>'transaction_id' = pa.transaction_id
+         )
+       )
        AND COALESCE(pa.metadata->>'recovery_adjustment_ineligible','') = ''
        AND COALESCE(pa.metadata->>'recovery_adjustment_capture_status','') <> 'manual_required'
        AND (

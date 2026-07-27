@@ -198,8 +198,39 @@ test('scheduler filters enabled environments before both limits and isolates can
   assert.match(sql[0].text, /pa\.updated_at<=NOW\(\)-INTERVAL '15 minutes'/)
   assert.match(sql[0].text, /recovery_adjustment_discovery_retry_at[\s\S]*timestamptz<=NOW\(\)/)
   assert.match(sql[0].text, /recovery_adjustment_discovery_retry_at[\s\S]*ASC NULLS FIRST/)
+  assert.match(sql[0].text, /authoritative_reconciliation[\s\S]*metadata->>'transaction_id' = pa\.transaction_id/)
+  assert.doesNotMatch(sql[0].text, /subscription_get_reconciliation/)
   assert.match(sql[1].text, /paddle_environment = ANY\(\$1::text\[\]\)[\s\S]*LIMIT 20 FOR UPDATE OF a SKIP LOCKED/)
   assert.deepEqual(sql.map(({ params }) => params), [[['sandbox']], [['sandbox']]])
+})
+
+test('authoritative reconciliation discovers only the exact recovered transaction', async () => {
+  const attempts = [
+    {
+      id: 'old_attempt', transaction_id: 'txn_old',
+      metadata: { resolved_by: 'authoritative_reconciliation', transaction_id: 'txn_recovered' },
+    },
+    {
+      id: 'recovered_attempt', transaction_id: 'txn_recovered',
+      metadata: { resolved_by: 'authoritative_reconciliation', transaction_id: 'txn_recovered' },
+    },
+  ]
+  const created = []
+  const db = { async query(sql) {
+    if (/SELECT pa\.\*/.test(sql)) {
+      const rows = attempts.filter((attempt) => attempt.metadata.transaction_id === attempt.transaction_id)
+      return { rows, rowCount: rows.length }
+    }
+    return { rows: [], rowCount: 0 }
+  } }
+
+  await runRecoveryBillingAdjustments({
+    db,
+    env: { PADDLE_PAST_DUE_RECOVERY_BILLING_ADJUSTMENT_ENVIRONMENTS: 'sandbox' },
+    createAdjustment: async (attempt) => created.push(attempt.transaction_id),
+  })
+
+  assert.deepEqual(created, ['txn_recovered'])
 })
 
 test('permanently ineligible initial checkouts are filtered before LIMIT and cannot starve a recurring recovery', async () => {
