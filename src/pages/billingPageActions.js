@@ -14,7 +14,9 @@ export function isRecoveryAdjustmentTerminal(status) {
 }
 
 export function shouldPollRecoveryAdjustment(recoveryPending, subscription) {
-  return Boolean(recoveryPending && !isRecoveryAdjustmentTerminal(subscription?.recoveryAdjustmentStatus))
+  const status = String(subscription?.recoveryAdjustmentStatus || '').toLowerCase()
+  const providerAdjustmentPending = ['pending', 'provider_updating', 'retryable_failed'].includes(status)
+  return Boolean((recoveryPending || providerAdjustmentPending) && !isRecoveryAdjustmentTerminal(status))
 }
 
 export function getBillingPlanAction(plan, subscriptionState = null) {

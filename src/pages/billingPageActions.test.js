@@ -34,6 +34,8 @@ test('recovery polling continues through activation until adjustment reaches a t
   assert.equal(shouldPollRecoveryAdjustment(true, { status: 'active' }), true)
   assert.equal(shouldPollRecoveryAdjustment(true, { status: 'active', recoveryAdjustmentStatus: 'pending' }), true)
   assert.equal(shouldPollRecoveryAdjustment(true, { status: 'active', recoveryAdjustmentStatus: 'retryable_failed' }), true)
+  assert.equal(shouldPollRecoveryAdjustment(false, { status: 'active', recoveryAdjustmentStatus: 'pending' }), true)
+  assert.equal(shouldPollRecoveryAdjustment(false, { status: 'active', recoveryAdjustmentStatus: 'provider_updating' }), true)
   for (const status of ['confirmed', 'already_satisfied', 'manual_required', 'superseded']) {
     assert.equal(isRecoveryAdjustmentTerminal(status), true)
     assert.equal(shouldPollRecoveryAdjustment(true, { status: 'active', recoveryAdjustmentStatus: status }), false)
@@ -338,6 +340,8 @@ test('BillingPage keeps recovery state and polling until the adjustment is termi
   assert.match(source, /adjustmentIsTerminal[\s\S]*setRecoveryPending\(false\)[\s\S]*replaceState/)
   assert.match(source, /recoveryAdjustmentEnabled === false[\s\S]*setRecoveryPending\(false\)[\s\S]*replaceState/)
   assert.match(source, /recoveryAdjustmentStatus: 'pending'/)
+  assert.match(source, /providerAdjustmentPending/)
+  assert.match(source, /setRecoveryPending\(true\)/)
   assert.match(source, /Check recovery status/)
 })
 

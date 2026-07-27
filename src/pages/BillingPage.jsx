@@ -132,7 +132,13 @@ export default function BillingPage() {
       let nextSubscription = subPayload.subscription || null
       const accessIsActive = ['active', 'trialing'].includes(String(nextSubscription?.status || '').toLowerCase())
       const adjustmentIsTerminal = isRecoveryAdjustmentTerminal(nextSubscription?.recoveryAdjustmentStatus)
-      if (recoveryPending && accessIsActive) {
+      const providerAdjustmentPending = ['pending', 'provider_updating', 'retryable_failed']
+        .includes(String(nextSubscription?.recoveryAdjustmentStatus || '').toLowerCase())
+      const shouldTrackRecovery = recoveryPending || providerAdjustmentPending
+      if (providerAdjustmentPending && nextSubscription?.recoveryAdjustmentEnabled !== false) {
+        setRecoveryPending(true)
+      }
+      if (shouldTrackRecovery && accessIsActive) {
         sessionStorage.removeItem(RECOVERY_TRANSACTION_KEY)
         if (!recoveryAccessConfirmedRef.current) {
           recoveryAccessConfirmedRef.current = true

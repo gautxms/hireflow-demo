@@ -388,6 +388,7 @@ export async function processRecoveryAdjustment(adjustment, dependencies = {}) {
     subscription = await getSubscription(adjustment.paddle_subscription_id)
     const target = validDate(adjustment.target_next_billed_at)
     const current = validDate(subscription?.next_billed_at)
+    const previous = validDate(adjustment.previous_next_billed_at)
     const plan = inferPlanFromPaddlePayload(subscription, paddle)
     const capture = selectAuthoritativeCapture(transaction?.payments)
     if (!target || !current || target <= new Date() || !transactionIsRecurringRenewal(transaction)
@@ -411,6 +412,14 @@ export async function processRecoveryAdjustment(adjustment, dependencies = {}) {
         [adjustment.id],
       )
       return 'manual_required'
+    }
+    if (current < target && (!previous || current.getTime() !== previous.getTime())) {
+      await db.query(
+        `UPDATE recovery_billing_adjustments SET status='superseded', safe_error_code='provider_billing_date_changed',
+           next_retry_at=NULL, updated_at=NOW() WHERE id=$1 AND status='provider_updating'`,
+        [adjustment.id],
+      )
+      return 'superseded'
     }
     if (current < target) {
       console.info('[recovery-billing-adjustment] provider update attempted', { adjustmentId: adjustment.id, userId: adjustment.user_id, environment: paddle.environment })
