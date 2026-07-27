@@ -2,6 +2,7 @@ import crypto from 'node:crypto'
 import { pool, logErrorToDatabase } from '../db/client.js'
 import { resolvePaddleConfig } from '../config/paddle.js'
 import { inferPlanFromPaddlePayload } from './paddlePlanChangeRecovery.js'
+import { lockResumeQuotaForUser } from './resumeQuotaReservations.js'
 
 const TERMINAL = new Set(['confirmed', 'already_satisfied', 'manual_required', 'superseded'])
 const MISSING_CAPTURE_MAX_ATTEMPTS = 4
@@ -447,6 +448,7 @@ export async function processRecoveryAdjustment(adjustment, dependencies = {}) {
     transactionClient = typeof db.connect === 'function' ? await db.connect() : db
     await transactionClient.query('BEGIN')
     transactionStarted = true
+    await lockResumeQuotaForUser(transactionClient, adjustment.user_id)
     const userUpdate = await transactionClient.query(
       `UPDATE users SET current_period_end=$2, subscription_renewal_date=$2, next_billing_date=$2,
          quota_anchor_at=$3, updated_at=NOW()

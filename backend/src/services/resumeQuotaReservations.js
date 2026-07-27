@@ -115,6 +115,10 @@ async function lockUserQuota(client, userId) {
   )
 }
 
+export async function lockResumeQuotaForUser(client, userId) {
+  await lockUserQuota(client, userId)
+}
+
 export async function reserveResumeQuotaUnits({
   userId,
   periodStart,
@@ -184,20 +188,34 @@ export async function reserveResumeQuotaUnits({
         [normalizedUserId, normalizedPeriodStart, normalizedPeriodEnd],
       )
     const reservedResult = await client.query(
-      `SELECT COALESCE(SUM(
-         CASE
-           WHEN reservation.expires_at > NOW()
-             THEN reservation.requested_units
-                  - reservation.consumed_units
-                  - reservation.released_units
-           ELSE (
-             SELECT COUNT(*)::INT
-             FROM resume_quota_allocations AS allocation
-             WHERE allocation.reservation_id = reservation.id
-               AND allocation.status = 'reserved'
-           )
-         END
-       ), 0)::INT AS reserved_count
+      `SELECT (
+         COALESCE(SUM(
+           CASE
+             WHEN reservation.expires_at > NOW()
+               THEN reservation.requested_units
+                    - reservation.consumed_units
+                    - reservation.released_units
+             ELSE (
+               SELECT COUNT(*)::INT
+               FROM resume_quota_allocations AS allocation
+               WHERE allocation.reservation_id = reservation.id
+                 AND allocation.status = 'reserved'
+             )
+           END
+         ), 0)
+         + (
+           SELECT COUNT(*)::INT
+           FROM resume_quota_allocations AS carried_allocation
+           JOIN resume_quota_reservations AS carried_reservation
+             ON carried_reservation.id = carried_allocation.reservation_id
+           WHERE carried_allocation.user_id = $1
+             AND carried_allocation.status = 'reserved'
+             AND (
+               carried_reservation.period_start IS DISTINCT FROM $2
+               OR carried_reservation.period_end IS DISTINCT FROM $3
+             )
+         )
+       )::INT AS reserved_count
        FROM resume_quota_reservations AS reservation
        WHERE reservation.user_id = $1
          AND reservation.period_start = $2

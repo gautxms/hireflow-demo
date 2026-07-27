@@ -132,6 +132,11 @@ test('reservation preflight counts allocation usage by exact reservation period 
   assert.doesNotMatch(usageQuery.sql, /month_start = \$2::date/)
   assert.equal(usageQuery.params[1].toISOString(), periodStart.toISOString())
   assert.equal(usageQuery.params[2].toISOString(), periodEnd.toISOString())
+  const reservedQuery = calls.find(({ sql }) => sql.includes('AS reserved_count'))
+  assert.match(reservedQuery.sql, /resume_quota_allocations AS carried_allocation/)
+  assert.match(reservedQuery.sql, /carried_allocation\.status = 'reserved'/)
+  assert.match(reservedQuery.sql, /carried_reservation\.period_start IS DISTINCT FROM \$2/)
+  assert.match(reservedQuery.sql, /carried_reservation\.period_end IS DISTINCT FROM \$3/)
 })
 
 test('replaying a batch idempotency key returns the original reservation', async (t) => {

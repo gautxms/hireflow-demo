@@ -84,6 +84,8 @@ test('late August recovery PATCHes once from the existing August renewal to Sept
   assert.equal(Object.hasOwn(patches[0].body, 'items'), false)
   assert.match(calls.find((call) => /UPDATE users/.test(call.sql)).sql, /quota_anchor_at=\$3/)
   assert.deepEqual(calls.find((call) => /UPDATE users/.test(call.sql)).params.slice(1, 3).map((value) => new Date(value).toISOString()), ['2026-09-22T00:00:00.000Z', '2026-08-22T00:00:00.000Z'])
+  assert.ok(calls.findIndex((call) => /pg_advisory_xact_lock/.test(call.sql))
+    < calls.findIndex((call) => /UPDATE users/.test(call.sql)))
   assert.deepEqual(calls.filter((call) => ['BEGIN', 'COMMIT'].includes(call.sql)).map((call) => call.sql), ['BEGIN', 'COMMIT'])
   assert.equal(released, true)
 })

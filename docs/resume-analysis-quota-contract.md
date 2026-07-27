@@ -133,7 +133,9 @@ the immediate rollback path while `RESUME_QUOTA_RESERVATIONS_ENABLED=false`.
   fresh period without rewriting pre-recovery usage or allocations. If an
   existing reservation is consumed after the new recovery boundary but before
   local confirmation, its precise provider-start usage time counts in the new
-  period.
+  period. The recovery commit shares the reservation ledger's per-user lock,
+  and outstanding allocations from older reservation periods reserve capacity
+  in the new period without changing their identities.
 - If the kill switch is turned off mid-period, calendar-month enforcement still
   includes allocation-backed usage written during the flagged rollout.
 
