@@ -18,7 +18,7 @@ test('payment_failed billing state is treated as past due and uses the compact s
 
   assert.equal(isPastDueBillingState(subscriptionState), true)
   assert.equal(getBillingPlanAction('monthly', subscriptionState), null)
-  assert.equal(getPastDueBillingNotice(), 'Payment is required to continue. Your workspace is read-only until the overdue payment is completed securely through Paddle.')
+  assert.equal(getPastDueBillingNotice(), 'Paid workflow actions are read-only until the overdue payment succeeds. After recovery, HireFlow schedules the next renewal one billing interval from Paddle’s confirmed payment date.')
 })
 
 test('past_due billing state shows payment-required support notice without a primary CTA action', () => {
@@ -26,7 +26,7 @@ test('past_due billing state shows payment-required support notice without a pri
 
   assert.equal(isPastDueBillingState(subscriptionState), true)
   assert.equal(getBillingPlanAction('monthly', subscriptionState), null)
-  assert.equal(getPastDueBillingNotice(), 'Payment is required to continue. Your workspace is read-only until the overdue payment is completed securely through Paddle.')
+  assert.equal(getPastDueBillingNotice(), 'Paid workflow actions are read-only until the overdue payment succeeds. After recovery, HireFlow schedules the next renewal one billing interval from Paddle’s confirmed payment date.')
 })
 
 test('past_due metadata shows the authoritative retry timestamp without workspace access duplication', () => {

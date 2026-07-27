@@ -6,7 +6,7 @@ export function isPastDueBillingState(subscriptionState) {
 }
 
 export function getPastDueBillingNotice() {
-  return 'Payment is required to continue. Your workspace is read-only until the overdue payment is completed securely through Paddle.'
+  return 'Paid workflow actions are read-only until the overdue payment succeeds. After recovery, HireFlow schedules the next renewal one billing interval from Paddle’s confirmed payment date.'
 }
 
 export function getBillingPlanAction(plan, subscriptionState = null) {

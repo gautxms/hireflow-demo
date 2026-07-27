@@ -24,9 +24,11 @@ immediately before the first external AI-provider attempt.
 ## Period contract
 
 - Quota periods use UTC timestamps with an inclusive start and exclusive end.
-- The stable `users.quota_anchor_at` timestamp is set once from a provider-backed
-  paid billing-period boundary and is not moved by renewal, plan changes,
-  scheduled cancellation, payment recovery, or reactivation.
+- The stable `users.quota_anchor_at` timestamp is normally set once from a
+  provider-backed paid billing-period boundary. The sole recovery exception is
+  a verified overdue recurring renewal after a read-only Past Due period: once
+  Paddle confirms the adjusted billing date, the anchor moves exactly once to
+  that transaction's authoritative captured-payment timestamp.
 - Each monthly boundary is derived from that original anchor.
 - Anchors on the 29th, 30th, or 31st clamp to the last day of shorter months and
   return to the original day when a later month supports it.
@@ -50,7 +52,8 @@ immediately before the first external AI-provider attempt.
 | Monthly to annual switch | No reset and no anchor change |
 | Annual to monthly switch | No reset and no anchor change |
 | Scheduled cancellation | Paid access and the existing period continue until entitlement ends |
-| Payment failure/recovery | No reset and no anchor change |
+| Payment failure | Read-only access; no reset while payment remains unpaid |
+| Verified Past Due recurring-payment recovery | After Paddle confirms the adjusted billing date, start one new monthly period at `payments[].captured_at`; duplicate events do not move it again |
 | Reactivation/resubscription for the same user | Reuse the stable anchor; do not grant an extra immediate reset |
 | Missing or invalid anchor | Use UTC calendar-month fallback |
 

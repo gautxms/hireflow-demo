@@ -413,9 +413,14 @@ export default function BillingPage() {
                 ))}
               </div>
               {pastDueBillingNotice ? <p className="billing-page__past-due-note">{pastDueBillingNotice}</p> : null}
-              {recoveryPending && subscriptionState.isPastDue ? (
+              {['pending', 'provider_updating', 'retryable_failed'].includes(subscription?.recoveryAdjustmentStatus) ? (
                 <p className="billing-page__feedback billing-page__feedback--success" role="status">
-                  Payment received. We’re confirming your subscription.
+                  Payment received. We’re confirming your adjusted renewal date.
+                </p>
+              ) : null}
+              {subscription?.recoveryAdjustmentStatus === 'manual_required' ? (
+                <p className="billing-page__feedback billing-page__feedback--error" role="alert">
+                  Your payment succeeded, but we couldn’t confirm the adjusted renewal date. Please contact support; do not make another payment. Reference: {subscription.recoveryAdjustmentReference}
                 </p>
               ) : null}
               {cancellationAccessMessage ? (

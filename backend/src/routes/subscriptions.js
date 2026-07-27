@@ -458,6 +458,22 @@ router.get('/current', requireAuth, async (req, res) => {
               trial_ends_at, trial_consumed_at,
               payment_method_brand, payment_method_last4, paddle_customer_id, paddle_subscription_id,
               paddle_environment, last_paddle_event_at,
+              (
+                SELECT adjustment.status
+                FROM recovery_billing_adjustments adjustment
+                WHERE adjustment.user_id = users.id
+                  AND adjustment.paddle_environment = COALESCE(NULLIF(LOWER(users.paddle_environment), ''), 'production')
+                  AND adjustment.paddle_subscription_id = users.paddle_subscription_id
+                ORDER BY adjustment.created_at DESC LIMIT 1
+              ) AS recovery_adjustment_status,
+              (
+                SELECT adjustment.id
+                FROM recovery_billing_adjustments adjustment
+                WHERE adjustment.user_id = users.id
+                  AND adjustment.paddle_environment = COALESCE(NULLIF(LOWER(users.paddle_environment), ''), 'production')
+                  AND adjustment.paddle_subscription_id = users.paddle_subscription_id
+                ORDER BY adjustment.created_at DESC LIMIT 1
+              ) AS recovery_adjustment_reference,
               EXISTS (SELECT 1 FROM payment_attempts attempt WHERE attempt.user_id = users.id) AS has_payment_attempts,
               (
                 SELECT attempt.next_retry_at
@@ -679,6 +695,8 @@ router.get('/current', requireAuth, async (req, res) => {
         nextRetryAt: ['past_due', 'payment_failed'].includes(normalizeStatus(user.subscription_status))
           ? isoOrNull(user.next_payment_retry_at)
           : null,
+        recoveryAdjustmentStatus: user.recovery_adjustment_status || null,
+        recoveryAdjustmentReference: user.recovery_adjustment_reference || null,
         cancellationEffectiveAt,
         cancelAtPeriodEnd: hasScheduledCancellation,
         paymentMethod: isFinalCancellation ? null : user.payment_method_last4
