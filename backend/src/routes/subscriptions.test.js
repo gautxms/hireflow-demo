@@ -681,8 +681,9 @@ test('GET /api/subscriptions/current atomically recovers the same Past Due lifec
   assert.match(recovery.sql, /last_paddle_event_at IS NOT DISTINCT FROM \$12::timestamptz/)
   assert.match(recovery.sql, /WHEN \$9 THEN GREATEST\(COALESCE\(last_paddle_event_at, NOW\(\)\), NOW\(\)\)/)
   assert.match(recovery.sql, /EXISTS \(SELECT 1 FROM reconciled_user\)/)
-  assert.match(recovery.sql, /\$14::text IS NOT NULL/)
-  assert.match(recovery.sql, /transaction_id = \$14/)
+  assert.match(recovery.sql, /status = CASE WHEN transaction_id=\$14 THEN 'succeeded' ELSE status END/)
+  assert.match(recovery.sql, /next_retry_at = NULL/)
+  assert.match(recovery.sql, /WHEN \$14::text IS NULL[\s\S]*subscription_get_reconciliation_pending/)
 })
 
 test('GET /api/subscriptions/current records only the exact provider-confirmed recovered attempt', async () => {
@@ -807,6 +808,7 @@ test('GET /api/subscriptions/current exposes durable missing-capture manual revi
   assert.equal(res.payload.subscription.recoveryAdjustmentEnabled, false)
   assert.match(calls[0].sql, /recovery_adjustment_capture_status/)
   assert.match(calls[0].sql, /'superseded' AS status[\s\S]*recovery_adjustment_ineligible/)
+  assert.match(calls[0].sql, /COALESCE\(adjustment\.confirmed_at, adjustment\.updated_at, adjustment\.created_at\) AS occurred_at/)
   assert.match(calls[0].sql, /ORDER BY recovery\.occurred_at DESC/)
 })
 
