@@ -601,6 +601,7 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment) {
   const payloadHash = crypto.createHash('sha256').update(rawBody || '', 'utf8').digest('hex')
   let inboxClaimed = false
   let inboxAttemptCount = null
+  const completionTasks = []
   const postProcessingTasks = []
 
   try {
@@ -780,7 +781,7 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment) {
         }))
 
         if (activationApplied) {
-          postProcessingTasks.push(() => triggerWebhook('subscription.activated', {
+          completionTasks.push(() => triggerWebhook('subscription.activated', {
             userId,
             subscriptionId: transactionSubscriptionId,
             transactionId,
@@ -1033,6 +1034,12 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment) {
       await upsertSubscriptionProjection(subscriptionProjection)
     }
 
+    // Integration notification selection and delivery logging must finish before
+    // the inbox is completed. Otherwise a crash (or selection failure) in this
+    // window would make every Paddle redelivery look like a completed duplicate.
+    for (const task of completionTasks) {
+      await task()
+    }
     await completeWebhookInboxEvent(dedupeEventId, payloadHash, inboxAttemptCount)
     for (const task of postProcessingTasks) {
       try {

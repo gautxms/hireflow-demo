@@ -495,6 +495,88 @@ test('POST /api/paddle/webhook reclaims retryable failures and suppresses later 
   assert.equal(userUpdateAttempts, 2)
 })
 
+test('POST /api/paddle/webhook keeps activation notification failures retryable until selection succeeds', async (t) => {
+  const payload = {
+    event_id: 'evt_activation_notification_retry',
+    event_type: 'transaction.completed',
+    data: {
+      id: 'txn_activation_notification_retry',
+      subscription_id: 'sub_activation_notification_retry',
+      customer_id: 'ctm_test_123',
+      custom_data: {
+        userId: 42,
+        plan: 'monthly',
+        paddleEnvironment: 'sandbox',
+      },
+      billing_period: { ends_at: '2026-08-23T00:00:00.000Z' },
+      items: [{ price: { id: 'pri_monthly' }, quantity: 1 }],
+    },
+  }
+  const rawBody = JSON.stringify(payload)
+  const payloadHash = crypto.createHash('sha256').update(rawBody, 'utf8').digest('hex')
+  let inbox = null
+  let failNotificationSelection = true
+  let notificationSelections = 0
+
+  t.mock.method(pool, 'query', async (sql, params) => {
+    const query = String(sql)
+    if (query.includes('FROM paddle_webhook_events')) {
+      return inbox ? { rowCount: 1, rows: [{ ...inbox }] } : { rowCount: 0, rows: [] }
+    }
+    if (/INSERT INTO paddle_webhook_events/.test(query)) {
+      inbox = { event_id: payload.event_id, payload_hash: payloadHash, status: 'processing', attempt_count: 1 }
+      return { rowCount: 1, rows: [{ event_id: payload.event_id }] }
+    }
+    if (/UPDATE paddle_webhook_events[\s\S]+SET status = 'retryable_failed'/.test(query)) {
+      inbox = { ...inbox, status: 'retryable_failed' }
+      return { rowCount: 1, rows: [] }
+    }
+    if (/UPDATE paddle_webhook_events[\s\S]+SET status = 'processing'/.test(query)) {
+      inbox = { ...inbox, status: 'processing', attempt_count: inbox.attempt_count + 1 }
+      return { rowCount: 1, rows: [{ event_id: payload.event_id, attempt_count: inbox.attempt_count }] }
+    }
+    if (/UPDATE paddle_webhook_events[\s\S]+SET status = 'completed'/.test(query)) {
+      inbox = { ...inbox, status: 'completed' }
+      return { rowCount: 1, rows: [] }
+    }
+    if (query.includes('FROM users')) {
+      return {
+        rowCount: 1,
+        rows: [{
+          id: 42,
+          paddle_customer_id: 'ctm_test_123',
+          paddle_subscription_id: payload.data.subscription_id,
+          subscription_status: 'active',
+          paddle_environment: 'sandbox',
+        }],
+      }
+    }
+    if (/UPDATE users[\s\S]+subscription_status = 'active'/.test(query)) {
+      return { rowCount: 1, rows: [] }
+    }
+    if (query.includes('FROM integration_webhooks')) {
+      if (params?.[0] === 'subscription.activated') {
+        notificationSelections += 1
+        if (failNotificationSelection) throw new Error('integration webhook selection unavailable')
+      }
+      return { rowCount: 0, rows: [] }
+    }
+    return { rowCount: 1, rows: [] }
+  })
+
+  const first = await postWebhook({ body: rawBody, signature: signBody(rawBody) })
+  assert.equal(first.response.status, 500)
+  assert.equal(inbox.status, 'retryable_failed')
+  assert.equal(notificationSelections, 1)
+
+  failNotificationSelection = false
+  const retry = await postWebhook({ body: rawBody, signature: signBody(rawBody) })
+  assert.equal(retry.response.status, 200)
+  assert.equal(inbox.status, 'completed')
+  assert.equal(inbox.attempt_count, 2)
+  assert.equal(notificationSelections, 2)
+})
+
 
 async function postValidWebhookWithQueryMock(t, payload) {
   const rawBody = JSON.stringify(payload)
