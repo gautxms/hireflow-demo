@@ -1747,11 +1747,7 @@ router.post('/cancel', requireAuth, async (req, res) => {
     }
 
     if (providerAccepted) {
-      return res.status(202).json({
-        status: 'syncing',
-        code: 'CANCELLATION_CONFIRMATION_PENDING',
-        message: 'Paddle accepted the cancellation request. HireFlow is confirming the effective date.',
-      })
+      return sendBillingError(res, new BillingError('CANCELLATION_PROVIDER_STATE_UNVERIFIED'))
     }
 
     if (error instanceof BillingError) {

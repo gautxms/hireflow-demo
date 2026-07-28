@@ -2249,7 +2249,7 @@ test('POST /api/subscriptions/cancel rejects a conflicting scheduled pause', asy
   assert.equal(connectCalls.length, 0)
 })
 
-test('POST /api/subscriptions/cancel returns confirmation pending for an ambiguous 2xx Paddle response', async () => {
+test('POST /api/subscriptions/cancel fails when an ambiguous 2xx Paddle response cannot be confirmed', async () => {
   resetPaddleEnv()
   const { connectCalls } = installDbMock({
     ...activeCancellationUser(),
@@ -2263,8 +2263,9 @@ test('POST /api/subscriptions/cancel returns confirmation pending for an ambiguo
 
   const res = await invokeRoute('/cancel', { reason: 'too expensive' })
 
-  assert.equal(res.statusCode, 202)
-  assert.equal(res.payload.code, 'CANCELLATION_CONFIRMATION_PENDING')
+  assert.equal(res.statusCode, 502)
+  assert.equal(res.payload.code, 'CANCELLATION_PROVIDER_STATE_UNVERIFIED')
+  assert.equal(res.payload.error, 'HireFlow could not verify the current subscription state with Paddle. Reload Billing before trying again.')
   assert.equal(paddleCalls.length, 3)
   assert.equal(connectCalls.length, 0)
 })
