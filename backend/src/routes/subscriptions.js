@@ -598,11 +598,29 @@ function getScheduledAction(paddlePayload = {}) {
   return normalizeStatus(scheduledChange?.action || scheduledChange?.type || scheduledChange?.status)
 }
 
+function getPendingDowngradePlan(user, paddlePayload, paddle) {
+  const metadata = getPlanChangeMetadata(paddlePayload)
+  const providerPlan = inferPlanFromPaddlePayload(paddlePayload, paddle)
+
+  if (
+    metadata?.fromPlan === user?.subscription_plan
+    && metadata.fromPlan === 'annual'
+    && metadata.toPlan === 'monthly'
+    && metadata.outcome === 'pending'
+    && providerPlan === metadata.toPlan
+  ) {
+    return metadata.toPlan
+  }
+
+  return null
+}
+
 function inspectCancellationProviderState(user, paddlePayload, paddle) {
   return inspectPaddleSubscriptionForReconciliation({
     user,
     paddlePayload,
     paddle,
+    pendingProviderPlan: getPendingDowngradePlan(user, paddlePayload, paddle),
   })
 }
 
@@ -1683,6 +1701,7 @@ router.post('/cancel', requireAuth, async (req, res) => {
       user,
       paddlePayload: confirmedPayload,
       paddle,
+      pendingProviderPlan: getPendingDowngradePlan(user, confirmedPayload, paddle),
       source: 'subscription_cancel_command',
     })
     reconciliationResult = reconciliation.reason

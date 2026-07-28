@@ -2065,6 +2065,45 @@ test('POST /api/subscriptions/cancel uses one checked-out client after Paddle ca
   assert.equal(clientCalls[4].sql, 'RELEASE')
 })
 
+test('POST /api/subscriptions/cancel allows cancellation during a pending annual-to-monthly downgrade', async () => {
+  resetPaddleEnv()
+  const user = activeCancellationUser({
+    subscription_plan: 'annual',
+    paddle_environment: 'production',
+  })
+  installDbMock(user)
+  const pendingDowngrade = {
+    ...paddleMonthlySubscription(),
+    custom_data: {
+      hireflowPlanChange: {
+        fromPlan: 'annual',
+        toPlan: 'monthly',
+        outcome: 'pending',
+      },
+    },
+  }
+  const paddleCalls = mockPaddleSequence([
+    { payload: { data: pendingDowngrade } },
+    { payload: { data: {
+      ...pendingDowngrade,
+      updated_at: '2026-07-28T10:01:00.000Z',
+      next_billed_at: null,
+      scheduled_change: {
+        action: 'cancel',
+        effective_at: '2027-08-28T00:00:00.000Z',
+      },
+    } } },
+  ])
+  const { clientCalls } = installClientMock()
+
+  const res = await invokeRoute('/cancel', { reason: 'too expensive' })
+
+  assert.equal(res.statusCode, 200)
+  assert.equal(res.payload.status, 'ok')
+  assert.equal(paddleCalls.length, 2)
+  assert.equal(clientCalls[1].params[2], 'annual')
+})
+
 test('POST /api/subscriptions/cancel routes an explicitly sandbox user to the sandbox API', async () => {
   resetPaddleEnv()
   process.env.PADDLE_SANDBOX_API_BASE_URL = 'https://sandbox-api.paddle.test'

@@ -81,6 +81,7 @@ export function inspectPaddleSubscriptionForReconciliation({
   user,
   paddlePayload,
   paddle,
+  pendingProviderPlan = null,
 }) {
   const subscription = dataFromPayload(paddlePayload)
   const providerStatus = normalizeStatus(subscription?.status)
@@ -93,7 +94,10 @@ export function inspectPaddleSubscriptionForReconciliation({
   )
   const nextBillingDate = validIsoOrNull(subscription?.next_billed_at)
   const isTerminal = TERMINAL_STATUSES.has(providerStatus)
-  const providerPlan = inferPlanFromPaddlePayload(subscription, paddle)
+  const observedProviderPlan = inferPlanFromPaddlePayload(subscription, paddle)
+  const providerPlan = observedProviderPlan === pendingProviderPlan
+    ? user?.subscription_plan
+    : observedProviderPlan
   const environment = resolvePaddleEnvironmentForUser(user)
 
   const snapshot = {
@@ -102,6 +106,7 @@ export function inspectPaddleSubscriptionForReconciliation({
     providerStatus,
     storedStatus,
     providerPlan,
+    observedProviderPlan,
     currentPeriodEnd,
     nextBillingDate,
     observedAt,
@@ -217,6 +222,7 @@ export async function reconcilePaddleSubscriptionState({
   user,
   paddlePayload,
   paddle,
+  pendingProviderPlan = null,
   db = pool,
   source = 'subscription_get',
 }) {
@@ -224,6 +230,7 @@ export async function reconcilePaddleSubscriptionState({
     user,
     paddlePayload,
     paddle,
+    pendingProviderPlan,
   })
 
   if (!inspection.ok) {
