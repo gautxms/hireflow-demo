@@ -312,6 +312,32 @@ test('reconciliation repairs scheduled cancellation and keeps next billing null'
   assert.ok(!mock.calls.some(({ sql }) => /UPDATE payment_attempts/.test(sql)))
 })
 
+test('reconciliation persists a newer provider watermark for an already-current active snapshot', async () => {
+  const previousWatermark = '2026-07-28T07:55:00.000Z'
+  const providerWatermark = '2026-07-28T08:00:00.000Z'
+  const mock = dbMock()
+  const result = await reconcilePaddleSubscriptionState({
+    user: user({ last_paddle_event_at: previousWatermark }),
+    paddle: paddle(),
+    paddlePayload: subscription({ updated_at: providerWatermark }),
+    db: mock.db,
+    source: 'test',
+  })
+
+  assert.equal(result.reconciled, true)
+  assert.equal(result.user.last_paddle_event_at, providerWatermark)
+
+  const update = mock.calls.find(({ sql }) => /UPDATE users/.test(sql))
+  assert.ok(update)
+  assert.equal(update.params[7], providerWatermark)
+  assert.equal(update.params[13], previousWatermark)
+  assert.match(update.sql, /last_paddle_event_at = GREATEST/)
+  assert.match(update.sql, /\$8::timestamptz >= last_paddle_event_at/)
+  assert.ok(!mock.calls.some(({ sql }) => /UPDATE payment_attempts/.test(sql)))
+  assert.equal(mock.calls.at(-1).sql, 'COMMIT')
+  assert.equal(mock.released, true)
+})
+
 test('reconciliation does not overwrite a concurrent webhook state change', async () => {
   const mock = dbMock({ userUpdateRowCount: 0 })
   const result = await reconcilePaddleSubscriptionState({
