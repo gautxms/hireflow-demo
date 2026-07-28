@@ -196,6 +196,7 @@ function hasMaterialDifference(user, snapshot) {
     || !sameInstant(user.next_billing_date, snapshot.nextBillingDate)
     || !sameInstant(user.cancellation_effective_at, snapshot.cancellationEffectiveAt)
     || user.subscription_plan !== (snapshot.providerPlan || user.subscription_plan)
+    || !sameInstant(user.last_paddle_event_at, snapshot.observedAt)
 }
 
 function reconciledUserProjection(user, snapshot) {
