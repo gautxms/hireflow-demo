@@ -429,6 +429,39 @@ test('Paddle event ordering migration adds an idempotent provider timestamp', as
   assert.match(queries[0], /ADD COLUMN IF NOT EXISTS last_paddle_event_at TIMESTAMPTZ/)
 })
 
+test('migration runner adds the durable Paddle webhook inbox after recovery billing adjustments', async () => {
+  const source = await readRunnerSource()
+  assert.match(source, /'050-add-durable-paddle-webhook-inbox'/)
+  assert.ok(
+    source.indexOf("'049-add-recovery-billing-adjustments'") <
+      source.indexOf("'050-add-durable-paddle-webhook-inbox'"),
+  )
+})
+
+test('durable Paddle webhook inbox migration preserves completed legacy events and adds retry state', async () => {
+  const queries = []
+  const { up } = await import('./050-add-durable-paddle-webhook-inbox.js')
+
+  await up({
+    query(sql) {
+      queries.push(String(sql))
+      return Promise.resolve({ rows: [] })
+    },
+  })
+
+  const sql = queries.join('\n')
+  assert.match(sql, /CREATE TABLE IF NOT EXISTS paddle_webhook_events/)
+  assert.match(sql, /event_id TEXT NOT NULL UNIQUE/)
+  assert.match(sql, /payload JSONB/)
+  assert.match(sql, /paddle_environment TEXT/)
+  assert.match(sql, /status TEXT NOT NULL DEFAULT 'completed'/)
+  assert.match(sql, /attempt_count INTEGER NOT NULL DEFAULT 1/)
+  assert.match(sql, /ALTER COLUMN processed_at DROP NOT NULL/)
+  assert.match(sql, /completed_at = COALESCE\(completed_at, processed_at, created_at\)/)
+  assert.match(sql, /CHECK \(status IN \('processing', 'completed', 'retryable_failed'\)\)/)
+  assert.match(sql, /idx_paddle_webhook_events_retryable/)
+})
+
 test('recovery billing adjustment migration is additive, durable, and uniquely idempotent', async () => {
   const queries = []
   const { up } = await import('./049-add-recovery-billing-adjustments.js')

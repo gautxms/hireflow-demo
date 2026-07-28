@@ -51,6 +51,7 @@ const migrationFiles = [
   '047-add-resume-quota-allocations',
   '048-add-paddle-event-ordering-timestamp',
   '049-add-recovery-billing-adjustments',
+  '050-add-durable-paddle-webhook-inbox',
 ]
 
 async function ensureMigrationsTable(client) {

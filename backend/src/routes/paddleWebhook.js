@@ -29,6 +29,7 @@ import {
 } from '../services/recoveryBillingAdjustment.js'
 
 const router = express.Router()
+const WEBHOOK_PROCESSING_LEASE_SECONDS = 120
 
 async function paddleApiRequest(path, options = {}, paddle) {
   const response = await fetch(`${paddle.apiBaseUrl}${path}`, {
@@ -362,20 +363,156 @@ async function logWebhookAudit(eventType, payload, isValidSignature, errorMessag
   )
 }
 
-async function ensureWebhookEventsTable() {
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS paddle_webhook_events (
-      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      event_id TEXT NOT NULL UNIQUE,
-      event_type TEXT,
-      payload_hash TEXT NOT NULL,
-      processed_at TIMESTAMP NOT NULL DEFAULT NOW(),
-      created_at TIMESTAMP NOT NULL DEFAULT NOW()
-    );
+function normalizeInboxStatus(status) {
+  const normalized = String(status || '').toLowerCase()
+  return normalized || 'completed'
+}
 
-    CREATE INDEX IF NOT EXISTS idx_paddle_webhook_events_created_at
-      ON paddle_webhook_events (created_at DESC);
-  `)
+async function getWebhookInboxEvent(eventId) {
+  const result = await pool.query(
+    `SELECT event_id, payload_hash, status, attempt_count, last_attempt_at
+     FROM paddle_webhook_events
+     WHERE event_id = $1
+     LIMIT 1`,
+    [eventId],
+  )
+  return result.rows[0] || null
+}
+
+async function claimWebhookInboxEvent({
+  eventId,
+  eventType,
+  payloadHash,
+  payload,
+  environment,
+}) {
+  const existing = await getWebhookInboxEvent(eventId)
+
+  if (existing) {
+    if (existing.payload_hash && existing.payload_hash !== payloadHash) {
+      return { claimed: false, conflict: true }
+    }
+
+    if (normalizeInboxStatus(existing.status) === 'completed') {
+      return { claimed: false, duplicate: true, status: 'completed' }
+    }
+
+    const retryResult = await pool.query(
+      `UPDATE paddle_webhook_events
+       SET status = 'processing',
+           attempt_count = GREATEST(COALESCE(attempt_count, 0), 0) + 1,
+           last_attempt_at = NOW(),
+           failed_at = NULL,
+           next_retry_at = NULL,
+           last_error_code = NULL,
+           last_error_message = NULL,
+           payload = COALESCE(payload, $3::jsonb),
+           paddle_environment = COALESCE(paddle_environment, $4)
+       WHERE event_id = $1
+         AND payload_hash = $2
+         AND (
+           status = 'retryable_failed'
+           OR (
+             status = 'processing'
+             AND (
+               last_attempt_at IS NULL
+               OR last_attempt_at <= NOW() - ($5::integer * INTERVAL '1 second')
+             )
+           )
+         )
+       RETURNING event_id, attempt_count`,
+      [
+        eventId,
+        payloadHash,
+        JSON.stringify(payload),
+        environment,
+        WEBHOOK_PROCESSING_LEASE_SECONDS,
+      ],
+    )
+
+    if (retryResult.rowCount === 0) {
+      return { claimed: false, duplicate: true, status: 'processing' }
+    }
+
+    return {
+      claimed: true,
+      retry: true,
+      attemptCount: retryResult.rows[0]?.attempt_count || Number(existing.attempt_count || 0) + 1,
+    }
+  }
+
+  const insertResult = await pool.query(
+    `INSERT INTO paddle_webhook_events (
+       event_id,
+       event_type,
+       payload_hash,
+       payload,
+       paddle_environment,
+       status,
+       attempt_count,
+       first_received_at,
+       last_attempt_at,
+       processed_at
+     )
+     VALUES ($1, $2, $3, $4::jsonb, $5, 'processing', 1, NOW(), NOW(), NULL)
+     ON CONFLICT (event_id) DO NOTHING
+     RETURNING event_id`,
+    [eventId, eventType || 'unknown', payloadHash, JSON.stringify(payload), environment],
+  )
+
+  if (insertResult.rowCount > 0) {
+    return { claimed: true, retry: false, attemptCount: 1 }
+  }
+
+  const racedEvent = await getWebhookInboxEvent(eventId)
+  if (racedEvent?.payload_hash && racedEvent.payload_hash !== payloadHash) {
+    return { claimed: false, conflict: true }
+  }
+
+  return {
+    claimed: false,
+    duplicate: true,
+    status: normalizeInboxStatus(racedEvent?.status || 'processing'),
+  }
+}
+
+async function completeWebhookInboxEvent(eventId, payloadHash, attemptCount) {
+  const result = await pool.query(
+    `UPDATE paddle_webhook_events
+     SET status = 'completed',
+         processed_at = NOW(),
+         completed_at = NOW(),
+         failed_at = NULL,
+         next_retry_at = NULL,
+         last_error_code = NULL,
+         last_error_message = NULL
+     WHERE event_id = $1
+       AND payload_hash = $2
+       AND status = 'processing'
+       AND attempt_count = $3`,
+    [eventId, payloadHash, attemptCount],
+  )
+
+  if (result.rowCount === 0) {
+    throw new Error('Paddle webhook inbox claim was lost before completion')
+  }
+}
+
+async function failWebhookInboxEvent(eventId, payloadHash, attemptCount, error) {
+  const safeError = getSafeErrorContext(error)
+  await pool.query(
+    `UPDATE paddle_webhook_events
+     SET status = 'retryable_failed',
+         failed_at = NOW(),
+         next_retry_at = NOW(),
+         last_error_code = LEFT($4, 120),
+         last_error_message = LEFT($5, 500)
+     WHERE event_id = $1
+       AND payload_hash = $2
+       AND status = 'processing'
+       AND attempt_count = $3`,
+    [eventId, payloadHash, attemptCount, safeError.code, safeError.message],
+  )
 }
 
 async function upsertSubscriptionProjection({ subscriptionId, userId, status, eventType, payload, environment }) {
@@ -460,23 +597,45 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment) {
     console.error('[Paddle webhook] failed to write audit log', error)
   }
 
+  const dedupeEventId = getEventDeduplicationId(payload, rawBody)
+  const payloadHash = crypto.createHash('sha256').update(rawBody || '', 'utf8').digest('hex')
+  let inboxClaimed = false
+  let inboxAttemptCount = null
+  const postProcessingTasks = []
+
   try {
-    await ensureWebhookEventsTable()
+    const inboxClaim = await claimWebhookInboxEvent({
+      eventId: dedupeEventId,
+      eventType,
+      payloadHash,
+      payload,
+      environment: paddle.environment,
+    })
 
-    const dedupeEventId = getEventDeduplicationId(payload, rawBody)
-    const payloadHash = crypto.createHash('sha256').update(rawBody || '', 'utf8').digest('hex')
-
-    const existingEventResult = await pool.query(
-      `SELECT event_id
-       FROM paddle_webhook_events
-       WHERE event_id = $1
-       LIMIT 1`,
-      [dedupeEventId],
-    )
-
-    if (existingEventResult.rowCount > 0) {
-      return res.status(200).json({ received: true, duplicate: true })
+    if (inboxClaim.conflict) {
+      console.error('[Paddle webhook] rejected reused event id with different payload', {
+        environment: paddle.environment,
+        eventType,
+        eventId: dedupeEventId,
+      })
+      return res.status(409).json({ error: 'Webhook event payload conflict' })
     }
+
+    if (!inboxClaim.claimed) {
+      if (inboxClaim.status === 'processing') {
+        res.set('Retry-After', String(WEBHOOK_PROCESSING_LEASE_SECONDS))
+        return res.status(503).json({
+          error: 'Webhook event is already processing',
+          retryable: true,
+        })
+      }
+      return res.status(200).json({
+        received: true,
+        duplicate: true,
+      })
+    }
+    inboxClaimed = true
+    inboxAttemptCount = inboxClaim.attemptCount
 
     const nextStatus = mapToSubscriptionStatus(eventType, payload)
     const providerEventAt = getProviderEventTimestamp(payload)
@@ -608,7 +767,7 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment) {
           subscriptionProjection = null
         }
 
-        await trackEvent({
+        postProcessingTasks.push(() => trackEvent({
           userId,
           eventType: 'payment_success',
           metadata: {
@@ -618,15 +777,15 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment) {
             amount: getPaymentAmount(payload),
             currency: payload?.data?.currency_code || payload?.data?.currency || null,
           },
-        })
+        }))
 
         if (activationApplied) {
-          await triggerWebhook('subscription.activated', {
+          postProcessingTasks.push(() => triggerWebhook('subscription.activated', {
             userId,
             subscriptionId: transactionSubscriptionId,
             transactionId,
             status: 'active',
-          })
+          }))
         }
       }
     }
@@ -709,7 +868,7 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment) {
         await logErrorToDatabase('payment.failure.record_failed', error, context)
       }
 
-      await trackEvent({
+      postProcessingTasks.push(() => trackEvent({
         userId: user?.id || null,
         eventType: 'payment_fail',
         metadata: {
@@ -719,7 +878,7 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment) {
           amount: getPaymentAmount(payload),
           currency: payload?.data?.currency_code || payload?.data?.currency || null,
         },
-      })
+      }))
     }
 
     if (!hasEnvironmentMismatch && (eventType === 'subscription.created' || eventType === 'subscription.updated' || eventType === 'subscription.trialing')) {
@@ -860,26 +1019,37 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment) {
         if (cancellationResult.rowCount === 0) subscriptionProjection = null
       }
 
-      await trackEvent({
+      postProcessingTasks.push(() => trackEvent({
         userId: user?.id || null,
         eventType: 'cancellation',
         metadata: {
           source: 'paddle.webhook',
           subscription_id: canceledSubscriptionId,
         },
-      })
+      }))
     }
 
     if (subscriptionProjection) {
       await upsertSubscriptionProjection(subscriptionProjection)
     }
 
-    await pool.query(
-      `INSERT INTO paddle_webhook_events (event_id, event_type, payload_hash)
-       VALUES ($1, $2, $3)
-       ON CONFLICT (event_id) DO NOTHING`,
-      [dedupeEventId, eventType || 'unknown', payloadHash],
-    )
+    await completeWebhookInboxEvent(dedupeEventId, payloadHash, inboxAttemptCount)
+    for (const task of postProcessingTasks) {
+      try {
+        await task()
+      } catch (error) {
+        console.error('[Paddle webhook] post-processing task failed', getSafeErrorContext(error))
+        try {
+          await logErrorToDatabase('paddle.webhook.post_processing_failed', error, {
+            eventType,
+            eventId: dedupeEventId,
+            environment: paddle.environment,
+          })
+        } catch (logError) {
+          console.error('[Paddle webhook] failed to persist post-processing error', logError)
+        }
+      }
+    }
     if (recoveryAdjustmentCandidate) {
       const { userId, transactionId } = recoveryAdjustmentCandidate
       setImmediate(() => {
@@ -899,7 +1069,22 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment) {
     }
   } catch (error) {
     console.error('[Paddle webhook] failed to update subscription state', error)
-    await logErrorToDatabase('paddle.webhook.processing_failed', error, { eventType, payload })
+    if (inboxClaimed) {
+      try {
+        await failWebhookInboxEvent(dedupeEventId, payloadHash, inboxAttemptCount, error)
+      } catch (inboxError) {
+        console.error('[Paddle webhook] failed to persist retryable inbox state', inboxError)
+      }
+    }
+    try {
+      await logErrorToDatabase('paddle.webhook.processing_failed', error, {
+        eventType,
+        eventId: dedupeEventId,
+        environment: paddle.environment,
+      })
+    } catch (logError) {
+      console.error('[Paddle webhook] failed to persist processing error', logError)
+    }
     return res.status(500).json({ error: 'Webhook processing failed' })
   }
 
