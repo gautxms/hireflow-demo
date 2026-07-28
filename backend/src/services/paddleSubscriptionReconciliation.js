@@ -344,12 +344,14 @@ export async function reconcilePaddleSubscriptionState({
                payload->'data'->>'subscription_id', payload->'data'->>'subscriptionId',
                payload->>'subscription_id', payload->>'subscriptionId'
              ) = $3
-             OR COALESCE(
-               payload->'data'->>'subscription_id', payload->'data'->>'subscriptionId',
-               payload->>'subscription_id', payload->>'subscriptionId'
-             ) IS NULL
+             OR (
+               COALESCE(
+                 payload->'data'->>'subscription_id', payload->'data'->>'subscriptionId',
+                 payload->>'subscription_id', payload->>'subscriptionId'
+               ) IS NULL
+               AND created_at <= $5::timestamptz
+             )
            )
-           AND created_at <= $5::timestamptz
            AND status IN ('pending', 'failed', 'retrying')`,
         [
           user.id,

@@ -207,7 +207,7 @@ test('inspection does not reactivate a fully canceled lifecycle from a conflicti
   assert.equal(result.reason, 'terminal_lifecycle_cannot_reactivate')
 })
 
-test('terminal reconciliation clears billing dates and retries in one transaction', async () => {
+test('terminal reconciliation suppresses matching retries even when ingested after cancellation', async () => {
   const mock = dbMock()
   const result = await reconcilePaddleSubscriptionState({
     user: user(),
@@ -242,8 +242,11 @@ test('terminal reconciliation clears billing dates and retries in one transactio
   const retryUpdate = mock.calls.find(({ sql }) => /UPDATE payment_attempts/.test(sql))
   assert.ok(retryUpdate)
   assert.match(retryUpdate.sql, /next_retry_at = NULL/)
-  assert.match(retryUpdate.sql, /subscriptionId'[\s\S]*\) IS NULL/)
-  assert.match(retryUpdate.sql, /created_at <= \$5::timestamptz/)
+  assert.match(
+    retryUpdate.sql,
+    /\) = \$3\s+OR \(\s+COALESCE\([\s\S]*?\) IS NULL\s+AND created_at <= \$5::timestamptz\s+\)\s+\)/,
+  )
+  assert.doesNotMatch(retryUpdate.sql, /\)\s+AND created_at <= \$5::timestamptz\s+AND status/)
   assert.deepEqual(retryUpdate.params.slice(0, 3), [30, 'sandbox', 'sub_current'])
   assert.equal(retryUpdate.params[4], '2026-07-28T08:00:00.000Z')
 
