@@ -5,6 +5,7 @@ import { schemas, validateBody } from '../middleware/validation.js'
 import { generalApiLimiterAuth } from '../middleware/rateLimiter.js'
 import { resolvePaddleConfigForUser, resolvePaddleEnvironmentForUser } from '../config/paddle.js'
 import { inferPlanFromPaddlePayload } from '../services/paddlePlanChangeRecovery.js'
+import { reconcilePaddleSubscriptionState } from '../services/paddleSubscriptionReconciliation.js'
 
 const router = Router()
 const TEST_MONTHLY_PLAN = 'test-monthly'
@@ -380,6 +381,34 @@ async function loadProviderSubscription(user, paddle) {
   return payload?.data || payload
 }
 
+export async function prepareCheckoutSubscriptionState({
+  user,
+  paddle,
+  providerSubscription,
+  reconcile = reconcilePaddleSubscriptionState,
+}) {
+  if (!providerSubscription) {
+    return { user, providerSubscriptionVerified: false, reconciliationReason: 'provider_missing' }
+  }
+
+  const providerReconciliation = await reconcile({
+    user,
+    paddlePayload: providerSubscription,
+    paddle,
+    source: 'paddle.checkout_preflight',
+  })
+
+  const reconciledUser = providerReconciliation.user
+    ? { ...user, ...providerReconciliation.user }
+    : user
+
+  return {
+    user: reconciledUser,
+    providerSubscriptionVerified: providerReconciliation.providerVerified === true,
+    reconciliationReason: providerReconciliation.reason,
+  }
+}
+
 async function createCheckout(req, res, logLabel) {
   const { plan, testKey } = req.body || {}
 
@@ -388,7 +417,9 @@ async function createCheckout(req, res, logLabel) {
   try {
     const userResult = await pool.query(
       `SELECT id, email, subscription_status, subscription_started_at, trial_ends_at, trial_consumed_at,
+              subscription_plan, current_period_end, subscription_renewal_date, next_billing_date,
               cancellation_effective_at, paddle_customer_id, paddle_subscription_id, paddle_environment,
+              last_paddle_event_at,
               EXISTS (SELECT 1 FROM payment_attempts attempt WHERE attempt.user_id = users.id) AS has_payment_attempts
        FROM users
        WHERE id = $1`,
@@ -427,19 +458,41 @@ async function createCheckout(req, res, logLabel) {
   }
 
   let providerSubscription = null
+  let providerSubscriptionVerified = false
 
   try {
-    const localBlock = getCheckoutBlockReason(user)
-    if (localBlock) {
-      return res.status(409).json({
-        error: 'Checkout is unavailable for the current subscription state.',
-        code: localBlock.reason,
-        redirectTo: localBlock.redirectTo,
+    providerSubscription = await loadProviderSubscription(user, paddle)
+    if (providerSubscription) {
+      const preflight = await prepareCheckoutSubscriptionState({
+        user,
+        paddle,
+        providerSubscription,
       })
+
+      if (preflight.reconciliationReason === 'concurrent_state_change') {
+        return res.status(409).json({
+          error: 'Your subscription changed while checkout was being prepared. Please try again.',
+          code: 'subscription_sync_pending',
+          redirectTo: '/pricing',
+        })
+      }
+
+      providerSubscriptionVerified = preflight.providerSubscriptionVerified
+      user = preflight.user
+
+      if (!providerSubscriptionVerified) {
+        return res.status(409).json({
+          error: 'Checkout is unavailable until the existing Paddle subscription can be verified.',
+          code: 'subscription_verification_required',
+          redirectTo: '/billing',
+        })
+      }
     }
 
-    providerSubscription = await loadProviderSubscription(user, paddle)
-    const providerBlock = getCheckoutBlockReason(user, providerSubscription)
+    const providerBlock = getCheckoutBlockReason(
+      user,
+      providerSubscriptionVerified ? providerSubscription : null,
+    )
     if (providerBlock) {
       return res.status(409).json({
         error: 'Checkout is unavailable because a Paddle subscription still requires attention.',
