@@ -253,6 +253,43 @@ test('terminal reconciliation clears billing dates and retries in one transactio
   assert.equal(mock.released, true)
 })
 
+test('terminal reconciliation suppresses retries when the user projection is already current', async () => {
+  const terminalAt = '2026-07-28T08:00:00.000Z'
+  const mock = dbMock()
+  const result = await reconcilePaddleSubscriptionState({
+    user: user({
+      subscription_status: 'cancelled',
+      current_period_end: null,
+      subscription_renewal_date: null,
+      next_billing_date: null,
+      cancellation_effective_at: terminalAt,
+      last_paddle_event_at: terminalAt,
+      next_payment_retry_at: '2026-07-29T08:00:00.000Z',
+    }),
+    paddle: paddle(),
+    paddlePayload: subscription({
+      status: 'canceled',
+      updated_at: terminalAt,
+      canceled_at: terminalAt,
+      current_billing_period: null,
+      next_billed_at: null,
+      items: [],
+    }),
+    db: mock.db,
+    source: 'test',
+  })
+
+  assert.equal(result.reconciled, true)
+  assert.equal(result.user.next_payment_retry_at, null)
+
+  const retryUpdate = mock.calls.find(({ sql }) => /UPDATE payment_attempts/.test(sql))
+  assert.ok(retryUpdate)
+  assert.match(retryUpdate.sql, /next_retry_at = NULL/)
+  assert.deepEqual(retryUpdate.params.slice(0, 3), [30, 'sandbox', 'sub_current'])
+  assert.equal(mock.calls.at(-1).sql, 'COMMIT')
+  assert.equal(mock.released, true)
+})
+
 test('reconciliation repairs scheduled cancellation and keeps next billing null', async () => {
   const mock = dbMock()
   const result = await reconcilePaddleSubscriptionState({

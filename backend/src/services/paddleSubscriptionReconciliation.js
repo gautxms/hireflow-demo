@@ -247,7 +247,10 @@ export async function reconcilePaddleSubscriptionState({
   const { snapshot } = inspection
   const nextUser = reconciledUserProjection(user, snapshot)
 
-  if (!hasMaterialDifference(user, snapshot)) {
+  // A terminal snapshot also authoritatively suppresses any pending payment retries.
+  // That cleanup lives outside the users row, so it must still run when the user
+  // projection already matches Paddle (for example, after a cancellation webhook).
+  if (!hasMaterialDifference(user, snapshot) && !snapshot.isTerminal) {
     return {
       reconciled: false,
       providerVerified: true,
