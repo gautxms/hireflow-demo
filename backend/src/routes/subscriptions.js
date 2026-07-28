@@ -17,6 +17,7 @@ import {
   runRecoveryBillingAdjustments,
   selectAuthoritativeCapture,
 } from '../services/recoveryBillingAdjustment.js'
+import { reconcilePaddleSubscriptionState } from '../services/paddleSubscriptionReconciliation.js'
 
 const router = Router()
 
@@ -689,7 +690,7 @@ router.get('/current', requireAuth, async (req, res) => {
        LIMIT 1`,
       [req.userId, paddle.environment],
     )
-    const latestSubscription = subscriptionResult.rows[0] || null
+    let latestSubscription = subscriptionResult.rows[0] || null
 
     if (!latestSubscription) {
       console.warn('[subscriptions.current] No subscription row found in subscriptions table', { userId: req.userId })
@@ -709,28 +710,57 @@ router.get('/current', requireAuth, async (req, res) => {
     const isPastDueRecovery = ['past_due', 'payment_failed'].includes(normalizeStatus(user.subscription_status))
     const hasValidPaddleDates = [paddleCurrentPeriodStart, paddleCurrentPeriodEnd, paddleNextBillingDate]
       .every((value) => value && !Number.isNaN(new Date(value).getTime()))
-    if (!isPastDueRecovery && paddleStatus === 'active') {
+
+    if (planCost.paddleSubscriptionPayload) {
+      const providerReconciliation = await reconcilePaddleSubscriptionState({
+        user,
+        paddlePayload: planCost.paddleSubscriptionPayload,
+        paddle,
+        source: 'subscriptions.current',
+      })
+
+      if (providerReconciliation.user) {
+        Object.assign(user, providerReconciliation.user)
+        latestSubscription = {
+          ...latestSubscription,
+          status: providerReconciliation.snapshot?.storedStatus || latestSubscription?.status || null,
+        }
+      } else if (providerReconciliation.reason === 'concurrent_state_change') {
+        const latestStateResult = await pool.query(
+          `SELECT subscription_status, subscription_plan, current_period_end,
+                  subscription_renewal_date, next_billing_date, cancellation_effective_at,
+                  paddle_customer_id, paddle_subscription_id, paddle_environment,
+                  last_paddle_event_at
+           FROM users
+           WHERE id = $1`,
+          [user.id],
+        )
+        if (latestStateResult.rows[0]) {
+          Object.assign(user, latestStateResult.rows[0])
+        }
+      }
+    }
+
+    if (
+      !isPastDueRecovery
+      && paddleStatus === 'active'
+      && normalizeStatus(user.subscription_status) === 'active'
+      && !user.cancellation_effective_at
+    ) {
       const heldRecoveryTransactionId = await resolveHeldGetRecoveryAttempts(user, paddle)
       await processRecoveredTransactionImmediately(user.id, heldRecoveryTransactionId, paddle)
     }
 
     if (
+      isPastDueRecovery
+      &&
       paddleSubscription.id === user.paddle_subscription_id
-      && (!isPastDueRecovery || paddleSubscription.customer_id === user.paddle_customer_id)
+      && paddleSubscription.customer_id === user.paddle_customer_id
       && paddlePlan === planKey
-      && (isPastDueRecovery ? paddleStatus === 'active' : ['active', 'trialing'].includes(paddleStatus))
-      && (isPastDueRecovery ? hasValidPaddleDates : Boolean(paddleCurrentPeriodEnd && paddleNextBillingDate))
-      && (
-        isPastDueRecovery
-        ||
-        isoOrNull(user.current_period_end) !== isoOrNull(paddleCurrentPeriodEnd)
-        || isoOrNull(user.subscription_renewal_date) !== isoOrNull(paddleCurrentPeriodEnd)
-        || isoOrNull(user.next_billing_date) !== isoOrNull(paddleNextBillingDate)
-      )
+      && paddleStatus === 'active'
+      && hasValidPaddleDates
     ) {
-      const exactRecoveryTransactionId = isPastDueRecovery
-        ? await resolveExactRecoveredTransactionId(user, paddle)
-        : null
+      const exactRecoveryTransactionId = await resolveExactRecoveredTransactionId(user, paddle)
       const reconciliation = await pool.query(
         `WITH reconciled_user AS (
            UPDATE users
@@ -891,19 +921,23 @@ router.get('/current', requireAuth, async (req, res) => {
           && !user.has_payment_attempts
           && ['inactive', 'no_subscription', 'none', 'free', ''].includes(normalizeStatus(user.subscription_status)),
         renewalDate: isFinalCancellation ? null : isoOrNull(user.subscription_renewal_date || user.current_period_end),
-        nextBillingDate: isFinalCancellation ? null : isoOrNull(user.next_billing_date || user.current_period_end),
+        nextBillingDate: isFinalCancellation ? null : isoOrNull(user.next_billing_date),
         nextRetryAt: ['past_due', 'payment_failed'].includes(normalizeStatus(user.subscription_status))
           ? isoOrNull(user.next_payment_retry_at)
           : null,
-        recoveryAdjustmentStatus: user.recovery_adjustment_status || null,
-        recoveryAdjustmentReference: user.recovery_adjustment_reference || null,
+        recoveryAdjustmentStatus: isFinalCancellation ? null : (user.recovery_adjustment_status || null),
+        recoveryAdjustmentReference: isFinalCancellation ? null : (user.recovery_adjustment_reference || null),
         recoveryAdjustmentEnabled: isRecoveryBillingAdjustmentEnabled(paddle.environment),
         cancellationEffectiveAt,
         cancelAtPeriodEnd: hasScheduledCancellation,
         paymentMethod: isFinalCancellation ? null : user.payment_method_last4
           ? `${user.payment_method_brand || 'Card'} •••• ${user.payment_method_last4}`
           : hasBillingPortalAccess ? 'Card on file' : null,
-        latestRecordStatus: hasScheduledCancellation ? (latestSubscription?.status || 'cancellation_scheduled') : (latestSubscription?.status || null),
+        latestRecordStatus: isFinalCancellation
+          ? normalizeStatus(user.subscription_status)
+          : hasScheduledCancellation
+            ? (latestSubscription?.status || 'cancellation_scheduled')
+            : (latestSubscription?.status || null),
         latestRecordCreatedAt: isoOrNull(latestSubscription?.created_at),
       },
     })

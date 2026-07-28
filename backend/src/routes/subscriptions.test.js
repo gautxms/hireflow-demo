@@ -159,6 +159,37 @@ function installClientMock({ failOn } = {}) {
   return { client, clientCalls, connectCalls }
 }
 
+function installCurrentReconciliationDbMock(user, { userUpdateRowCount = 1 } = {}) {
+  const calls = []
+  const clientCalls = []
+  const client = {
+    async query(sql, params = []) {
+      clientCalls.push({ sql: String(sql), params })
+      if (/UPDATE users/.test(String(sql))) {
+        return {
+          rows: userUpdateRowCount ? [{ id: user.id }] : [],
+          rowCount: userUpdateRowCount,
+        }
+      }
+      return { rows: [], rowCount: 1 }
+    },
+    release() {
+      clientCalls.push({ sql: 'RELEASE', params: [] })
+    },
+  }
+
+  pool.connect = async () => client
+  pool.query = async (sql, params = []) => {
+    calls.push({ sql: String(sql), params })
+    if (String(sql).includes('FROM users')) {
+      return { rows: [user], rowCount: 1 }
+    }
+    return { rows: [], rowCount: 0 }
+  }
+
+  return { calls, clientCalls }
+}
+
 function assertTransactionSequence(clientCalls, updatePattern, { includesProjection = false } = {}) {
   assert.equal(clientCalls.length, includesProjection ? 6 : 5)
   assert.equal(clientCalls[0].sql, 'BEGIN')
@@ -266,6 +297,45 @@ test('GET /api/subscriptions/current returns cancelAtPeriodEnd true when Paddle 
 
   assert.equal(res.statusCode, 200)
   assert.equal(res.payload.subscription.cancelAtPeriodEnd, true)
+})
+
+test('GET /api/subscriptions/current persists Paddle scheduled cancellation with no next billing date', async () => {
+  resetPaddleEnv()
+  const currentUser = {
+    ...activeAnnualUser(),
+    paddle_customer_id: 'ctm_123',
+    subscription_renewal_date: '2027-01-07T00:00:00.000Z',
+    next_billing_date: '2027-01-07T00:00:00.000Z',
+    cancellation_effective_at: null,
+  }
+  const { clientCalls } = installCurrentReconciliationDbMock(currentUser)
+  mockPaddleResponse({
+    payload: {
+      data: {
+        id: 'sub_123',
+        customer_id: 'ctm_123',
+        status: 'active',
+        updated_at: '2026-07-28T08:00:00.000Z',
+        items: [{ price: { id: 'pri_annual', billing_cycle: { interval: 'year' } } }],
+        current_billing_period: { ends_at: '2027-01-07T00:00:00.000Z' },
+        next_billed_at: null,
+        scheduled_change: {
+          action: 'cancel',
+          effective_at: '2027-01-07T00:00:00.000Z',
+        },
+      },
+    },
+  })
+
+  const res = await invokeRoute('/current')
+
+  assert.equal(res.statusCode, 200)
+  assert.equal(res.payload.subscription.status, 'active')
+  assert.equal(res.payload.subscription.cancelAtPeriodEnd, true)
+  assert.equal(res.payload.subscription.cancellationEffectiveAt, '2027-01-07T00:00:00.000Z')
+  assert.equal(res.payload.subscription.nextBillingDate, null)
+  const update = clientCalls.find(({ sql }) => /UPDATE users/.test(String(sql)))
+  assert.equal(update.params[5], null)
 })
 
 test('GET /api/subscriptions/current does not return cancelAtPeriodEnd true when cancellation_effective_at is missing or past', async () => {
@@ -533,7 +603,9 @@ test('GET /api/subscriptions/current keeps local pricing for users without Paddl
 function authoritativeAnnualSubscription(overrides = {}) {
   return { data: {
     id: 'sub_123',
+    customer_id: 'ctm_123',
     status: 'active',
+    updated_at: '2026-07-21T12:00:00.000Z',
     items: [{ price: { id: 'pri_annual', billing_cycle: { interval: 'year' }, unit_price: { amount: '99900', currency_code: 'USD' } } }],
     current_billing_period: { ends_at: '2027-07-21T00:00:00.000Z' },
     next_billed_at: '2027-07-21T00:00:00.000Z',
@@ -545,10 +617,11 @@ test('GET /api/subscriptions/current moves earlier local dates forward from veri
   resetPaddleEnv()
   const user = {
     ...activeAnnualUser(),
+    paddle_customer_id: 'ctm_123',
     subscription_renewal_date: '2026-08-20T00:00:00.000Z',
     next_billing_date: '2027-07-21T00:00:00.000Z',
   }
-  const { calls } = installDbMock(user)
+  const { clientCalls } = installCurrentReconciliationDbMock(user)
   mockPaddleResponse({ payload: authoritativeAnnualSubscription() })
 
   const res = await invokeRoute('/current')
@@ -556,16 +629,24 @@ test('GET /api/subscriptions/current moves earlier local dates forward from veri
   assert.equal(res.statusCode, 200)
   assert.equal(res.payload.subscription.renewalDate, '2027-07-21T00:00:00.000Z')
   assert.equal(res.payload.subscription.nextBillingDate, '2027-07-21T00:00:00.000Z')
-  const repair = calls.find(({ sql }) => String(sql).includes('subscription_renewal_date = $2'))
+  const repair = clientCalls.find(({ sql }) => String(sql).includes('subscription_renewal_date = CASE'))
   assert.ok(repair)
-  assert.deepEqual(repair.params.slice(0, 6), [123, '2027-07-21T00:00:00.000Z', '2027-07-21T00:00:00.000Z', 'sub_123', 'annual', 'active'])
-  assert.doesNotMatch(repair.sql, />= current_period_end/)
+  assert.deepEqual(repair.params.slice(0, 6), [
+    123,
+    'active',
+    'annual',
+    false,
+    '2027-07-21T00:00:00.000Z',
+    '2027-07-21T00:00:00.000Z',
+  ])
+  assert.match(repair.sql, /last_paddle_event_at IS NOT DISTINCT FROM \$14::timestamptz/)
 })
 
 test('GET /api/subscriptions/current moves incorrectly later local dates backward from verified Paddle state', async () => {
   resetPaddleEnv()
-  const { calls } = installDbMock({
+  const { clientCalls } = installCurrentReconciliationDbMock({
     ...activeAnnualUser(),
+    paddle_customer_id: 'ctm_123',
     current_period_end: '2028-07-21T00:00:00.000Z',
     subscription_renewal_date: '2028-07-21T00:00:00.000Z',
     next_billing_date: '2028-07-21T00:00:00.000Z',
@@ -576,7 +657,7 @@ test('GET /api/subscriptions/current moves incorrectly later local dates backwar
 
   assert.equal(res.payload.subscription.renewalDate, '2027-07-21T00:00:00.000Z')
   assert.equal(res.payload.subscription.nextBillingDate, '2027-07-21T00:00:00.000Z')
-  assert.ok(calls.some(({ sql }) => String(sql).includes('subscription_renewal_date = $2')))
+  assert.ok(clientCalls.some(({ sql }) => String(sql).includes('subscription_renewal_date = CASE')))
 })
 
 test('GET /api/subscriptions/current does not reconcile a different Paddle plan or subscription ID', async () => {
@@ -595,12 +676,58 @@ test('GET /api/subscriptions/current does not reconcile a different Paddle plan 
   }
 })
 
-test('GET /api/subscriptions/current does not reconcile non-current Paddle statuses or missing dates', async () => {
+test('GET /api/subscriptions/current repairs verified Past Due and canceled provider states', async () => {
+  resetPaddleEnv()
+
+  const scenarios = [
+    {
+      overrides: { status: 'past_due', next_billed_at: null },
+      expectedStatus: 'past_due',
+      expectedNextBilling: null,
+    },
+    {
+      overrides: {
+        status: 'canceled',
+        canceled_at: '2020-07-28T08:00:00.000Z',
+        current_billing_period: null,
+        next_billed_at: null,
+        items: [],
+      },
+      expectedStatus: 'cancelled',
+      expectedNextBilling: null,
+    },
+  ]
+
+  for (const scenario of scenarios) {
+    const currentUser = {
+      ...activeAnnualUser(),
+      paddle_customer_id: 'ctm_123',
+      subscription_renewal_date: '2028-07-21T00:00:00.000Z',
+      next_billing_date: '2028-07-21T00:00:00.000Z',
+      recovery_adjustment_status: 'pending',
+      recovery_adjustment_reference: 'payment_attempt:42',
+    }
+    const { clientCalls } = installCurrentReconciliationDbMock(currentUser)
+    mockPaddleResponse({ payload: authoritativeAnnualSubscription(scenario.overrides) })
+    const res = await invokeRoute('/current')
+
+    assert.equal(res.statusCode, 200)
+    assert.equal(res.payload.subscription.status, scenario.expectedStatus)
+    assert.equal(res.payload.subscription.nextBillingDate, scenario.expectedNextBilling)
+    if (scenario.expectedStatus === 'cancelled') {
+      assert.equal(res.payload.subscription.renewalDate, null)
+      assert.equal(res.payload.subscription.latestRecordStatus, 'cancelled')
+      assert.equal(res.payload.subscription.recoveryAdjustmentStatus, null)
+      assert.equal(res.payload.subscription.recoveryAdjustmentReference, null)
+    }
+    assert.ok(clientCalls.some(({ sql }) => /UPDATE users/.test(String(sql))))
+  }
+})
+
+test('GET /api/subscriptions/current fails closed on unsupported provider state or incomplete active dates', async () => {
   resetPaddleEnv()
 
   for (const overrides of [
-    { status: 'past_due' },
-    { status: 'canceled' },
     { status: null },
     { current_billing_period: null },
     { next_billed_at: null },
@@ -609,7 +736,7 @@ test('GET /api/subscriptions/current does not reconcile non-current Paddle statu
     mockPaddleResponse({ payload: authoritativeAnnualSubscription(overrides) })
     await invokeRoute('/current')
 
-    assert.ok(!calls.some(({ sql }) => String(sql).includes('subscription_renewal_date = $2')))
+    assert.ok(!calls.some(({ sql }) => String(sql).includes('UPDATE users')))
   }
 })
 
