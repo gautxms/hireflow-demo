@@ -11,7 +11,7 @@ import {
   isResumeQuotaReservationsEnabled,
 } from '../services/resumeQuotaReservations.js'
 import { resolveResumeQuotaPeriod } from '../utils/resumeQuotaPeriod.js'
-import { hasScheduledCancellationAccess } from '../utils/subscriptionAccess.js'
+import { canUsePaidMutation, hasScheduledCancellationAccess } from '../utils/subscriptionAccess.js'
 
 const router = Router()
 
@@ -34,6 +34,7 @@ export function buildResumeAnalysisUsageResponse({
   periodEnd = getMonthEnd(periodStart),
   reserved = 0,
   nextRevalidationAt = periodEnd,
+  canUseAnalysis = true,
 }) {
   const normalizedLimit = Number(limit || 0)
   const normalizedUsed = Number(used || 0)
@@ -48,7 +49,7 @@ export function buildResumeAnalysisUsageResponse({
     used: normalizedUsed,
     remaining,
     available,
-    canCreateAnalysis: available > 0,
+    canCreateAnalysis: canUseAnalysis && available > 0,
     periodStart: periodStart.toISOString(),
     periodEnd: periodEnd.toISOString(),
     percentageUsed,
@@ -110,6 +111,7 @@ router.get('/resume-analysis', async (req, res) => {
       periodEnd: period.end,
       reserved,
       nextRevalidationAt,
+      canUseAnalysis: canUsePaidMutation(user),
     }))
   } catch (error) {
     console.error('[Usage] Failed to load resume analysis usage:', error)
