@@ -12,10 +12,20 @@ test('both analysis entry points use the shared canonical quota hook', () => {
 
 test('canonical hook retains focus, reconnect, and visibility revalidation', async () => {
   const hookSource = await readFile(new URL('../hooks/useResumeAnalysisQuota.js', import.meta.url), 'utf8')
-  assert.match(hookSource, /addEventListener\('focus', handleBrowserRefresh\)/)
-  assert.match(hookSource, /addEventListener\('online', handleBrowserRefresh\)/)
+  assert.match(hookSource, /addEventListener\('focus', refreshIfCurrent\)/)
+  assert.match(hookSource, /addEventListener\('online', refreshIfCurrent\)/)
   assert.match(hookSource, /addEventListener\('visibilitychange', handleVisibilityChange\)/)
-  assert.match(hookSource, /const quotaStore = createResumeAnalysisQuotaStore/)
+  assert.match(hookSource, /store: createResumeAnalysisQuotaStore/)
+})
+
+
+test('canonical quota state is scoped to the current authentication identity', async () => {
+  const hookSource = await readFile(new URL('../hooks/useResumeAnalysisQuota.js', import.meta.url), 'utf8')
+  assert.match(hookSource, /async function loadResumeAnalysisQuota\(token\)/)
+  assert.match(hookSource, /const quotaRecords = new Map\(\)/)
+  assert.match(hookSource, /loadQuota: \(\) => loadResumeAnalysisQuota\(token\)/)
+  assert.match(hookSource, /addEventListener\('storage', handleStorage\)/)
+  assert.match(hookSource, /quotaRecords\.delete\(token\)/)
 })
 
 test('both entry points refresh canonical quota after accepted initialization and rejection', () => {

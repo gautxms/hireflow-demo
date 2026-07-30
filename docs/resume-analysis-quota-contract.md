@@ -112,6 +112,8 @@ completion and explicit releases do not have a predictable transition time, the
 store also performs one deduplicated five-minute refresh while at least one
 consumer is mounted and the document is visible. Focus, reconnect, and returning
 to a visible tab refresh immediately; the timer is removed when the last consumer
+unmounts. Shared stores and in-flight requests are scoped to the current auth
+token, and the previous identity's store is discarded when its final consumer
 unmounts. This revalidation changes no reservation or accounting semantics.
 
 ## PR 2 reservation behavior
