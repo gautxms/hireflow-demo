@@ -129,13 +129,13 @@ test('GET /usage/resume-analysis reflects admin limit and reset overrides', asyn
   assert.equal(queries.some((sql) => sql.includes('FROM usage_log')), false)
 })
 
-test('GET /usage/resume-analysis preserves trial/free limit resolution', async (t) => {
+test('GET /usage/resume-analysis preserves the fallback limit but blocks inactive subscription access', async (t) => {
   process.env.JWT_SECRET = 'test-secret'
 
   t.mock.method(pool, 'query', async (sql) => {
     if (sql.includes('FROM users')) return { rows: [{ id: 9, subscription_status: 'inactive' }] }
     if (sql.includes('FROM usage_overrides')) return { rows: [] }
-    if (sql.includes('FROM usage_log')) return { rows: [{ usage_count: 10 }] }
+    if (sql.includes('FROM usage_log')) return { rows: [{ usage_count: 9 }] }
     return { rows: [] }
   })
 
@@ -143,12 +143,24 @@ test('GET /usage/resume-analysis preserves trial/free limit resolution', async (
 
   assert.equal(response.status, 200)
   assert.equal(payload.limit, 10)
-  assert.equal(payload.used, 10)
-  assert.equal(payload.remaining, 0)
-  assert.equal(payload.available, 0)
+  assert.equal(payload.used, 9)
+  assert.equal(payload.remaining, 1)
+  assert.equal(payload.available, 1)
   assert.equal(payload.canCreateAnalysis, false)
-  assert.equal(payload.percentageUsed, 100)
-  assert.equal(payload.warningLevel, 'exceeded')
+  assert.equal(payload.percentageUsed, 90)
+  assert.equal(payload.warningLevel, 'critical')
+})
+
+test('buildResumeAnalysisUsageResponse requires both subscription access and quota capacity', () => {
+  const payload = buildResumeAnalysisUsageResponse({
+    limit: 10,
+    used: 0,
+    canUseAnalysis: false,
+    periodStart: new Date('2026-05-01T00:00:00.000Z'),
+  })
+
+  assert.equal(payload.available, 10)
+  assert.equal(payload.canCreateAnalysis, false)
 })
 
 test('buildResumeAnalysisUsageResponse subtracts active reservations from current availability', () => {
