@@ -456,6 +456,7 @@ test('durable Paddle webhook inbox migration preserves completed legacy events a
   assert.match(sql, /paddle_environment TEXT/)
   assert.match(sql, /status TEXT NOT NULL DEFAULT 'completed'/)
   assert.match(sql, /attempt_count INTEGER NOT NULL DEFAULT 1/)
+  assert.match(sql, /processing_token UUID/)
   assert.match(sql, /ALTER COLUMN processed_at DROP NOT NULL/)
   assert.match(sql, /completed_at = COALESCE\(completed_at, processed_at, created_at\)/)
   assert.match(sql, /CHECK \(status IN \('processing', 'completed', 'retryable_failed'\)\)/)

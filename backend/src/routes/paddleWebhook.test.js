@@ -28,6 +28,18 @@ test('completed-payment webhook defers provider adjustment work until after dura
   assert.doesNotMatch(source, /await runRecoveryBillingAdjustments/)
 })
 
+test('inbox ownership writes fence stale attempts by environment, attempt, and processing token', () => {
+  const source = readFileSync(new URL('./paddleWebhook.js', import.meta.url), 'utf8')
+  const fencedUpdates = source.match(/UPDATE paddle_webhook_events[\s\S]*?processing_token = \$5`/g) || []
+
+  assert.ok(fencedUpdates.length >= 3)
+  for (const query of fencedUpdates) {
+    assert.match(query, /COALESCE\(paddle_environment, \$3\) = \$3/)
+    assert.match(query, /attempt_count = \$4/)
+    assert.match(query, /processing_token = \$5/)
+  }
+})
+
 function signBody(rawBody, secret = WEBHOOK_SECRET, timestamp = Math.floor(Date.now() / 1000)) {
   const hmac = crypto.createHmac('sha256', secret).update(`${timestamp}:${rawBody}`, 'utf8').digest('hex')
   return `ts=${timestamp};h1=${hmac}`
@@ -64,6 +76,93 @@ async function postWebhook({ body, signature, path = '' }) {
     server.close()
   }
 }
+
+const delay = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds))
+
+test('inbox heartbeat retains exact ownership across repeated lease renewals and stops on completion', async (t) => {
+  const { createWebhookInboxLease } = await import('./paddleWebhook.js')
+  const calls = []
+  t.mock.method(pool, 'query', async (sql, params) => {
+    calls.push({ sql: String(sql), params })
+    return { rowCount: 1, rows: [] }
+  })
+  const lease = createWebhookInboxLease({
+    eventId: 'evt_heartbeat_long_processing',
+    payloadHash: 'hash-heartbeat',
+    environment: 'sandbox',
+    attemptCount: 7,
+    processingToken: '8e95ebf0-bb34-4f7e-8940-a0ae4e377166',
+    heartbeatIntervalMs: 5,
+  })
+
+  await delay(35)
+  await lease.assertOwned()
+  assert.ok(calls.length >= 2)
+  assert.ok(calls.every(({ sql }) => /processing_token = \$5/.test(sql)))
+  assert.ok(calls.every(({ params }) => params[0] === 'evt_heartbeat_long_processing'
+    && params[2] === 'sandbox' && params[3] === 7
+    && params[4] === '8e95ebf0-bb34-4f7e-8940-a0ae4e377166'))
+
+  let completed = false
+  await lease.finish(async () => { completed = true })
+  const stoppedAt = calls.length
+  await delay(12)
+  assert.equal(completed, true)
+  assert.equal(calls.length, stoppedAt)
+})
+
+test('lost inbox ownership fences renewal and follow-up completion without leaving a timer', async (t) => {
+  const { createWebhookInboxLease } = await import('./paddleWebhook.js')
+  let renewals = 0
+  t.mock.method(pool, 'query', async () => {
+    renewals += 1
+    return { rowCount: 0, rows: [] }
+  })
+  const lease = createWebhookInboxLease({
+    eventId: 'evt_heartbeat_lost',
+    payloadHash: 'hash-lost',
+    environment: 'production',
+    attemptCount: 2,
+    processingToken: 'e90af1ab-d547-4117-b5c4-d099dad38d91',
+    heartbeatIntervalMs: 5,
+  })
+
+  await delay(10)
+  await assert.rejects(lease.assertOwned(), /claim was lost/)
+  let staleCompletionRan = false
+  await assert.rejects(
+    lease.finish(async () => { staleCompletionRan = true }),
+    /claim was lost/,
+  )
+  const stoppedAt = renewals
+  await delay(12)
+  assert.equal(staleCompletionRan, false)
+  assert.equal(renewals, stoppedAt)
+})
+
+test('inbox lease renewal database failure safely abandons ownership and stops its timer', async (t) => {
+  const { createWebhookInboxLease } = await import('./paddleWebhook.js')
+  let renewals = 0
+  t.mock.method(pool, 'query', async () => {
+    renewals += 1
+    throw new Error('lease database unavailable')
+  })
+  const lease = createWebhookInboxLease({
+    eventId: 'evt_heartbeat_database_failure',
+    payloadHash: 'hash-database-failure',
+    environment: 'sandbox',
+    attemptCount: 3,
+    processingToken: 'bcb1990f-e960-47cf-ae80-f05c6a11756f',
+    heartbeatIntervalMs: 5,
+  })
+
+  await delay(10)
+  await assert.rejects(lease.assertOwned(), /claim was lost/)
+  await lease.stop()
+  const stoppedAt = renewals
+  await delay(12)
+  assert.equal(renewals, stoppedAt)
+})
 
 test('POST /api/paddle/webhook/sandbox verifies with the sandbox secret while production remains the default', async (t) => {
   const originalEnvironment = process.env.PADDLE_ENVIRONMENT
@@ -360,9 +459,129 @@ test('POST /api/paddle/webhook asks Paddle to retry while another delivery holds
   assert.equal(responsePayload.retryable, true)
   assert.equal(calls.some((sql) => /FROM users|UPDATE users|INSERT INTO subscriptions/.test(sql)), false)
   assert.equal(
-    calls.some((sql) => /last_attempt_at <= NOW\(\) - \(\$5::integer \* INTERVAL '1 second'\)/.test(sql)),
+    calls.some((sql) => /last_attempt_at <= NOW\(\) - \(\$6::integer \* INTERVAL '1 second'\)/.test(sql)),
     true,
   )
+})
+
+test('POST /api/paddle/webhook safely reclaims an expired abandoned processing lease', async (t) => {
+  const payload = buildSubscriptionUpdatedPayload({ event_id: 'evt_expired_abandoned_lease' })
+  const rawBody = JSON.stringify(payload)
+  const payloadHash = crypto.createHash('sha256').update(rawBody, 'utf8').digest('hex')
+  let status = 'processing'
+  let attemptCount = 4
+  let processingToken = 'abandoned-token'
+  let mutations = 0
+
+  t.mock.method(pool, 'query', async (sql, params) => {
+    const query = String(sql)
+    if (query.includes('FROM paddle_webhook_events')) {
+      return {
+        rowCount: 1,
+        rows: [{
+          event_id: payload.event_id,
+          payload_hash: payloadHash,
+          status,
+          attempt_count: attemptCount,
+          last_attempt_at: '2026-01-01T00:00:00.000Z',
+        }],
+      }
+    }
+    if (/UPDATE paddle_webhook_events[\s\S]+attempt_count = GREATEST/.test(query)) {
+      attemptCount += 1
+      processingToken = params[4]
+      return { rowCount: 1, rows: [{ event_id: payload.event_id, attempt_count: attemptCount }] }
+    }
+    if (/UPDATE paddle_webhook_events[\s\S]+SET status = 'completed'/.test(query)) {
+      assert.equal(params[3], attemptCount)
+      assert.equal(params[4], processingToken)
+      status = 'completed'
+      return { rowCount: 1, rows: [] }
+    }
+    if (query.includes('FROM users')) {
+      return {
+        rowCount: 1,
+        rows: [{ id: 42, paddle_customer_id: 'ctm_test_123', paddle_environment: 'sandbox' }],
+      }
+    }
+    if (query.includes('UPDATE users')) mutations += 1
+    return { rowCount: 1, rows: [] }
+  })
+
+  const result = await postWebhook({ body: rawBody, signature: signBody(rawBody) })
+  assert.equal(result.response.status, 200)
+  assert.equal(attemptCount, 5)
+  assert.equal(status, 'completed')
+  assert.equal(mutations, 1)
+  assert.notEqual(processingToken, 'abandoned-token')
+})
+
+test('simultaneous retryable deliveries atomically elect one worker and the loser returns retryable', async (t) => {
+  const payload = buildSubscriptionUpdatedPayload({ event_id: 'evt_retryable_concurrent_claim' })
+  const rawBody = JSON.stringify(payload)
+  const payloadHash = crypto.createHash('sha256').update(rawBody, 'utf8').digest('hex')
+  const inbox = {
+    event_id: payload.event_id,
+    payload_hash: payloadHash,
+    status: 'retryable_failed',
+    attempt_count: 1,
+    paddle_environment: 'sandbox',
+    processing_token: null,
+  }
+  let reads = 0
+  let releaseReads
+  const bothRead = new Promise((resolve) => { releaseReads = resolve })
+  let mutationCount = 0
+
+  t.mock.method(pool, 'query', async (sql, params) => {
+    const query = String(sql)
+    if (query.includes('FROM paddle_webhook_events')) {
+      const snapshot = { ...inbox }
+      reads += 1
+      if (reads === 2) releaseReads()
+      await bothRead
+      return { rowCount: 1, rows: [snapshot] }
+    }
+    if (/UPDATE paddle_webhook_events[\s\S]+attempt_count = GREATEST/.test(query)) {
+      if (inbox.status !== 'retryable_failed') return { rowCount: 0, rows: [] }
+      inbox.status = 'processing'
+      inbox.attempt_count += 1
+      inbox.processing_token = params[4]
+      return { rowCount: 1, rows: [{ event_id: inbox.event_id, attempt_count: inbox.attempt_count }] }
+    }
+    if (/UPDATE paddle_webhook_events[\s\S]+SET status = 'completed'/.test(query)) {
+      if (inbox.status !== 'processing' || inbox.attempt_count !== params[3] || inbox.processing_token !== params[4]) {
+        return { rowCount: 0, rows: [] }
+      }
+      inbox.status = 'completed'
+      return { rowCount: 1, rows: [] }
+    }
+    if (query.includes('FROM users')) {
+      return {
+        rowCount: 1,
+        rows: [{
+          id: 42,
+          paddle_customer_id: 'ctm_test_123',
+          paddle_subscription_id: payload.data.id,
+          subscription_status: 'active',
+          paddle_environment: 'sandbox',
+        }],
+      }
+    }
+    if (query.includes('UPDATE users')) mutationCount += 1
+    return { rowCount: 1, rows: [] }
+  })
+
+  const [first, second] = await Promise.all([
+    postWebhook({ body: rawBody, signature: signBody(rawBody) }),
+    postWebhook({ body: rawBody, signature: signBody(rawBody) }),
+  ])
+  const statuses = [first.response.status, second.response.status].sort()
+  assert.deepEqual(statuses, [200, 503])
+  assert.equal([first.payload, second.payload].some((body) => body.retryable === true), true)
+  assert.equal(mutationCount, 1)
+  assert.equal(inbox.status, 'completed')
+  assert.equal(inbox.attempt_count, 2)
 })
 
 test('POST /api/paddle/webhook rejects an event id reused with a different signed payload', async (t) => {
@@ -444,12 +663,12 @@ test('POST /api/paddle/webhook reclaims retryable failures and suppresses later 
       return { rowCount: 1, rows: [{ event_id: payload.event_id }] }
     }
     if (/UPDATE paddle_webhook_events[\s\S]+SET status = 'retryable_failed'/.test(query)) {
-      failedClaimAttempts.push(params?.[2])
+      failedClaimAttempts.push(params?.[3])
       inbox = { ...inbox, status: 'retryable_failed' }
       return { rowCount: 1, rows: [] }
     }
     if (/UPDATE paddle_webhook_events[\s\S]+SET status = 'completed'/.test(query)) {
-      completedClaimAttempts.push(params?.[2])
+      completedClaimAttempts.push(params?.[3])
       inbox = { ...inbox, status: 'completed' }
       return { rowCount: 1, rows: [] }
     }

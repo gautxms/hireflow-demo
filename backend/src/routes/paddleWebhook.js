@@ -30,6 +30,7 @@ import {
 
 const router = express.Router()
 const WEBHOOK_PROCESSING_LEASE_SECONDS = 120
+const WEBHOOK_HEARTBEAT_INTERVAL_MS = 40_000
 
 async function paddleApiRequest(path, options = {}, paddle) {
   const response = await fetch(`${paddle.apiBaseUrl}${path}`, {
@@ -379,6 +380,40 @@ async function getWebhookInboxEvent(eventId) {
   return result.rows[0] || null
 }
 
+async function reclaimWebhookInboxEvent({ eventId, payloadHash, payload, environment, processingToken }) {
+  const retryResult = await pool.query(
+    `UPDATE paddle_webhook_events
+     SET status = 'processing',
+         attempt_count = GREATEST(COALESCE(attempt_count, 0), 0) + 1,
+         last_attempt_at = NOW(),
+         failed_at = NULL,
+         next_retry_at = NULL,
+         last_error_code = NULL,
+         last_error_message = NULL,
+         payload = COALESCE(payload, $3::jsonb),
+         paddle_environment = COALESCE(paddle_environment, $4),
+         processing_token = $5
+     WHERE event_id = $1
+       AND payload_hash = $2
+       AND COALESCE(paddle_environment, $4) = $4
+       AND (
+         status = 'retryable_failed'
+         OR (
+           status = 'processing'
+           AND (
+             last_attempt_at IS NULL
+             OR last_attempt_at <= NOW() - ($6::integer * INTERVAL '1 second')
+           )
+         )
+       )
+     RETURNING event_id, attempt_count`,
+    [eventId, payloadHash, JSON.stringify(payload), environment, processingToken, WEBHOOK_PROCESSING_LEASE_SECONDS],
+  )
+
+  if (retryResult.rowCount === 0) return null
+  return retryResult.rows[0]?.attempt_count
+}
+
 async function claimWebhookInboxEvent({
   eventId,
   eventType,
@@ -386,6 +421,7 @@ async function claimWebhookInboxEvent({
   payload,
   environment,
 }) {
+  const processingToken = crypto.randomUUID()
   const existing = await getWebhookInboxEvent(eventId)
 
   if (existing) {
@@ -397,47 +433,19 @@ async function claimWebhookInboxEvent({
       return { claimed: false, duplicate: true, status: 'completed' }
     }
 
-    const retryResult = await pool.query(
-      `UPDATE paddle_webhook_events
-       SET status = 'processing',
-           attempt_count = GREATEST(COALESCE(attempt_count, 0), 0) + 1,
-           last_attempt_at = NOW(),
-           failed_at = NULL,
-           next_retry_at = NULL,
-           last_error_code = NULL,
-           last_error_message = NULL,
-           payload = COALESCE(payload, $3::jsonb),
-           paddle_environment = COALESCE(paddle_environment, $4)
-       WHERE event_id = $1
-         AND payload_hash = $2
-         AND (
-           status = 'retryable_failed'
-           OR (
-             status = 'processing'
-             AND (
-               last_attempt_at IS NULL
-               OR last_attempt_at <= NOW() - ($5::integer * INTERVAL '1 second')
-             )
-           )
-         )
-       RETURNING event_id, attempt_count`,
-      [
-        eventId,
-        payloadHash,
-        JSON.stringify(payload),
-        environment,
-        WEBHOOK_PROCESSING_LEASE_SECONDS,
-      ],
-    )
+    const attemptCount = await reclaimWebhookInboxEvent({
+      eventId, payloadHash, payload, environment, processingToken,
+    })
 
-    if (retryResult.rowCount === 0) {
+    if (!attemptCount) {
       return { claimed: false, duplicate: true, status: 'processing' }
     }
 
     return {
       claimed: true,
       retry: true,
-      attemptCount: retryResult.rows[0]?.attempt_count || Number(existing.attempt_count || 0) + 1,
+      attemptCount,
+      processingToken,
     }
   }
 
@@ -452,16 +460,17 @@ async function claimWebhookInboxEvent({
        attempt_count,
        first_received_at,
        last_attempt_at,
-       processed_at
+       processed_at,
+       processing_token
      )
-     VALUES ($1, $2, $3, $4::jsonb, $5, 'processing', 1, NOW(), NOW(), NULL)
+     VALUES ($1, $2, $3, $4::jsonb, $5, 'processing', 1, NOW(), NOW(), NULL, $6)
      ON CONFLICT (event_id) DO NOTHING
      RETURNING event_id`,
-    [eventId, eventType || 'unknown', payloadHash, JSON.stringify(payload), environment],
+    [eventId, eventType || 'unknown', payloadHash, JSON.stringify(payload), environment, processingToken],
   )
 
   if (insertResult.rowCount > 0) {
-    return { claimed: true, retry: false, attemptCount: 1 }
+    return { claimed: true, retry: false, attemptCount: 1, processingToken }
   }
 
   const racedEvent = await getWebhookInboxEvent(eventId)
@@ -469,14 +478,19 @@ async function claimWebhookInboxEvent({
     return { claimed: false, conflict: true }
   }
 
-  return {
-    claimed: false,
-    duplicate: true,
-    status: normalizeInboxStatus(racedEvent?.status || 'processing'),
+  if (normalizeInboxStatus(racedEvent?.status) === 'completed') {
+    return { claimed: false, duplicate: true, status: 'completed' }
   }
+
+  const attemptCount = await reclaimWebhookInboxEvent({
+    eventId, payloadHash, payload, environment, processingToken,
+  })
+  return attemptCount
+    ? { claimed: true, retry: true, attemptCount, processingToken }
+    : { claimed: false, duplicate: true, status: 'processing' }
 }
 
-async function completeWebhookInboxEvent(eventId, payloadHash, attemptCount) {
+async function completeWebhookInboxEvent(eventId, payloadHash, environment, attemptCount, processingToken) {
   const result = await pool.query(
     `UPDATE paddle_webhook_events
      SET status = 'completed',
@@ -488,9 +502,11 @@ async function completeWebhookInboxEvent(eventId, payloadHash, attemptCount) {
          last_error_message = NULL
      WHERE event_id = $1
        AND payload_hash = $2
+       AND COALESCE(paddle_environment, $3) = $3
        AND status = 'processing'
-       AND attempt_count = $3`,
-    [eventId, payloadHash, attemptCount],
+       AND attempt_count = $4
+       AND processing_token = $5`,
+    [eventId, payloadHash, environment, attemptCount, processingToken],
   )
 
   if (result.rowCount === 0) {
@@ -498,21 +514,93 @@ async function completeWebhookInboxEvent(eventId, payloadHash, attemptCount) {
   }
 }
 
-async function failWebhookInboxEvent(eventId, payloadHash, attemptCount, error) {
+async function failWebhookInboxEvent(eventId, payloadHash, environment, attemptCount, processingToken, error) {
   const safeError = getSafeErrorContext(error)
   await pool.query(
     `UPDATE paddle_webhook_events
      SET status = 'retryable_failed',
          failed_at = NOW(),
          next_retry_at = NOW(),
-         last_error_code = LEFT($4, 120),
-         last_error_message = LEFT($5, 500)
+         last_error_code = LEFT($6, 120),
+         last_error_message = LEFT($7, 500)
      WHERE event_id = $1
        AND payload_hash = $2
+       AND COALESCE(paddle_environment, $3) = $3
        AND status = 'processing'
-       AND attempt_count = $3`,
-    [eventId, payloadHash, attemptCount, safeError.code, safeError.message],
+       AND attempt_count = $4
+       AND processing_token = $5`,
+    [eventId, payloadHash, environment, attemptCount, processingToken, safeError.code, safeError.message],
   )
+}
+
+export function createWebhookInboxLease({
+  eventId,
+  payloadHash,
+  environment,
+  attemptCount,
+  processingToken,
+  heartbeatIntervalMs = WEBHOOK_HEARTBEAT_INTERVAL_MS,
+}) {
+  let timer = null
+  let renewal = null
+  let ownershipLost = false
+  let closed = false
+
+  const stopTimer = () => {
+    if (timer) clearInterval(timer)
+    timer = null
+  }
+
+  const renew = async () => {
+    try {
+      const result = await pool.query(
+        `UPDATE paddle_webhook_events
+         SET last_attempt_at = NOW()
+         WHERE event_id = $1
+           AND payload_hash = $2
+           AND COALESCE(paddle_environment, $3) = $3
+           AND status = 'processing'
+           AND attempt_count = $4
+           AND processing_token = $5`,
+        [eventId, payloadHash, environment, attemptCount, processingToken],
+      )
+      if (result.rowCount === 0) ownershipLost = true
+    } catch (error) {
+      ownershipLost = true
+      console.error('[Paddle webhook] inbox lease renewal failed', getSafeErrorContext(error))
+    } finally {
+      renewal = null
+      if (ownershipLost) stopTimer()
+    }
+  }
+
+  const tick = () => {
+    if (closed || ownershipLost || renewal) return
+    renewal = renew()
+  }
+
+  timer = setInterval(tick, heartbeatIntervalMs)
+  timer.unref?.()
+
+  const assertOwned = async () => {
+    if (renewal) await renewal
+    if (ownershipLost) throw new Error('Paddle webhook inbox claim was lost during processing')
+  }
+
+  return {
+    assertOwned,
+    async finish(task) {
+      closed = true
+      stopTimer()
+      await assertOwned()
+      return task()
+    },
+    async stop() {
+      closed = true
+      stopTimer()
+      if (renewal) await renewal
+    },
+  }
 }
 
 async function upsertSubscriptionProjection({ subscriptionId, userId, status, eventType, payload, environment }) {
@@ -601,6 +689,8 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment) {
   const payloadHash = crypto.createHash('sha256').update(rawBody || '', 'utf8').digest('hex')
   let inboxClaimed = false
   let inboxAttemptCount = null
+  let inboxProcessingToken = null
+  let inboxLease = null
   const completionTasks = []
   const postProcessingTasks = []
 
@@ -637,6 +727,14 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment) {
     }
     inboxClaimed = true
     inboxAttemptCount = inboxClaim.attemptCount
+    inboxProcessingToken = inboxClaim.processingToken
+    inboxLease = createWebhookInboxLease({
+      eventId: dedupeEventId,
+      payloadHash,
+      environment: paddle.environment,
+      attemptCount: inboxAttemptCount,
+      processingToken: inboxProcessingToken,
+    })
 
     const nextStatus = mapToSubscriptionStatus(eventType, payload)
     const providerEventAt = getProviderEventTimestamp(payload)
@@ -1038,9 +1136,17 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment) {
     // the inbox is completed. Otherwise a crash (or selection failure) in this
     // window would make every Paddle redelivery look like a completed duplicate.
     for (const task of completionTasks) {
+      await inboxLease.assertOwned()
       await task()
+      await inboxLease.assertOwned()
     }
-    await completeWebhookInboxEvent(dedupeEventId, payloadHash, inboxAttemptCount)
+    await inboxLease.finish(() => completeWebhookInboxEvent(
+      dedupeEventId,
+      payloadHash,
+      paddle.environment,
+      inboxAttemptCount,
+      inboxProcessingToken,
+    ))
     for (const task of postProcessingTasks) {
       try {
         await task()
@@ -1078,7 +1184,14 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment) {
     console.error('[Paddle webhook] failed to update subscription state', error)
     if (inboxClaimed) {
       try {
-        await failWebhookInboxEvent(dedupeEventId, payloadHash, inboxAttemptCount, error)
+        await inboxLease.finish(() => failWebhookInboxEvent(
+          dedupeEventId,
+          payloadHash,
+          paddle.environment,
+          inboxAttemptCount,
+          inboxProcessingToken,
+          error,
+        ))
       } catch (inboxError) {
         console.error('[Paddle webhook] failed to persist retryable inbox state', inboxError)
       }
@@ -1093,6 +1206,8 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment) {
       console.error('[Paddle webhook] failed to persist processing error', logError)
     }
     return res.status(500).json({ error: 'Webhook processing failed' })
+  } finally {
+    await inboxLease?.stop()
   }
 
   return res.status(200).json({ received: true })

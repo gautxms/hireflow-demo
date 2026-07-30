@@ -17,6 +17,7 @@ export async function up(client) {
       completed_at TIMESTAMPTZ,
       failed_at TIMESTAMPTZ,
       next_retry_at TIMESTAMPTZ,
+      processing_token UUID,
       last_error_code TEXT,
       last_error_message TEXT,
       created_at TIMESTAMP NOT NULL DEFAULT NOW()
@@ -34,6 +35,7 @@ export async function up(client) {
       ADD COLUMN IF NOT EXISTS completed_at TIMESTAMPTZ,
       ADD COLUMN IF NOT EXISTS failed_at TIMESTAMPTZ,
       ADD COLUMN IF NOT EXISTS next_retry_at TIMESTAMPTZ,
+      ADD COLUMN IF NOT EXISTS processing_token UUID,
       ADD COLUMN IF NOT EXISTS last_error_code TEXT,
       ADD COLUMN IF NOT EXISTS last_error_message TEXT
   `)
