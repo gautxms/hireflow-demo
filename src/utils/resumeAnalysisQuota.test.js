@@ -1,10 +1,12 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
+  formatResumeAnalysisCreationBlocked,
   formatResumeQuotaRejection,
   formatResumeQuotaResetDate,
   getBatchQuotaGuidance,
   getResumeAllowanceTone,
+  isResumeAnalysisAccessBlocked,
   isResumeQuotaRejection,
   normalizeResumeAnalysisQuota,
   RESUME_ANALYSIS_QUOTA_EXCEEDED_CODE,
@@ -47,8 +49,11 @@ test('799 of 800 permits one resume and 800 blocks submission', () => {
 })
 
 test('server-provided creation decision overrides browser percentage', () => {
-  assert.equal(quota(100, 800, { canCreateAnalysis: false, available: 20 }).canCreateAnalysis, false)
-  assert.equal(getResumeAllowanceTone(quota(100, 800, { canCreateAnalysis: false, available: 20 })), 'reached')
+  const accessBlocked = quota(100, 800, { canCreateAnalysis: false, available: 20 })
+  assert.equal(accessBlocked.canCreateAnalysis, false)
+  assert.equal(isResumeAnalysisAccessBlocked(accessBlocked), true)
+  assert.equal(getResumeAllowanceTone(accessBlocked), 'unavailable')
+  assert.match(formatResumeAnalysisCreationBlocked(accessBlocked), /active subscription/i)
   assert.equal(quota(800, 800, { canCreateAnalysis: true, available: 1 }).canCreateAnalysis, true)
 })
 
