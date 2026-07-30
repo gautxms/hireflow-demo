@@ -193,6 +193,11 @@
   text-align: left;
   white-space: pre-line;
 }
+
+.resume-quota-callout { margin: 16px 0; padding: 12px 14px; border: 1px solid color-mix(in srgb, var(--hf-error) 40%, var(--border)); border-radius: 8px; background: color-mix(in srgb, var(--hf-error) 8%, var(--card)); color: var(--color-text-secondary); font-family: var(--font-family-base); }
+.resume-quota-callout strong { display: block; color: var(--color-text-primary); font-family: var(--font-family-heading); font-size: 0.9rem; }
+.resume-quota-callout p { margin: 4px 0 0; font-size: 0.82rem; line-height: 1.45; }
+.resume-quota-callout--warning { border-color: color-mix(in srgb, var(--hf-warning) 42%, var(--border)); background: color-mix(in srgb, var(--hf-warning) 8%, var(--card)); }
 .resume-error-details { margin-top: 0.75rem; }
 .resume-error-details-summary { cursor: pointer; font-weight: 600; }
 .resume-error-details-pre { margin: 0.5rem 0 0; font-size: 0.85rem; overflow-x: auto; white-space: pre-wrap; }

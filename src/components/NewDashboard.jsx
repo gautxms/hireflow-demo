@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { Check, ChevronDown } from 'lucide-react'
 import API_BASE from '../config/api'
+import useResumeAnalysisQuota from '../hooks/useResumeAnalysisQuota.js'
 import { Icon } from './Icon'
+import ResumeAllowanceCard from './ResumeAllowanceCard.jsx'
 import './NewDashboard.css'
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
@@ -299,6 +301,7 @@ function summarizeScoreTrend(series, fallbackScoredCount = 0, fallbackAverage = 
 }
 
 export default function NewDashboard() {
+  const resumeQuota = useResumeAnalysisQuota()
   const [rangeDays, setRangeDays] = useState('30')
   const [jobDescriptionId, setJobDescriptionId] = useState('')
   const [dashboardData, setDashboardData] = useState(null)
@@ -392,12 +395,6 @@ export default function NewDashboard() {
     shortlistedRate: 0,
   }
   const kpis = { ...defaultKpis, ...(dashboardData?.kpis || {}) }
-  const usage = dashboardData?.usage
-  const hasMonthlyResumeAnalysisLimit = Number.isFinite(Number(usage?.monthlyResumeAnalysisLimit))
-  const monthlyResumeAnalysisLimit = hasMonthlyResumeAnalysisLimit
-    ? formatCompactNumber(usage.monthlyResumeAnalysisLimit)
-    : null
-
   const analysesTrend = useMemo(() => dashboardData?.charts?.analysesTrend || [], [dashboardData])
   const averageScoreTrend = useMemo(() => dashboardData?.charts?.averageScoreTrend || [], [dashboardData])
   const analysesSummary = useMemo(() => summarizeAnalysesTrend(analysesTrend), [analysesTrend])
@@ -475,7 +472,6 @@ export default function NewDashboard() {
             label: 'Resumes Analyzed',
             value: formatCompactNumber(kpis.resumesAnalyzedCount),
             iconName: 'users',
-            inlineMeta: monthlyResumeAnalysisLimit ? `/ ${monthlyResumeAnalysisLimit}` : null,
           },
           { label: 'Completion Rate', value: formatPercent(kpis.completionRate), iconName: 'target' },
           { label: 'Average Score', value: formatScore(kpis.avgScore), iconName: 'chart' },
@@ -495,6 +491,8 @@ export default function NewDashboard() {
           </article>
         ))}
       </section>
+
+      <ResumeAllowanceCard status={resumeQuota.status} quota={resumeQuota.quota} />
 
       <section className="new-dashboard__trends">
         <article className="new-dashboard__trend-card" role="region" aria-labelledby="dashboard-analyses-trend-title">

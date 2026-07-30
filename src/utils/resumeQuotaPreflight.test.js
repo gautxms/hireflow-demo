@@ -4,6 +4,7 @@ import {
   buildResumeQuotaBatchKey,
   buildResumeQuotaFileIdentity,
   preflightResumeQuota,
+  retireResumeQuotaBatchKey,
 } from './resumeQuotaPreflight.js'
 
 test('preflight reuses its idempotency key after a lost response', async (t) => {
@@ -48,7 +49,7 @@ test('preflight reuses its idempotency key after a lost response', async (t) => 
   assert.equal(result.quotaIdempotencyKey, requestKeys[0])
 })
 
-test('preflight retains its idempotency key after success for reload recovery', async (t) => {
+test('preflight retains its key for recovery, then retirement rotates a completed attempt', async (t) => {
   const requestKeys = []
   t.mock.method(globalThis, 'fetch', async (_url, options) => {
     requestKeys.push(JSON.parse(options.body).quotaIdempotencyKey)
@@ -64,6 +65,11 @@ test('preflight retains its idempotency key after success for reload recovery', 
 
   assert.equal(requestKeys.length, 2)
   assert.equal(requestKeys[0], requestKeys[1])
+
+  retireResumeQuotaBatchKey(batchKey)
+  await preflightResumeQuota({ apiBase: '/api', token: 'token', fileCount: 1, batchKey })
+  assert.equal(requestKeys.length, 3)
+  assert.notEqual(requestKeys[2], requestKeys[1])
 })
 
 test('file identities distinguish same-named files within a stable batch', () => {
@@ -83,4 +89,26 @@ test('file identities distinguish same-named files within a stable batch', () =>
     buildResumeQuotaFileIdentity(batchKey, 0),
     buildResumeQuotaFileIdentity(batchKey, 0),
   )
+})
+
+test('quota rejection is returned once without an automatic preflight retry', async (t) => {
+  let requestCount = 0
+  t.mock.method(globalThis, 'fetch', async () => {
+    requestCount += 1
+    return {
+      ok: false,
+      status: 429,
+      json: async () => ({
+        code: 'RESUME_ANALYSIS_QUOTA_EXCEEDED',
+        message: 'This batch exceeds your resume analysis allowance.',
+        remaining: 0,
+      }),
+    }
+  })
+
+  await assert.rejects(
+    preflightResumeQuota({ apiBase: '/api', token: 'token', fileCount: 1, batchKey: `blocked-${Date.now()}` }),
+    (error) => error.status === 429 && error.quota.code === 'RESUME_ANALYSIS_QUOTA_EXCEEDED',
+  )
+  assert.equal(requestCount, 1)
 })

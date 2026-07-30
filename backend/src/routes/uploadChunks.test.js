@@ -148,6 +148,8 @@ test('POST /api/uploads/chunks/init enforces monthly quota before creating a ses
 
   assert.equal(response.status, 429)
   assert.equal(payload.error, 'Upload limit reached')
+  assert.equal(payload.code, 'RESUME_ANALYSIS_QUOTA_EXCEEDED')
+  assert.match(payload.periodEnd, /^\d{4}-\d{2}-01T00:00:00\.000Z$/)
   assert.equal(queries.some(({ sql }) => sql.includes('INSERT INTO upload_chunks')), false)
 })
 
@@ -168,6 +170,7 @@ test('POST /api/uploads/chunks/preflight rejects a 795 plus 10 batch before any 
   assert.equal(payload.used, 795)
   assert.equal(payload.requested, 10)
   assert.equal(payload.remaining, 5)
+  assert.equal(payload.code, 'RESUME_ANALYSIS_QUOTA_EXCEEDED')
   assert.equal(queries.some(({ sql }) => sql.includes('INSERT INTO upload_chunks')), false)
 })
 
