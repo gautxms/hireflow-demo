@@ -235,9 +235,15 @@ test('flagged usage response reports enforcement-consistent availability after a
     t.mock.method(pool, 'query', async (sql) => {
       if (sql.includes('FROM users')) return { rows: [{ id: 11, subscription_status: 'active', quota_anchor_at: '2026-01-20T08:30:00.000Z' }] }
       if (sql.includes('FROM usage_overrides')) return { rows: [] }
-      if (sql.includes('FROM usage_log')) return { rows: [{ usage_count: 790 }] }
-      if (sql.includes('SELECT MIN(reservation.expires_at)')) return { rows: [{ next_availability_change_at: '2026-07-30T12:00:00.000Z' }] }
-      if (sql.includes('FROM resume_quota_reservations')) return { rows: [{ reserved_count: 5 }] }
+      if (sql.includes('WITH quota_usage AS')) {
+        return {
+          rows: [{
+            usage_count: 790,
+            reserved_count: 5,
+            next_availability_change_at: '2026-07-30T12:00:00.000Z',
+          }],
+        }
+      }
       return { rows: [] }
     })
 
@@ -247,6 +253,7 @@ test('flagged usage response reports enforcement-consistent availability after a
     assert.equal(payload.remaining, 10)
     assert.equal(payload.available, 5)
     assert.equal(payload.canCreateAnalysis, true)
+    assert.equal(queries.filter((sql) => sql.includes('WITH quota_usage AS')).length, 1)
     const expectedTransition = new Date('2026-07-30T12:00:00.000Z') < new Date(payload.periodEnd)
       ? '2026-07-30T12:00:00.000Z'
       : payload.periodEnd

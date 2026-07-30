@@ -100,7 +100,9 @@ equals `remaining`.
 Customer UI must use `available` and `canCreateAnalysis` for submission guidance,
 while it may use `used`, `percentageUsed`, and `warningLevel` to describe actual
 consumption. Active reservations must not be described as completed or analyzed
-resumes.
+resumes. On the reservation-enabled path, consumed usage, active reservations,
+and the next availability transition are read in one database snapshot so a
+provider-start conversion cannot disappear between counters.
 
 The additive `nextRevalidationAt` field is the nearest server-known time when
 availability may change: the earlier of the current `periodEnd` and an active
@@ -123,6 +125,9 @@ unmounts. This revalidation changes no reservation or accounting semantics.
   reserve the same batch twice.
 - The client retains that key across an unknown preflight outcome, so a lost
   response can recover the original reservation instead of allocating another.
+  The Analyses flow retires it only after sessions are definitively initialized
+  or an unused reservation release succeeds; a later intentional rerun then gets
+  a fresh key.
 - Reservations expire after two hours if a client abandons an upload.
 - Clients explicitly release every unused unit when initial session creation
   fails; successful sibling sessions continue instead of being abandoned.

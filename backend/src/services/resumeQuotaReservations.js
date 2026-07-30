@@ -172,6 +172,123 @@ export async function getNextResumeQuotaAvailabilityChangeAt({
   return result.rows[0]?.next_availability_change_at || null
 }
 
+export async function getResumeQuotaUsageAvailabilitySnapshot({
+  userId,
+  periodStart,
+  periodEnd,
+  shouldResetUsage = false,
+  queryable = pool,
+}) {
+  const result = await queryable.query(
+    `WITH quota_usage AS (
+       SELECT CASE
+         WHEN $4::boolean THEN 0
+         ELSE COUNT(*)::INT
+       END AS usage_count
+       FROM usage_log
+       WHERE user_id = $1
+         AND (
+           (
+             quota_allocation_id IS NOT NULL
+             AND (
+               EXISTS (
+                 SELECT 1
+                 FROM resume_quota_allocations AS allocation
+                 JOIN resume_quota_reservations AS allocation_reservation
+                   ON allocation_reservation.id = allocation.reservation_id
+                 WHERE allocation.id = usage_log.quota_allocation_id
+                   AND allocation_reservation.period_start = $2
+                   AND allocation_reservation.period_end = $3
+               )
+               OR (usage_log.created_at >= $2 AND usage_log.created_at < $3)
+             )
+           )
+           OR (
+             quota_allocation_id IS NULL
+             AND usage_log.created_at >= $2
+             AND usage_log.created_at < $3
+           )
+         )
+     ),
+     period_reservations AS (
+       SELECT COALESCE(SUM(
+         CASE
+           WHEN reservation.expires_at > NOW()
+             THEN reservation.requested_units
+                  - reservation.consumed_units
+                  - reservation.released_units
+           ELSE (
+             SELECT COUNT(*)::INT
+             FROM resume_quota_allocations AS allocation
+             WHERE allocation.reservation_id = reservation.id
+               AND allocation.status = 'reserved'
+           )
+         END
+       ), 0)::INT AS reserved_count
+       FROM resume_quota_reservations AS reservation
+       WHERE reservation.user_id = $1
+         AND reservation.period_start = $2
+         AND reservation.period_end = $3
+         AND reservation.status = 'reserved'
+         AND (
+           reservation.expires_at > NOW()
+           OR EXISTS (
+             SELECT 1
+             FROM resume_quota_allocations AS active_allocation
+             WHERE active_allocation.reservation_id = reservation.id
+               AND active_allocation.status = 'reserved'
+           )
+         )
+     ),
+     carried_reservations AS (
+       SELECT COUNT(*)::INT AS reserved_count
+       FROM resume_quota_allocations AS carried_allocation
+       JOIN resume_quota_reservations AS carried_reservation
+         ON carried_reservation.id = carried_allocation.reservation_id
+       WHERE carried_allocation.user_id = $1
+         AND carried_allocation.status = 'reserved'
+         AND (
+           carried_reservation.period_start IS DISTINCT FROM $2
+           OR carried_reservation.period_end IS DISTINCT FROM $3
+         )
+     ),
+     next_change AS (
+       SELECT MIN(reservation.expires_at) AS next_availability_change_at
+       FROM resume_quota_reservations AS reservation
+       WHERE reservation.user_id = $1
+         AND reservation.period_start = $2
+         AND reservation.period_end = $3
+         AND reservation.status = 'reserved'
+         AND reservation.expires_at > NOW()
+         AND (
+           reservation.requested_units
+           - reservation.consumed_units
+           - reservation.released_units
+         ) > (
+           SELECT COUNT(*)::INT
+           FROM resume_quota_allocations AS allocation
+           WHERE allocation.reservation_id = reservation.id
+             AND allocation.status = 'reserved'
+         )
+     )
+     SELECT quota_usage.usage_count,
+            (period_reservations.reserved_count + carried_reservations.reserved_count)::INT
+              AS reserved_count,
+            next_change.next_availability_change_at
+     FROM quota_usage
+     CROSS JOIN period_reservations
+     CROSS JOIN carried_reservations
+     CROSS JOIN next_change`,
+    [userId, periodStart, periodEnd, Boolean(shouldResetUsage)],
+  )
+  const row = result.rows[0] || {}
+  return {
+    used: Number(row.usage_count || 0),
+    reserved: Number(row.reserved_count || 0),
+    nextAvailabilityChangeAt: row.next_availability_change_at || null,
+  }
+}
+
 export function isResumeQuotaReservationsEnabled(env = process.env) {
   return String(env.RESUME_QUOTA_RESERVATIONS_ENABLED || 'false').trim().toLowerCase() === 'true'
 }

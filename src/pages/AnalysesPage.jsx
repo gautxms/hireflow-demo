@@ -13,6 +13,7 @@ import {
   buildResumeQuotaFileIdentity,
   preflightResumeQuota,
   releaseResumeQuotaBatch,
+  retireResumeQuotaBatchKey,
 } from '../utils/resumeQuotaPreflight.js'
 import { formatResumeQuotaRejection, formatResumeQuotaResetDate, getBatchQuotaGuidance, isResumeQuotaRejection } from '../utils/resumeAnalysisQuota.js'
 
@@ -448,14 +449,19 @@ export default function AnalysesPage({ isReadOnly = false }) {
           fileIdentity: buildResumeQuotaFileIdentity(quotaBatchKey, 0),
         })
       } catch (firstInitError) {
+        let released = false
         await releaseResumeQuotaBatch({
           apiBase: API_BASE,
           token,
           reservationId: quotaPreflight.reservationId,
-        }).catch(() => {})
+        }).then(() => { released = true }).catch(() => {})
+        if (released) retireResumeQuotaBatchKey(quotaBatchKey)
         throw firstInitError
       }
-      if (!firstInit.analysisId) throw new Error('Upload started but no analysis ID was returned.')
+      if (!firstInit.analysisId) {
+        retireResumeQuotaBatchKey(quotaBatchKey)
+        throw new Error('Upload started but no analysis ID was returned.')
+      }
 
       const remainingUploadResults = await Promise.allSettled(filesSnapshot.slice(1).map((file, index) => (
         initChunkUpload({
@@ -479,6 +485,7 @@ export default function AnalysesPage({ isReadOnly = false }) {
           reservationId: quotaPreflight.reservationId,
         }).catch(() => {})
       }
+      retireResumeQuotaBatchKey(quotaBatchKey)
       await resumeQuota.refresh()
 
       const overlay = {

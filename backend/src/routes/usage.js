@@ -4,12 +4,10 @@ import { pool } from '../db/client.js'
 import {
   getMonthStart,
   getUsageCount,
-  getUsageCountForPeriod,
   getUsageOverride,
 } from '../middleware/subscriptionCheck.js'
 import {
-  getActiveResumeQuotaReservationCount,
-  getNextResumeQuotaAvailabilityChangeAt,
+  getResumeQuotaUsageAvailabilitySnapshot,
   isResumeQuotaReservationsEnabled,
 } from '../services/resumeQuotaReservations.js'
 import { resolveResumeQuotaPeriod } from '../utils/resumeQuotaPeriod.js'
@@ -88,28 +86,18 @@ router.get('/resume-analysis', async (req, res) => {
         quotaAnchorAt: user.quota_anchor_at,
       })
       : { start: legacyMonthStart, end: getMonthEnd(legacyMonthStart) }
-    const used = reservationsEnabled
-      ? await getUsageCountForPeriod(
-        req.userId,
-        period.start,
-        period.end,
-        usageOverride?.reset_usage,
-      )
-      : await getUsageCount(req.userId, legacyMonthStart, usageOverride?.reset_usage)
-    const reserved = reservationsEnabled
-      ? await getActiveResumeQuotaReservationCount({
+    const availabilitySnapshot = reservationsEnabled
+      ? await getResumeQuotaUsageAvailabilitySnapshot({
         userId: req.userId,
         periodStart: period.start,
         periodEnd: period.end,
-      })
-      : 0
-    const nextReservationChangeAt = reservationsEnabled
-      ? await getNextResumeQuotaAvailabilityChangeAt({
-        userId: req.userId,
-        periodStart: period.start,
-        periodEnd: period.end,
+        shouldResetUsage: usageOverride?.reset_usage,
       })
       : null
+    const used = availabilitySnapshot?.used
+      ?? await getUsageCount(req.userId, legacyMonthStart, usageOverride?.reset_usage)
+    const reserved = availabilitySnapshot?.reserved ?? 0
+    const nextReservationChangeAt = availabilitySnapshot?.nextAvailabilityChangeAt ?? null
     const nextRevalidationAt = nextReservationChangeAt
       && new Date(nextReservationChangeAt).getTime() < period.end.getTime()
       ? new Date(nextReservationChangeAt)

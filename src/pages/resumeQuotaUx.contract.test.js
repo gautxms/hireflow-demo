@@ -25,6 +25,12 @@ test('both entry points refresh canonical quota after accepted initialization an
   assert.match(uploaderSource, /isResumeQuotaRejection\(err\)[\s\S]*await resumeQuota\.refresh\(\)/)
 })
 
+
+test('Analyses retires a completed preflight attempt without discarding ambiguous retries', () => {
+  assert.match(analysesSource, /if \(released\) retireResumeQuotaBatchKey\(quotaBatchKey\)/)
+  assert.match(analysesSource, /remainingUploadResults[\s\S]*retireResumeQuotaBatchKey\(quotaBatchKey\)[\s\S]*await resumeQuota\.refresh\(\)/)
+})
+
 test('quota blocking preserves historical navigation and selected-file controls', () => {
   assert.match(analysesSource, /href=\{`\/analyses\/\$\{analysis\.id\}`\}/)
   assert.match(analysesSource, /onRemoveSelectedFile\(getFileKey\(file\)\)/)
