@@ -48,14 +48,12 @@ test('dashboard filter controls use an accessible custom dark listbox instead of
 })
 
 
-test('dashboard renders resumes analyzed KPI primary value and honest monthly usage helper', () => {
+test('dashboard separates the resumes analyzed reporting KPI from canonical allowance UI', () => {
   assert.match(dashboardSource, /const defaultKpis = \{[\s\S]*resumesAnalyzedCount: 0,/)
   assert.match(dashboardSource, /const kpis = \{ \.\.\.defaultKpis, \.\.\.\(dashboardData\?\.kpis \|\| \{\}\) \}/)
-  assert.match(dashboardSource, /\['Resumes Analyzed', formatCompactNumber\(kpis\.resumesAnalyzedCount\), 'users', monthlyResumeAnalysisHelper\]/)
-  assert.match(dashboardSource, /className="new-dashboard__kpi-value kpi-card-value">\{value\}/)
-  assert.match(dashboardSource, /hasMonthlyResumeAnalysisUsage = Number\.isFinite\(Number\(usage\?\.monthlyResumeAnalysisCount\)\)/)
-  assert.match(dashboardSource, /Monthly usage: \$\{formatCompactNumber\(usage\.monthlyResumeAnalysisCount\)\} \/ \$\{formatCompactNumber\(usage\.monthlyResumeAnalysisLimit\)\}/)
-  assert.match(dashboardSource, /: 'Monthly usage unavailable'/)
-  assert.doesNotMatch(dashboardSource, /dashboardData\?\.usage \|\| \{[\s\S]*monthlyResumeAnalysisCount: 0,[\s\S]*monthlyResumeAnalysisLimit: 800/)
-  assert.match(dashboardSource, /className="new-dashboard__kpi-helper"/)
+  assert.match(dashboardSource, /label: 'Resumes Analyzed',[\s\S]*value: formatCompactNumber\(kpis\.resumesAnalyzedCount\)/)
+  assert.match(dashboardSource, /className="new-dashboard__kpi-value kpi-card-value">[\s\S]*\{value\}/)
+  assert.doesNotMatch(dashboardSource, /inlineMeta: monthlyResumeAnalysisLimit/)
+  assert.match(dashboardSource, /useResumeAnalysisQuota\(\)/)
+  assert.match(dashboardSource, /<ResumeAllowanceCard status=\{resumeQuota\.status\} quota=\{resumeQuota\.quota\} \/>/)
 })

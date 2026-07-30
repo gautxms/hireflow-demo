@@ -64,6 +64,18 @@ function retainPendingQuotaKey(batchKey, quotaIdempotencyKey) {
   }
 }
 
+export function retireResumeQuotaBatchKey(batchKey) {
+  const logicalBatchKey = String(batchKey || '').trim()
+  if (!logicalBatchKey) return
+  const storageKey = quotaStorageKey(logicalBatchKey)
+  pendingQuotaKeys.delete(storageKey)
+  try {
+    globalThis.sessionStorage?.removeItem(storageKey)
+  } catch {
+    // In-memory retirement is sufficient for the current page lifecycle.
+  }
+}
+
 export function buildResumeQuotaBatchKey({ files, context = '' }) {
   const fileSignature = (Array.isArray(files) ? files : []).map((file, index) => [
     index,

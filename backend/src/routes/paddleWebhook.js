@@ -497,15 +497,15 @@ async function claimWebhookInboxEvent({
 
 async function claimLegacyCompatibleWebhookEvent({
   eventId,
-  eventType,
   payloadHash,
-  payload,
-  environment,
 }) {
   const existing = await getWebhookInboxEvent(eventId)
 
   if (!existing) {
-    return { claimed: true, legacy: true }
+    // Compatibility instances stay passive until durable mode is enabled.
+    // This closes the no-row race with a durable-enabled instance without
+    // exposing non-terminal rows to pre-inbox releases during phase 1.
+    return { claimed: false, retryable: true, status: 'rollout_paused' }
   }
 
   if (existing.payload_hash && existing.payload_hash !== payloadHash) {
@@ -516,55 +516,9 @@ async function claimLegacyCompatibleWebhookEvent({
     return { claimed: false, duplicate: true, status: 'completed' }
   }
 
-  // Once durable processing is enabled, a rollback or mixed deployment can
-  // still encounter an unfinished durable row. Reuse the fenced durable claim
-  // path instead of acknowledging unfinished work or creating a second legacy
-  // processor.
-  return claimWebhookInboxEvent({
-    eventId,
-    eventType,
-    payloadHash,
-    payload,
-    environment,
-  })
-}
-
-async function completeLegacyCompatibleWebhookEvent({
-  eventId,
-  eventType,
-  payloadHash,
-  payload,
-  environment,
-}) {
-  const result = await pool.query(
-    `INSERT INTO paddle_webhook_events (
-       event_id,
-       event_type,
-       payload_hash,
-       payload,
-       paddle_environment,
-       status,
-       attempt_count,
-       first_received_at,
-       last_attempt_at,
-       processed_at,
-       completed_at
-     )
-     VALUES ($1, $2, $3, $4::jsonb, $5, 'completed', 1, NOW(), NOW(), NOW(), NOW())
-     ON CONFLICT (event_id) DO NOTHING
-     RETURNING event_id`,
-    [eventId, eventType || 'unknown', payloadHash, JSON.stringify(payload), environment],
-  )
-
-  if (result.rowCount > 0) return
-
-  const racedEvent = await getWebhookInboxEvent(eventId)
-  if (racedEvent?.payload_hash && racedEvent.payload_hash !== payloadHash) {
-    throw new Error('Paddle webhook event id was reused with a different payload')
-  }
-  if (normalizeInboxStatus(racedEvent?.status) !== 'completed') {
-    throw new Error('Paddle webhook legacy-compatible completion raced with durable processing')
-  }
+  // A passive instance must not reclaim or process durable work. It asks
+  // Paddle to retry so a durable-enabled instance can acquire the fenced claim.
+  return { claimed: false, retryable: true, status: 'processing' }
 }
 
 async function completeWebhookInboxEvent(eventId, payloadHash, environment, attemptCount, processingToken) {
@@ -794,10 +748,12 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment) {
     }
 
     if (!inboxClaim.claimed) {
-      if (inboxClaim.status === 'processing') {
+      if (inboxClaim.retryable || inboxClaim.status !== 'completed') {
         res.set('Retry-After', String(WEBHOOK_PROCESSING_LEASE_SECONDS))
         return res.status(503).json({
-          error: 'Webhook event is already processing',
+          error: inboxClaim.status === 'rollout_paused'
+            ? 'Webhook processing is temporarily paused during rollout'
+            : 'Webhook event is already processing',
           retryable: true,
         })
       }
@@ -967,7 +923,7 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment) {
             subscriptionId: transactionSubscriptionId,
             transactionId,
             status: 'active',
-          }))
+          }, { requireDurableLog: true }))
         }
       }
     }
@@ -1223,23 +1179,16 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment) {
       await task()
       await inboxLease?.assertOwned()
     }
-    if (inboxLease) {
-      await inboxLease.finish(() => completeWebhookInboxEvent(
-        dedupeEventId,
-        payloadHash,
-        paddle.environment,
-        inboxAttemptCount,
-        inboxProcessingToken,
-      ))
-    } else {
-      await completeLegacyCompatibleWebhookEvent({
-        eventId: dedupeEventId,
-        eventType,
-        payloadHash,
-        payload,
-        environment: paddle.environment,
-      })
+    if (!inboxLease) {
+      throw new Error('Paddle webhook processing started without a durable inbox lease')
     }
+    await inboxLease.finish(() => completeWebhookInboxEvent(
+      dedupeEventId,
+      payloadHash,
+      paddle.environment,
+      inboxAttemptCount,
+      inboxProcessingToken,
+    ))
     for (const task of postProcessingTasks) {
       try {
         await task()

@@ -6,6 +6,8 @@ import {
   assertResumeQuotaReservationAvailable,
   consumeResumeQuotaAllocation,
   consumeResumeQuotaReservation,
+  getNextResumeQuotaAvailabilityChangeAt,
+  getResumeQuotaUsageAvailabilitySnapshot,
   isResumeQuotaReservationsEnabled,
   releaseResumeQuotaAllocation,
   releaseResumeQuotaAllocationsForAnalysis,
@@ -72,6 +74,67 @@ test('reservation rollout remains disabled unless explicitly enabled', () => {
   assert.equal(isResumeQuotaReservationsEnabled({}), false)
   assert.equal(isResumeQuotaReservationsEnabled({ RESUME_QUOTA_RESERVATIONS_ENABLED: 'true' }), true)
   assert.equal(isResumeQuotaReservationsEnabled({ RESUME_QUOTA_RESERVATIONS_ENABLED: 'false' }), false)
+})
+
+test('next availability change exposes only an expiry that can release unallocated units', async () => {
+  const periodStart = new Date('2026-07-20T00:00:00.000Z')
+  const periodEnd = new Date('2026-08-20T00:00:00.000Z')
+  const queryable = {
+    async query(sql, params) {
+      assert.match(sql, /MIN\(reservation\.expires_at\)/)
+      assert.match(sql, /reservation\.expires_at > NOW\(\)/)
+      assert.match(sql, /reservation\.requested_units[\s\S]*reservation\.consumed_units[\s\S]*reservation\.released_units/)
+      assert.match(sql, /allocation\.status = 'reserved'/)
+      assert.deepEqual(params, [42, periodStart, periodEnd])
+      return { rows: [{ next_availability_change_at: '2026-07-20T02:00:00.000Z' }] }
+    },
+  }
+  const transition = await getNextResumeQuotaAvailabilityChangeAt({
+    userId: 42,
+    periodStart,
+    periodEnd,
+    queryable,
+  })
+  assert.equal(transition, '2026-07-20T02:00:00.000Z')
+})
+
+
+test('usage availability reads consumed usage, reservations, and expiry from one database snapshot', async () => {
+  const periodStart = new Date('2026-07-20T00:00:00.000Z')
+  const periodEnd = new Date('2026-08-20T00:00:00.000Z')
+  let callCount = 0
+  const queryable = {
+    async query(sql, params) {
+      callCount += 1
+      assert.match(sql, /WITH quota_usage AS/)
+      assert.match(sql, /period_reservations AS/)
+      assert.match(sql, /carried_reservations AS/)
+      assert.match(sql, /next_change AS/)
+      assert.match(sql, /allocation_reservation\.period_start = \$2/)
+      assert.deepEqual(params, [42, periodStart, periodEnd, false])
+      return {
+        rows: [{
+          usage_count: 799,
+          reserved_count: 1,
+          next_availability_change_at: '2026-07-20T02:00:00.000Z',
+        }],
+      }
+    },
+  }
+
+  const snapshot = await getResumeQuotaUsageAvailabilitySnapshot({
+    userId: 42,
+    periodStart,
+    periodEnd,
+    queryable,
+  })
+
+  assert.equal(callCount, 1)
+  assert.deepEqual(snapshot, {
+    used: 799,
+    reserved: 1,
+    nextAvailabilityChangeAt: '2026-07-20T02:00:00.000Z',
+  })
 })
 
 test('atomic reservation permits the 800th unit and blocks a concurrent 801st unit', async (t) => {

@@ -53,10 +53,13 @@ test('buildResumeAnalysisUsageResponse exposes UI-ready quota fields', () => {
     limit: 800,
     used: 600,
     remaining: 200,
+    available: 200,
+    canCreateAnalysis: true,
     periodStart: '2026-05-01T00:00:00.000Z',
     periodEnd: '2026-06-01T00:00:00.000Z',
     percentageUsed: 75,
     warningLevel: 'approaching',
+    nextRevalidationAt: '2026-06-01T00:00:00.000Z',
   })
 })
 
@@ -94,6 +97,8 @@ test('GET /usage/resume-analysis returns paid active user usage without mutating
   assert.equal(payload.limit, 800)
   assert.equal(payload.used, 720)
   assert.equal(payload.remaining, 80)
+  assert.equal(payload.available, 80)
+  assert.equal(payload.canCreateAnalysis, true)
   assert.equal(payload.percentageUsed, 90)
   assert.equal(payload.warningLevel, 'critical')
   assert.match(payload.periodStart, /^\d{4}-\d{2}-01T00:00:00\.000Z$/)
@@ -124,13 +129,13 @@ test('GET /usage/resume-analysis reflects admin limit and reset overrides', asyn
   assert.equal(queries.some((sql) => sql.includes('FROM usage_log')), false)
 })
 
-test('GET /usage/resume-analysis preserves trial/free limit resolution', async (t) => {
+test('GET /usage/resume-analysis preserves the fallback limit but blocks inactive subscription access', async (t) => {
   process.env.JWT_SECRET = 'test-secret'
 
   t.mock.method(pool, 'query', async (sql) => {
     if (sql.includes('FROM users')) return { rows: [{ id: 9, subscription_status: 'inactive' }] }
     if (sql.includes('FROM usage_overrides')) return { rows: [] }
-    if (sql.includes('FROM usage_log')) return { rows: [{ usage_count: 10 }] }
+    if (sql.includes('FROM usage_log')) return { rows: [{ usage_count: 9 }] }
     return { rows: [] }
   })
 
@@ -138,10 +143,64 @@ test('GET /usage/resume-analysis preserves trial/free limit resolution', async (
 
   assert.equal(response.status, 200)
   assert.equal(payload.limit, 10)
-  assert.equal(payload.used, 10)
-  assert.equal(payload.remaining, 0)
-  assert.equal(payload.percentageUsed, 100)
-  assert.equal(payload.warningLevel, 'exceeded')
+  assert.equal(payload.used, 9)
+  assert.equal(payload.remaining, 1)
+  assert.equal(payload.available, 1)
+  assert.equal(payload.canCreateAnalysis, false)
+  assert.equal(payload.percentageUsed, 90)
+  assert.equal(payload.warningLevel, 'critical')
+})
+
+test('buildResumeAnalysisUsageResponse requires both subscription access and quota capacity', () => {
+  const payload = buildResumeAnalysisUsageResponse({
+    limit: 10,
+    used: 0,
+    canUseAnalysis: false,
+    periodStart: new Date('2026-05-01T00:00:00.000Z'),
+  })
+
+  assert.equal(payload.available, 10)
+  assert.equal(payload.canCreateAnalysis, false)
+})
+
+test('buildResumeAnalysisUsageResponse subtracts active reservations from current availability', () => {
+  const payload = buildResumeAnalysisUsageResponse({
+    limit: 800,
+    used: 790,
+    reserved: 5,
+    periodStart: new Date('2026-05-01T00:00:00.000Z'),
+  })
+
+  assert.equal(payload.used, 790)
+  assert.equal(payload.remaining, 10)
+  assert.equal(payload.available, 5)
+  assert.equal(payload.canCreateAnalysis, true)
+  assert.equal(payload.percentageUsed, 98)
+})
+
+test('server availability blocks creation when reservations consume all remaining capacity', () => {
+  const payload = buildResumeAnalysisUsageResponse({
+    limit: 800,
+    used: 799,
+    reserved: 1,
+    periodStart: new Date('2026-05-01T00:00:00.000Z'),
+  })
+
+  assert.equal(payload.remaining, 1)
+  assert.equal(payload.available, 0)
+  assert.equal(payload.canCreateAnalysis, false)
+})
+
+test('usage response exposes the nearest server-known revalidation boundary', () => {
+  const payload = buildResumeAnalysisUsageResponse({
+    limit: 800,
+    used: 799,
+    periodStart: new Date('2026-05-01T00:00:00.000Z'),
+    periodEnd: new Date('2026-06-01T00:00:00.000Z'),
+    nextRevalidationAt: new Date('2026-05-20T12:00:00.000Z'),
+  })
+
+  assert.equal(payload.nextRevalidationAt, '2026-05-20T12:00:00.000Z')
 })
 
 test('flagged usage response uses the billing-anniversary period and canonical ledger count', async (t) => {
@@ -174,6 +233,45 @@ test('flagged usage response uses the billing-anniversary period and canonical l
     const now = Date.now()
     assert.ok(new Date(payload.periodStart).getTime() <= now)
     assert.ok(new Date(payload.periodEnd).getTime() > now)
+  } finally {
+    if (previousFlag === undefined) delete process.env.RESUME_QUOTA_RESERVATIONS_ENABLED
+    else process.env.RESUME_QUOTA_RESERVATIONS_ENABLED = previousFlag
+  }
+})
+
+test('flagged usage response reports enforcement-consistent availability after active reservations', async (t) => {
+  const previousFlag = process.env.RESUME_QUOTA_RESERVATIONS_ENABLED
+  process.env.RESUME_QUOTA_RESERVATIONS_ENABLED = 'true'
+  const queries = []
+
+  try {
+    t.mock.method(pool, 'query', async (sql) => {
+      queries.push(String(sql))
+      if (sql.includes('FROM users')) return { rows: [{ id: 11, subscription_status: 'active', quota_anchor_at: '2026-01-20T08:30:00.000Z' }] }
+      if (sql.includes('FROM usage_overrides')) return { rows: [] }
+      if (sql.includes('WITH quota_usage AS')) {
+        return {
+          rows: [{
+            usage_count: 790,
+            reserved_count: 5,
+            next_availability_change_at: '2026-07-30T12:00:00.000Z',
+          }],
+        }
+      }
+      return { rows: [] }
+    })
+
+    const { response, payload } = await requestUsage({ headers: authHeader(11) })
+    assert.equal(response.status, 200)
+    assert.equal(payload.used, 790)
+    assert.equal(payload.remaining, 10)
+    assert.equal(payload.available, 5)
+    assert.equal(payload.canCreateAnalysis, true)
+    assert.equal(queries.filter((sql) => sql.includes('WITH quota_usage AS')).length, 1)
+    const expectedTransition = new Date('2026-07-30T12:00:00.000Z') < new Date(payload.periodEnd)
+      ? '2026-07-30T12:00:00.000Z'
+      : payload.periodEnd
+    assert.equal(payload.nextRevalidationAt, expectedTransition)
   } finally {
     if (previousFlag === undefined) delete process.env.RESUME_QUOTA_RESERVATIONS_ENABLED
     else process.env.RESUME_QUOTA_RESERVATIONS_ENABLED = previousFlag

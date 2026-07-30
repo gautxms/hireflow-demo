@@ -83,6 +83,41 @@ The target accounting contract for the reservation and enforcement phases is:
 The legacy path continues to record accepted uploads before scanning. It remains
 the immediate rollback path while `RESUME_QUOTA_RESERVATIONS_ENABLED=false`.
 
+### Customer-facing availability contract
+
+`GET /api/usage/resume-analysis` keeps `used`, `remaining`, and
+`percentageUsed` consumption-based for backward compatibility. In particular,
+`used` counts `usage_log` rows and `remaining` is `limit - used`; neither field
+includes active capacity reservations that have not reached provider start.
+
+The additive `available` field is the amount that atomic enforcement can accept
+now: `max(limit - used - active reserved, 0)`. `canCreateAnalysis` is the
+authoritative server decision for whether at least one new resume may be
+submitted. It is true only when `canUsePaidMutation(user) && available > 0`,
+so past-due, expired, inactive, and other read-only users are not advertised as
+able to submit even when unused quota capacity remains. When reservation
+enforcement is disabled, there is no active reservation capacity to subtract and
+`available` equals `remaining`.
+
+Customer UI must use `available` and `canCreateAnalysis` for submission guidance,
+while it may use `used`, `percentageUsed`, and `warningLevel` to describe actual
+consumption. Active reservations must not be described as completed or analyzed
+resumes. On the reservation-enabled path, consumed usage, active reservations,
+and the next availability transition are read in one database snapshot so a
+provider-start conversion cannot disappear between counters.
+
+The additive `nextRevalidationAt` field is the nearest server-known time when
+availability may change: the earlier of the current `periodEnd` and an active
+reservation expiry that can release unallocated capacity. The shared frontend
+quota store schedules one refresh just after that boundary. Because provider
+completion and explicit releases do not have a predictable transition time, the
+store also performs one deduplicated five-minute refresh while at least one
+consumer is mounted and the document is visible. Focus, reconnect, and returning
+to a visible tab refresh immediately; the timer is removed when the last consumer
+unmounts. Shared stores and in-flight requests are scoped to the current auth
+token, and the previous identity's store is discarded when its final consumer
+unmounts. This revalidation changes no reservation or accounting semantics.
+
 ## PR 2 reservation behavior
 
 - Reservation rollout is disabled by default.
@@ -94,6 +129,9 @@ the immediate rollback path while `RESUME_QUOTA_RESERVATIONS_ENABLED=false`.
   reserve the same batch twice.
 - The client retains that key across an unknown preflight outcome, so a lost
   response can recover the original reservation instead of allocating another.
+  Both analysis-submission flows retire it only after sessions are definitively
+  initialized or an unused reservation release succeeds; a later intentional
+  rerun then gets a fresh key.
 - Reservations expire after two hours if a client abandons an upload.
 - Clients explicitly release every unused unit when initial session creation
   fails; successful sibling sessions continue instead of being abandoned.
