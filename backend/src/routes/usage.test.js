@@ -230,9 +230,11 @@ test('flagged usage response uses the billing-anniversary period and canonical l
 test('flagged usage response reports enforcement-consistent availability after active reservations', async (t) => {
   const previousFlag = process.env.RESUME_QUOTA_RESERVATIONS_ENABLED
   process.env.RESUME_QUOTA_RESERVATIONS_ENABLED = 'true'
+  const queries = []
 
   try {
     t.mock.method(pool, 'query', async (sql) => {
+      queries.push(String(sql))
       if (sql.includes('FROM users')) return { rows: [{ id: 11, subscription_status: 'active', quota_anchor_at: '2026-01-20T08:30:00.000Z' }] }
       if (sql.includes('FROM usage_overrides')) return { rows: [] }
       if (sql.includes('WITH quota_usage AS')) {
