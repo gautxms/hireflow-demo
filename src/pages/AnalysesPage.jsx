@@ -404,6 +404,7 @@ export default function AnalysesPage({ isReadOnly = false }) {
     }
     setValidationErrors(nextValidationErrors)
     if (nextValidationErrors.name || nextValidationErrors.files) return
+    if (resumeQuota.status === 'idle' || resumeQuota.status === 'loading') return
     if (resumeQuota.status === 'success' && resumeQuota.quota?.canCreateAnalysis === false) {
       setSubmitError(formatResumeQuotaRejection({}, resumeQuota.quota))
       return
@@ -804,6 +805,7 @@ function CreateAnalysisModal({ isOpen, isSubmitting, analysisName, onAnalysisNam
   if (!isOpen) return null
 
   const quotaBlocked = quotaStatus === 'success' && quota?.canCreateAnalysis === false
+  const quotaPending = quotaStatus === 'idle' || quotaStatus === 'loading'
   const batchGuidance = getBatchQuotaGuidance(quotaStatus === 'success' ? quota : null, selectedFiles.length)
   const resetDate = formatResumeQuotaResetDate(quota?.periodEnd)
 
@@ -813,6 +815,7 @@ function CreateAnalysisModal({ isOpen, isSubmitting, analysisName, onAnalysisNam
         <div className="analyses-modal__header"><div><h2 id="create-analysis-title">Create analysis</h2><p id="create-analysis-description" className="analyses-modal__description">Upload resumes and choose a job description to start ranking candidates.</p></div><button type="button" className="analyses-modal__close" aria-label="Close create analysis modal" onClick={onClose} disabled={isSubmitting}><X size={18} strokeWidth={1.5} aria-hidden="true" /></button></div>
         <form onSubmit={onSubmit} className="analyses-modal__form" noValidate>
           <div className="analyses-modal__scrollable">
+            {quotaPending ? <div className="analyses-modal__quota-callout" role="status"><strong>Checking resume allowance</strong><p>Submission will be available after the current allowance is confirmed.</p></div> : null}
             {quotaBlocked ? <div className="analyses-modal__quota-callout" role="status"><strong>Resume-analysis limit reached</strong><p>Existing analyses and results remain available.{resetDate ? ` Your allowance resets on ${resetDate}.` : ''}</p></div> : null}
             {!quotaBlocked && batchGuidance ? <div className="analyses-modal__quota-callout analyses-modal__quota-callout--warning" role="status"><strong>Reduce this batch</strong><p>{batchGuidance}</p></div> : null}
             <div className="analyses-modal__field"><label htmlFor="analysis-name">Analysis name</label><input className="analyses-modal__control" ref={nameInputRef} id="analysis-name" value={analysisName} onChange={(event) => onAnalysisNameChange(event.target.value)} aria-invalid={Boolean(validationErrors.name)} aria-describedby={validationErrors.name ? 'analysis-name-error' : undefined} />{validationErrors.name && <p id="analysis-name-error" role="alert" className="analyses-modal__error">{validationErrors.name}</p>}</div>
@@ -820,7 +823,7 @@ function CreateAnalysisModal({ isOpen, isSubmitting, analysisName, onAnalysisNam
           <div className="analyses-modal__field"><label htmlFor="analysis-files">Resume files</label><input ref={fileInputRef} className="analyses-modal__input-hidden" id="analysis-files" type="file" multiple accept=".pdf,.docx,.doc,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onChange={onFileSelection} aria-invalid={Boolean(validationErrors.files)} aria-describedby={validationErrors.files ? 'analysis-files-error' : 'analysis-files-help'} /><div className={`analyses-modal__dropzone${isDraggingOverDropzone ? ' is-dragging' : ''}${validationErrors.files ? ' is-invalid' : ''}`} onDragEnter={(event) => { event.preventDefault(); if (!isSubmitting) setDropzoneDragging(true) }} onDragOver={(event) => { event.preventDefault(); if (!isSubmitting) setDropzoneDragging(true) }} onDragLeave={(event) => { event.preventDefault(); if (event.currentTarget.contains(event.relatedTarget)) return; setDropzoneDragging(false) }} onDrop={handleDrop}><Upload size={18} strokeWidth={1.5} aria-hidden="true" /><p className="analyses-modal__dropzone-title">Drag and drop resumes here</p><p id="analysis-files-help" className="analyses-modal__help">Upload PDF, DOC, or DOCX resumes. Max 25MB per file.</p><button type="button" className="hf-btn hf-btn--secondary analyses-modal__browse-btn" onClick={() => fileInputRef.current?.click()} disabled={isSubmitting}>Browse files</button></div>{selectedFiles.length > 0 && <div className="analyses-modal__selected-files"><p className="analyses-modal__selected-count">{selectedFiles.length} file(s) selected</p><ul>{selectedFiles.map((file) => <li key={getFileKey(file)}><span>{file.name}</span><button type="button" className="analyses-modal__file-remove" onClick={() => onRemoveSelectedFile(getFileKey(file))} aria-label={`Remove ${file.name}`}>×</button></li>)}</ul></div>}{validationErrors.files && <p id="analysis-files-error" role="alert" className="analyses-modal__error">{validationErrors.files}</p>}</div>
             {submitError && <p role="alert" className="analyses-modal__error">{submitError}</p>}
           </div>
-          <div className="analyses-modal__actions"><button type="button" className="hf-btn hf-btn--secondary" onClick={onClose} disabled={isSubmitting}>Cancel</button><button type="submit" className="hf-btn hf-btn--primary" disabled={isSubmitting || quotaBlocked || Boolean(batchGuidance)}>{isSubmitting ? 'Analyzing…' : 'Analyze resumes'}</button></div>
+          <div className="analyses-modal__actions"><button type="button" className="hf-btn hf-btn--secondary" onClick={onClose} disabled={isSubmitting}>Cancel</button><button type="submit" className="hf-btn hf-btn--primary" disabled={isSubmitting || quotaPending || quotaBlocked || Boolean(batchGuidance)}>{isSubmitting ? 'Analyzing…' : 'Analyze resumes'}</button></div>
         </form>
       </div>
     </div>,

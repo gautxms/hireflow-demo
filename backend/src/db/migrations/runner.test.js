@@ -429,6 +429,25 @@ test('Paddle event ordering migration adds an idempotent provider timestamp', as
   assert.match(queries[0], /ADD COLUMN IF NOT EXISTS last_paddle_event_at TIMESTAMPTZ/)
 })
 
+test('recovery billing adjustment migration is additive, durable, and uniquely idempotent', async () => {
+  const queries = []
+  const { up } = await import('./049-add-recovery-billing-adjustments.js')
+  await up({
+    async query(sql) {
+      queries.push(String(sql))
+      if (/format_type/.test(sql)) return { rows: [{ data_type: 'uuid' }] }
+      return { rows: [] }
+    },
+  })
+  assert.match(queries[1], /CREATE TABLE IF NOT EXISTS recovery_billing_adjustments/)
+  assert.match(queries[1], /user_id uuid NOT NULL REFERENCES users\(id\)/)
+  assert.match(queries[1], /UNIQUE \(paddle_environment, recovery_transaction_id\)/)
+  assert.match(queries[1], /captured_at TIMESTAMPTZ NOT NULL/)
+  assert.match(queries[2], /idx_recovery_billing_adjustments_due/)
+  const source = await readRunnerSource()
+  assert.ok(source.indexOf("'048-add-paddle-event-ordering-timestamp'") < source.indexOf("'049-add-recovery-billing-adjustments'"))
+})
+
 test('shortlist batch-add safety migration is additive and preserves metadata columns', async () => {
   const queries = []
   const { up } = await import('./040-ensure-shortlist-batch-add-schema.js')

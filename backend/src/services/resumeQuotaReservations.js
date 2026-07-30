@@ -96,20 +96,34 @@ export async function getActiveResumeQuotaReservationCount({
   queryable = pool,
 }) {
   const result = await queryable.query(
-    `SELECT COALESCE(SUM(
-       CASE
-         WHEN reservation.expires_at > NOW()
-           THEN reservation.requested_units
-                - reservation.consumed_units
-                - reservation.released_units
-         ELSE (
-           SELECT COUNT(*)::INT
-           FROM resume_quota_allocations AS allocation
-           WHERE allocation.reservation_id = reservation.id
-             AND allocation.status = 'reserved'
-         )
-       END
-     ), 0)::INT AS reserved_count
+    `SELECT (
+       COALESCE(SUM(
+         CASE
+           WHEN reservation.expires_at > NOW()
+             THEN reservation.requested_units
+                  - reservation.consumed_units
+                  - reservation.released_units
+           ELSE (
+             SELECT COUNT(*)::INT
+             FROM resume_quota_allocations AS allocation
+             WHERE allocation.reservation_id = reservation.id
+               AND allocation.status = 'reserved'
+           )
+         END
+       ), 0)
+       + (
+         SELECT COUNT(*)::INT
+         FROM resume_quota_allocations AS carried_allocation
+         JOIN resume_quota_reservations AS carried_reservation
+           ON carried_reservation.id = carried_allocation.reservation_id
+         WHERE carried_allocation.user_id = $1
+           AND carried_allocation.status = 'reserved'
+           AND (
+             carried_reservation.period_start IS DISTINCT FROM $2
+             OR carried_reservation.period_end IS DISTINCT FROM $3
+           )
+       )
+     )::INT AS reserved_count
      FROM resume_quota_reservations AS reservation
      WHERE reservation.user_id = $1
        AND reservation.period_start = $2
@@ -127,6 +141,35 @@ export async function getActiveResumeQuotaReservationCount({
     [userId, periodStart, periodEnd],
   )
   return Number(result.rows[0]?.reserved_count || 0)
+}
+
+export async function getNextResumeQuotaAvailabilityChangeAt({
+  userId,
+  periodStart,
+  periodEnd,
+  queryable = pool,
+}) {
+  const result = await queryable.query(
+    `SELECT MIN(reservation.expires_at) AS next_availability_change_at
+     FROM resume_quota_reservations AS reservation
+     WHERE reservation.user_id = $1
+       AND reservation.period_start = $2
+       AND reservation.period_end = $3
+       AND reservation.status = 'reserved'
+       AND reservation.expires_at > NOW()
+       AND (
+         reservation.requested_units
+         - reservation.consumed_units
+         - reservation.released_units
+       ) > (
+         SELECT COUNT(*)::INT
+         FROM resume_quota_allocations AS allocation
+         WHERE allocation.reservation_id = reservation.id
+           AND allocation.status = 'reserved'
+       )`,
+    [userId, periodStart, periodEnd],
+  )
+  return result.rows[0]?.next_availability_change_at || null
 }
 
 export function isResumeQuotaReservationsEnabled(env = process.env) {
@@ -153,6 +196,10 @@ async function lockUserQuota(client, userId) {
     'SELECT pg_advisory_xact_lock($1, $2)',
     [ADVISORY_LOCK_NAMESPACE, Number(userId)],
   )
+}
+
+export async function lockResumeQuotaForUser(client, userId) {
+  await lockUserQuota(client, userId)
 }
 
 export async function reserveResumeQuotaUnits({
@@ -200,11 +247,25 @@ export async function reserveResumeQuotaUnits({
          FROM usage_log
          WHERE user_id = $1
            AND (
-             (quota_allocation_id IS NOT NULL AND month_start = $2::date)
+             (
+               quota_allocation_id IS NOT NULL
+               AND (
+                 EXISTS (
+                   SELECT 1
+                   FROM resume_quota_allocations AS allocation
+                   JOIN resume_quota_reservations AS allocation_reservation
+                     ON allocation_reservation.id = allocation.reservation_id
+                   WHERE allocation.id = usage_log.quota_allocation_id
+                     AND allocation_reservation.period_start = $2
+                     AND allocation_reservation.period_end = $3
+                 )
+                 OR (usage_log.created_at >= $2 AND usage_log.created_at < $3)
+               )
+             )
              OR (
                quota_allocation_id IS NULL
-               AND created_at >= $2
-               AND created_at < $3
+               AND usage_log.created_at >= $2
+               AND usage_log.created_at < $3
              )
            )`,
         [normalizedUserId, normalizedPeriodStart, normalizedPeriodEnd],

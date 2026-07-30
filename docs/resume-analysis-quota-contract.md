@@ -24,9 +24,11 @@ immediately before the first external AI-provider attempt.
 ## Period contract
 
 - Quota periods use UTC timestamps with an inclusive start and exclusive end.
-- The stable `users.quota_anchor_at` timestamp is set once from a provider-backed
-  paid billing-period boundary and is not moved by renewal, plan changes,
-  scheduled cancellation, payment recovery, or reactivation.
+- The stable `users.quota_anchor_at` timestamp is normally set once from a
+  provider-backed paid billing-period boundary. The sole recovery exception is
+  a verified overdue recurring renewal after a read-only Past Due period: once
+  Paddle confirms the adjusted billing date, the anchor moves exactly once to
+  that transaction's authoritative captured-payment timestamp.
 - Each monthly boundary is derived from that original anchor.
 - Anchors on the 29th, 30th, or 31st clamp to the last day of shorter months and
   return to the original day when a later month supports it.
@@ -50,7 +52,8 @@ immediately before the first external AI-provider attempt.
 | Monthly to annual switch | No reset and no anchor change |
 | Annual to monthly switch | No reset and no anchor change |
 | Scheduled cancellation | Paid access and the existing period continue until entitlement ends |
-| Payment failure/recovery | No reset and no anchor change |
+| Payment failure | Read-only access; no reset while payment remains unpaid |
+| Verified Past Due recurring-payment recovery | After Paddle confirms the adjusted billing date, start one new monthly period at `payments[].captured_at`; duplicate events do not move it again |
 | Reactivation/resubscription for the same user | Reuse the stable anchor; do not grant an extra immediate reset |
 | Missing or invalid anchor | Use UTC calendar-month fallback |
 
@@ -99,6 +102,16 @@ while it may use `used`, `percentageUsed`, and `warningLevel` to describe actual
 consumption. Active reservations must not be described as completed or analyzed
 resumes.
 
+The additive `nextRevalidationAt` field is the nearest server-known time when
+availability may change: the earlier of the current `periodEnd` and an active
+reservation expiry that can release unallocated capacity. The shared frontend
+quota store schedules one refresh just after that boundary. Because provider
+completion and explicit releases do not have a predictable transition time, the
+store also performs one deduplicated five-minute refresh while at least one
+consumer is mounted and the document is visible. Focus, reconnect, and returning
+to a visible tab refresh immediately; the timer is removed when the last consumer
+unmounts. This revalidation changes no reservation or accounting semantics.
+
 ## PR 2 reservation behavior
 
 - Reservation rollout is disabled by default.
@@ -144,6 +157,14 @@ resumes.
   failure remains one consumed unit.
 - The usage API reads the same period and ledger-backed count as enforcement
   whenever the rollout flag is enabled.
+- Allocation-backed usage is assigned to the exact timestamp-precise period on
+  its durable reservation, so a recovery later on the same UTC date starts a
+  fresh period without rewriting pre-recovery usage or allocations. If an
+  existing reservation is consumed after the new recovery boundary but before
+  local confirmation, its precise provider-start usage time counts in the new
+  period. The recovery commit shares the reservation ledger's per-user lock,
+  and outstanding allocations from older reservation periods reserve capacity
+  in the new period without changing their identities.
 - If the kill switch is turned off mid-period, calendar-month enforcement still
   includes allocation-backed usage written during the flagged rollout.
 

@@ -6,6 +6,7 @@ import {
   assertResumeQuotaReservationAvailable,
   consumeResumeQuotaAllocation,
   consumeResumeQuotaReservation,
+  getNextResumeQuotaAvailabilityChangeAt,
   isResumeQuotaReservationsEnabled,
   releaseResumeQuotaAllocation,
   releaseResumeQuotaAllocationsForAnalysis,
@@ -74,6 +75,28 @@ test('reservation rollout remains disabled unless explicitly enabled', () => {
   assert.equal(isResumeQuotaReservationsEnabled({ RESUME_QUOTA_RESERVATIONS_ENABLED: 'false' }), false)
 })
 
+test('next availability change exposes only an expiry that can release unallocated units', async () => {
+  const periodStart = new Date('2026-07-20T00:00:00.000Z')
+  const periodEnd = new Date('2026-08-20T00:00:00.000Z')
+  const queryable = {
+    async query(sql, params) {
+      assert.match(sql, /MIN\(reservation\.expires_at\)/)
+      assert.match(sql, /reservation\.expires_at > NOW\(\)/)
+      assert.match(sql, /reservation\.requested_units[\s\S]*reservation\.consumed_units[\s\S]*reservation\.released_units/)
+      assert.match(sql, /allocation\.status = 'reserved'/)
+      assert.deepEqual(params, [42, periodStart, periodEnd])
+      return { rows: [{ next_availability_change_at: '2026-07-20T02:00:00.000Z' }] }
+    },
+  }
+  const transition = await getNextResumeQuotaAvailabilityChangeAt({
+    userId: 42,
+    periodStart,
+    periodEnd,
+    queryable,
+  })
+  assert.equal(transition, '2026-07-20T02:00:00.000Z')
+})
+
 test('atomic reservation permits the 800th unit and blocks a concurrent 801st unit', async (t) => {
   const { calls, reservations } = mockReservationDatabase(t, { used: 799 })
   const common = {
@@ -108,6 +131,35 @@ test('atomic reservation permits the 800th unit and blocks a concurrent 801st un
   const reservedQuery = calls.find(({ sql }) => sql.includes('AS reserved_count'))
   assert.match(reservedQuery.sql, /active_allocation\.status = 'reserved'/)
   assert.equal(calls.some(({ sql }) => sql === 'ROLLBACK'), true)
+})
+
+test('reservation preflight counts allocation usage by exact reservation period identity', async (t) => {
+  const { calls } = mockReservationDatabase(t)
+  const periodStart = new Date('2026-07-27T14:35:42.123Z')
+  const periodEnd = new Date('2026-08-27T14:35:42.123Z')
+
+  await reserveResumeQuotaUnits({
+    userId: 42,
+    periodStart,
+    periodEnd,
+    uploadLimit: 800,
+    requestedUnits: 1,
+    idempotencyKey: 'capture-precise-period',
+  })
+
+  const usageQuery = calls.find(({ sql }) => sql.includes('FROM usage_log'))
+  assert.match(usageQuery.sql, /JOIN resume_quota_reservations AS allocation_reservation/)
+  assert.match(usageQuery.sql, /allocation_reservation\.period_start = \$2/)
+  assert.match(usageQuery.sql, /allocation_reservation\.period_end = \$3/)
+  assert.match(usageQuery.sql, /OR \(usage_log\.created_at >= \$2 AND usage_log\.created_at < \$3\)/)
+  assert.doesNotMatch(usageQuery.sql, /month_start = \$2::date/)
+  assert.equal(usageQuery.params[1].toISOString(), periodStart.toISOString())
+  assert.equal(usageQuery.params[2].toISOString(), periodEnd.toISOString())
+  const reservedQuery = calls.find(({ sql }) => sql.includes('AS reserved_count'))
+  assert.match(reservedQuery.sql, /resume_quota_allocations AS carried_allocation/)
+  assert.match(reservedQuery.sql, /carried_allocation\.status = 'reserved'/)
+  assert.match(reservedQuery.sql, /carried_reservation\.period_start IS DISTINCT FROM \$2/)
+  assert.match(reservedQuery.sql, /carried_reservation\.period_end IS DISTINCT FROM \$3/)
 })
 
 test('replaying a batch idempotency key returns the original reservation', async (t) => {

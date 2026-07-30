@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import crypto from 'crypto'
 import express from 'express'
 import process from 'node:process'
+import { readFileSync } from 'node:fs'
 import { pool } from '../db/client.js'
 
 const WEBHOOK_SECRET = 'test-webhook-secret'
@@ -16,6 +17,16 @@ process.env.PADDLE_TEST_ANNUAL_PRICE_ID = 'pri_test_annual'
 process.env.PADDLE_TEST_MONTHLY_PRICE_ID = 'pri_test_monthly'
 process.env.PADDLE_SANDBOX_MONTHLY_LEGACY_PRICE_IDS = 'pri_legacy_monthly'
 process.env.PADDLE_SANDBOX_ANNUAL_LEGACY_PRICE_IDS = 'pri_legacy_annual'
+
+test('completed-payment webhook defers provider adjustment work until after durable event recording', () => {
+  const source = readFileSync(new URL('./paddleWebhook.js', import.meta.url), 'utf8')
+  const durableEventWrite = source.indexOf('INSERT INTO paddle_webhook_events')
+  const deferredRun = source.indexOf('setImmediate(() =>')
+
+  assert.ok(durableEventWrite >= 0)
+  assert.ok(deferredRun > durableEventWrite)
+  assert.doesNotMatch(source, /await runRecoveryBillingAdjustments/)
+})
 
 function signBody(rawBody, secret = WEBHOOK_SECRET, timestamp = Math.floor(Date.now() / 1000)) {
   const hmac = crypto.createHmac('sha256', secret).update(`${timestamp}:${rawBody}`, 'utf8').digest('hex')

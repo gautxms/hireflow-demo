@@ -404,6 +404,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
       setError('Please re-select files before retrying analysis.')
       return
     }
+    if (resumeQuota.status === 'idle' || resumeQuota.status === 'loading') return
     if (resumeQuota.status === 'success' && resumeQuota.quota?.canCreateAnalysis === false) {
       setError(formatResumeQuotaRejection({}, resumeQuota.quota))
       return
@@ -1089,6 +1090,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
     ? Math.round((uploadProgress.completed / uploadProgress.total) * 100)
     : 0
   const quotaBlocked = resumeQuota.status === 'success' && resumeQuota.quota?.canCreateAnalysis === false
+  const quotaPending = resumeQuota.status === 'idle' || resumeQuota.status === 'loading'
   const quotaBatchGuidance = getBatchQuotaGuidance(resumeQuota.status === 'success' ? resumeQuota.quota : null, uploadedFiles.length)
   const quotaResetDate = formatResumeQuotaResetDate(resumeQuota.quota?.periodEnd)
 
@@ -1251,6 +1253,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
           </div>
         )}
 
+        {quotaPending ? <div className="resume-quota-callout" role="status"><strong>Checking resume allowance</strong><p>Submission will be available after the current allowance is confirmed.</p></div> : null}
         {quotaBlocked ? <div className="resume-quota-callout" role="status"><strong>Resume-analysis limit reached</strong><p>Existing analyses and results remain available.{quotaResetDate ? ` Your allowance resets on ${quotaResetDate}.` : ''}</p></div> : null}
         {!quotaBlocked && quotaBatchGuidance ? <div className="resume-quota-callout resume-quota-callout--warning" role="status"><strong>Reduce this batch</strong><p>{quotaBatchGuidance}</p></div> : null}
 
@@ -1344,7 +1347,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
           <button
             className={`touch-target resume-analyze-button ${uploadedFiles.length === 0 ? 'resume-analyze-button--disabled' : ''}`}
             onClick={() => handleAnalyze()}
-            disabled={uploadedFiles.length === 0 || isAnalyzing || quotaBlocked || Boolean(quotaBatchGuidance)}
+            disabled={uploadedFiles.length === 0 || isAnalyzing || quotaPending || quotaBlocked || Boolean(quotaBatchGuidance)}
           >
             {isAnalyzing ? 'Analyzing...' : 'Analyze Candidates'}
           </button>

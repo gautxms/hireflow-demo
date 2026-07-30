@@ -23,6 +23,10 @@ import {
   PLAN_CHANGE_RECOVERY_OUTCOME,
   recoverFailedPaddlePlanChange,
 } from '../services/paddlePlanChangeRecovery.js'
+import {
+  isRecoveryBillingAdjustmentEnabled,
+  runRecoveryBillingAdjustments,
+} from '../services/recoveryBillingAdjustment.js'
 
 const router = express.Router()
 
@@ -504,6 +508,7 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment) {
           environment: paddle.environment,
         }
       : null
+    let recoveryAdjustmentCandidate = null
 
     if (eventType === 'transaction.completed') {
       const userId = user?.id || null
@@ -595,6 +600,9 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment) {
         // A completed transaction is authoritative for its own payment attempt even
         // when a newer subscription event has already won the user projection CAS.
         await markPaymentAttemptSucceeded(payload)
+        if (userId && transactionId && isRecoveryBillingAdjustmentEnabled(paddle.environment)) {
+          recoveryAdjustmentCandidate = { userId, transactionId }
+        }
 
         if (!activationApplied) {
           subscriptionProjection = null
@@ -872,6 +880,23 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment) {
        ON CONFLICT (event_id) DO NOTHING`,
       [dedupeEventId, eventType || 'unknown', payloadHash],
     )
+    if (recoveryAdjustmentCandidate) {
+      const { userId, transactionId } = recoveryAdjustmentCandidate
+      setImmediate(() => {
+        void runRecoveryBillingAdjustments({
+          candidateUserId: userId,
+          candidateTransactionId: transactionId,
+        }).catch((error) => {
+          void logErrorToDatabase('recovery_billing_adjustment.immediate_failed', error, {
+            userId,
+            transactionId,
+            environment: paddle.environment,
+          }).catch((logError) => {
+            console.error('[Paddle webhook] failed to log immediate recovery adjustment error', logError)
+          })
+        })
+      })
+    }
   } catch (error) {
     console.error('[Paddle webhook] failed to update subscription state', error)
     await logErrorToDatabase('paddle.webhook.processing_failed', error, { eventType, payload })

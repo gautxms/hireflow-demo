@@ -12,6 +12,15 @@ import {
   PLAN_CHANGE_RECOVERY_OUTCOME,
   recoverFailedPaddlePlanChange,
 } from '../services/paddlePlanChangeRecovery.js'
+import {
+  isRecoveryBillingAdjustmentEnabled,
+  runRecoveryBillingAdjustments,
+  selectAuthoritativeCapture,
+} from '../services/recoveryBillingAdjustment.js'
+import {
+  inspectPaddleSubscriptionForReconciliation,
+  reconcilePaddleSubscriptionState,
+} from '../services/paddleSubscriptionReconciliation.js'
 
 const router = Router()
 
@@ -45,6 +54,11 @@ const ERROR_RESPONSES = {
   PLAN_CHANGE_RECOVERY_FAILED: { status: 500, message: 'Unable to confirm that your current plan was restored. Reload Billing to check the latest status before trying again.' },
   PADDLE_SUBSCRIPTION_UPDATE_FAILED: { status: 502, message: 'Paddle could not update your subscription right now. Please try again or contact support if this continues.' },
   KEEP_SUBSCRIPTION_FAILED: { status: 500, message: 'Unable to confirm that your subscription will continue. Reload Billing to check the latest status before trying again.' },
+  CANCELLATION_CHANGE_CONFLICT: { status: 409, message: 'Another subscription change is already scheduled. Reload Billing or contact support before cancelling.' },
+  CANCELLATION_NOT_ALLOWED_PAST_DUE: { status: 409, message: 'This subscription has an overdue payment. Resolve the payment or contact support before cancelling.' },
+  CANCELLATION_NOT_ALLOWED_PAUSED: { status: 409, message: 'Paused subscriptions cannot be scheduled to cancel from HireFlow. Contact support for help with this subscription.' },
+  CANCELLATION_NOT_AVAILABLE: { status: 409, message: 'Cancellation is not available for the current subscription state. Reload Billing or contact support.' },
+  CANCELLATION_PROVIDER_STATE_UNVERIFIED: { status: 502, message: 'HireFlow could not verify the current subscription state with Paddle. Reload Billing before trying again.' },
   PLAN_ALREADY_ACTIVE: { status: 400, message: 'You are already on that plan.' },
   PLAN_CHANGE_NOT_ALLOWED: { status: 403, message: 'This plan change is not available for your subscription. Please contact support.' },
   UNSUPPORTED_BILLING_ITEMS: { status: 409, message: 'Your subscription has recurring add-ons that need support-assisted plan changes. Please contact support so we can update your plan safely.' },
@@ -150,7 +164,7 @@ function classifyPaddleFailure(status, payload = {}) {
   return 'PADDLE_SUBSCRIPTION_UPDATE_FAILED'
 }
 
-async function paddleRequest(path, options = {}, paddle = resolvePaddleConfig()) {
+async function paddleRequestWithMetadata(path, options = {}, paddle = resolvePaddleConfig()) {
   if (!paddle.apiKey) {
     throw new BillingError('BILLING_CONFIG_MISSING', { reason: 'missing_api_key' })
   }
@@ -175,6 +189,14 @@ async function paddleRequest(path, options = {}, paddle = resolvePaddleConfig())
     })
   }
 
+  return {
+    payload,
+    paddleRequestId: getPaddleRequestId(response),
+  }
+}
+
+async function paddleRequest(path, options = {}, paddle = resolvePaddleConfig()) {
+  const { payload } = await paddleRequestWithMetadata(path, options, paddle)
   return payload
 }
 
@@ -342,6 +364,111 @@ async function resolveCurrentPlanCost(user, planKey, plan) {
   }
 }
 
+export function selectExactRecoveredTransaction(transactions, transactionIds, user, paddle) {
+  const localIds = new Set(transactionIds.filter(Boolean))
+  return transactions
+    .map((transaction) => ({ transaction, capture: selectAuthoritativeCapture(transaction?.payments) }))
+    .filter(({ transaction, capture }) => (
+      localIds.has(transaction?.id)
+      && transaction?.origin === 'subscription_recurring'
+      && transaction?.status === 'completed'
+      && transaction?.customer_id === user.paddle_customer_id
+      && transaction?.subscription_id === user.paddle_subscription_id
+      && inferPlanFromPaddlePayload(transaction, paddle) === user.subscription_plan
+      && Number(transaction?.details?.totals?.grand_total ?? transaction?.details?.totals?.total ?? 0) > 0
+      && capture
+    ))
+    .sort((left, right) => (
+      new Date(right.capture.captured_at) - new Date(left.capture.captured_at)
+      || String(right.transaction.id).localeCompare(String(left.transaction.id))
+    ))[0]?.transaction || null
+}
+
+async function resolveExactRecoveredTransactionId(user, paddle, { pendingOnly = false } = {}) {
+  const attempts = await pool.query(
+    `SELECT transaction_id
+     FROM payment_attempts
+     WHERE user_id=$1
+       AND COALESCE(NULLIF(LOWER(paddle_environment), ''), 'production')=$2
+       AND status IN ('pending', 'failed', 'retrying')
+       AND COALESCE(
+         payload->'data'->>'subscription_id', payload->'data'->>'subscriptionId',
+         payload->>'subscription_id', payload->>'subscriptionId'
+       )=$3
+       AND transaction_id IS NOT NULL
+       AND (NOT $4 OR metadata->>'resolved_by'='subscription_get_reconciliation_pending')`,
+    [user.id, paddle.environment, user.paddle_subscription_id, pendingOnly],
+  )
+  const transactionIds = attempts.rows.map((attempt) => attempt.transaction_id)
+  if (transactionIds.length === 0) return null
+  try {
+    const payload = await paddleRequest(
+      `/transactions?subscription_id=${encodeURIComponent(user.paddle_subscription_id)}&customer_id=${encodeURIComponent(user.paddle_customer_id)}&per_page=30`,
+      {},
+      paddle,
+    )
+    return selectExactRecoveredTransaction(
+      Array.isArray(payload?.data) ? payload.data : [],
+      transactionIds,
+      user,
+      paddle,
+    )?.id || null
+  } catch (error) {
+    console.warn('[subscriptions.current] Exact recovery transaction lookup is not available yet', {
+      userId: user.id,
+      paddleSubscriptionId: user.paddle_subscription_id,
+      code: error.code || 'UNKNOWN',
+    })
+    return null
+  }
+}
+
+async function resolveHeldGetRecoveryAttempts(user, paddle) {
+  const transactionId = await resolveExactRecoveredTransactionId(user, paddle, { pendingOnly: true })
+  if (!transactionId) return null
+  await pool.query(
+    `UPDATE payment_attempts
+     SET status=CASE WHEN transaction_id=$4 THEN 'succeeded' ELSE status END,
+         next_retry_at=NULL,
+         metadata=COALESCE(metadata, '{}'::jsonb) || CASE
+           WHEN transaction_id=$4 THEN $5::jsonb
+           ELSE '{"resolved_by":"subscription_get_reconciliation","recovery_adjustment_ineligible":"superseded_by_exact_recovery"}'::jsonb
+         END,
+         updated_at=NOW()
+     WHERE user_id=$1
+       AND COALESCE(NULLIF(LOWER(paddle_environment), ''), 'production')=$2
+       AND COALESCE(
+         payload->'data'->>'subscription_id', payload->'data'->>'subscriptionId',
+         payload->>'subscription_id', payload->>'subscriptionId'
+       )=$3
+       AND metadata->>'resolved_by'='subscription_get_reconciliation_pending'`,
+    [
+      user.id,
+      paddle.environment,
+      user.paddle_subscription_id,
+      transactionId,
+      JSON.stringify({ resolved_by: 'subscription_get_reconciliation', transaction_id: transactionId }),
+    ],
+  )
+  return transactionId
+}
+
+async function processRecoveredTransactionImmediately(userId, transactionId, paddle) {
+  if (!transactionId || !isRecoveryBillingAdjustmentEnabled(paddle.environment)) return
+  try {
+    await runRecoveryBillingAdjustments({
+      candidateUserId: userId,
+      candidateTransactionId: transactionId,
+    })
+  } catch (error) {
+    await logErrorToDatabase('recovery_billing_adjustment.immediate_failed', error, {
+      userId,
+      transactionId,
+      environment: paddle.environment,
+    })
+  }
+}
+
 function extractBillingDates(paddlePayload = {}) {
   const data = paddlePayload.data || paddlePayload
   return {
@@ -449,6 +576,219 @@ function sendBillingError(res, error) {
   return res.status(response.status).json({ code, error: response.message })
 }
 
+async function logBillingErrorSafely(source, error, context) {
+  try {
+    await logErrorToDatabase(source, error, context)
+  } catch (loggingError) {
+    console.error('[subscriptions] Failed to persist safe billing error context', {
+      source,
+      code: error?.code || 'UNKNOWN',
+      loggingCode: loggingError?.code || 'UNKNOWN',
+    })
+  }
+}
+
+function getScheduledChange(paddlePayload = {}) {
+  const data = paddlePayload?.data || paddlePayload || {}
+  return data?.scheduled_change || data?.scheduledChange || null
+}
+
+function getScheduledAction(paddlePayload = {}) {
+  const scheduledChange = getScheduledChange(paddlePayload)
+  return normalizeStatus(scheduledChange?.action || scheduledChange?.type || scheduledChange?.status)
+}
+
+function getPendingDowngradePlan(user, paddlePayload, paddle) {
+  const metadata = getPlanChangeMetadata(paddlePayload)
+  const providerPlan = inferPlanFromPaddlePayload(paddlePayload, paddle)
+
+  if (
+    metadata?.fromPlan === user?.subscription_plan
+    && metadata.fromPlan === 'annual'
+    && metadata.toPlan === 'monthly'
+    && metadata.outcome === 'pending'
+    && providerPlan === metadata.toPlan
+  ) {
+    return metadata.toPlan
+  }
+
+  return null
+}
+
+function inspectCancellationProviderState(user, paddlePayload, paddle) {
+  return inspectPaddleSubscriptionForReconciliation({
+    user,
+    paddlePayload,
+    paddle,
+    pendingProviderPlan: getPendingDowngradePlan(user, paddlePayload, paddle),
+  })
+}
+
+function assertCancellationEligible(inspection, paddlePayload) {
+  const scheduledAction = getScheduledAction(paddlePayload)
+  if (scheduledAction && !scheduledAction.includes('cancel')) {
+    throw new BillingError('CANCELLATION_CHANGE_CONFLICT', { scheduledAction })
+  }
+
+  if (!inspection.ok) {
+    throw new BillingError('CANCELLATION_PROVIDER_STATE_UNVERIFIED', {
+      reason: inspection.reason,
+      providerStatus: inspection.snapshot?.providerStatus || null,
+    })
+  }
+
+  const providerStatus = inspection.snapshot.providerStatus
+  if (['canceled', 'cancelled'].includes(providerStatus)) return 'already_ended'
+  if (providerStatus === 'past_due') throw new BillingError('CANCELLATION_NOT_ALLOWED_PAST_DUE')
+  if (providerStatus === 'paused') throw new BillingError('CANCELLATION_NOT_ALLOWED_PAUSED')
+  if (!['active', 'trialing'].includes(providerStatus)) {
+    throw new BillingError('CANCELLATION_NOT_AVAILABLE', { providerStatus })
+  }
+
+  return scheduledAction.includes('cancel') ? 'already_scheduled' : 'eligible'
+}
+
+function assertCancellationConfirmed(inspection) {
+  if (!inspection.ok) {
+    throw new BillingError('CANCELLATION_PROVIDER_STATE_UNVERIFIED', {
+      reason: inspection.reason,
+      providerStatus: inspection.snapshot?.providerStatus || null,
+    })
+  }
+
+  const { snapshot } = inspection
+  const effectiveAt = snapshot.scheduledCancellation?.effectiveAt || null
+  if (
+    !['active', 'trialing'].includes(snapshot.providerStatus)
+    || !snapshot.scheduledCancellation
+    || !effectiveAt
+    || !isFutureDate(effectiveAt)
+  ) {
+    throw new BillingError('CANCELLATION_PROVIDER_STATE_UNVERIFIED', {
+      reason: 'scheduled_cancellation_not_confirmed',
+      providerStatus: snapshot.providerStatus,
+    })
+  }
+
+  return snapshot
+}
+
+function inspectContinuationProviderState(user, paddlePayload) {
+  const data = paddlePayload?.data || paddlePayload || {}
+  const providerStatus = normalizeStatus(data?.status)
+  const providerSubscriptionId = data?.id || null
+  const providerCustomerId = data?.customer_id || data?.customer?.id || null
+  const scheduledAction = getScheduledAction(paddlePayload)
+  const currentPeriodEnd = dateOrNull(
+    data?.current_billing_period?.ends_at || data?.billing_period?.ends_at,
+  )
+  const nextBillingDate = dateOrNull(data?.next_billed_at)
+
+  const identityMatches = Boolean(
+    user?.paddle_subscription_id
+      && user?.paddle_customer_id
+      && providerSubscriptionId === user.paddle_subscription_id
+      && providerCustomerId === user.paddle_customer_id
+  )
+  const isContinuing = identityMatches
+    && ['active', 'trialing'].includes(providerStatus)
+    && !scheduledAction
+    && currentPeriodEnd
+    && nextBillingDate
+
+  return {
+    data,
+    providerStatus,
+    providerSubscriptionId,
+    providerCustomerId,
+    scheduledAction,
+    currentPeriodEnd,
+    nextBillingDate,
+    identityMatches,
+    isContinuing: Boolean(isContinuing),
+  }
+}
+
+async function persistCancellationAudit({
+  user,
+  effectiveAt,
+  reason,
+  acceptOffer,
+  paddle,
+  paddleRequestId,
+  providerObservedAt,
+  providerAlreadyScheduled,
+  reconciliationResult,
+}) {
+  const metadata = {
+    source: 'billing_page',
+    paddle_subscription_id: user.paddle_subscription_id,
+    paddle_environment: paddle.environment,
+    paddle_request_id: paddleRequestId,
+    provider_observed_at: providerObservedAt,
+    provider_schedule_already_present: providerAlreadyScheduled,
+    reconciliation_result: reconciliationResult,
+    effective_from: 'next_billing_period',
+    acceptOffer: Boolean(acceptOffer),
+  }
+  const result = await pool.query(
+    `WITH updated_user AS (
+       UPDATE users
+       SET cancellation_reason = COALESCE(NULLIF($3, ''), cancellation_reason),
+           updated_at = NOW()
+       WHERE id = $1
+         AND paddle_subscription_id = $2
+         AND cancellation_effective_at IS NOT DISTINCT FROM $4::timestamp
+         AND LOWER(subscription_status) IN (
+           'active', 'trialing', 'cancel_scheduled', 'cancellation_scheduled',
+           'pending_cancellation', 'scheduled_cancellation'
+         )
+       RETURNING id
+     ),
+     existing_event AS (
+       SELECT existing.id
+       FROM subscription_change_events existing
+       WHERE existing.user_id = $1
+         AND existing.change_type = 'cancel'
+         AND existing.effective_at IS NOT DISTINCT FROM $4::timestamp
+         AND existing.metadata->>'paddle_subscription_id' = $2
+       ORDER BY existing.created_at DESC, existing.id DESC
+       LIMIT 1
+     ),
+     inserted_event AS (
+       INSERT INTO subscription_change_events (
+         user_id, from_plan, to_plan, change_type, effective_at, reason, metadata
+       )
+       SELECT $1, $5, NULL, 'cancel', $4, NULLIF($3, ''), $6::jsonb
+       FROM updated_user
+       WHERE NOT EXISTS (SELECT 1 FROM existing_event)
+       RETURNING id
+     )
+     SELECT
+       EXISTS (SELECT 1 FROM updated_user) AS user_persisted,
+       COALESCE(
+         (SELECT id FROM inserted_event LIMIT 1),
+         (SELECT id FROM existing_event LIMIT 1)
+       ) AS event_id`,
+    [
+      user.id,
+      user.paddle_subscription_id,
+      reason || null,
+      effectiveAt,
+      user.subscription_plan || 'monthly',
+      JSON.stringify(metadata),
+    ],
+  )
+
+  if (result.rows?.[0]?.user_persisted !== true) {
+    throw new BillingError('CANCELLATION_PROVIDER_STATE_UNVERIFIED', {
+      reason: 'local_cancellation_projection_changed',
+    })
+  }
+
+  return result.rows?.[0]?.event_id || null
+}
+
 router.get('/current', requireAuth, async (req, res) => {
   try {
     console.info('[subscriptions.current] Loading subscription details', { userId: req.userId })
@@ -458,6 +798,8 @@ router.get('/current', requireAuth, async (req, res) => {
               trial_ends_at, trial_consumed_at,
               payment_method_brand, payment_method_last4, paddle_customer_id, paddle_subscription_id,
               paddle_environment, last_paddle_event_at,
+              latest_recovery.status AS recovery_adjustment_status,
+              latest_recovery.reference AS recovery_adjustment_reference,
               EXISTS (SELECT 1 FROM payment_attempts attempt WHERE attempt.user_id = users.id) AS has_payment_attempts,
               (
                 SELECT attempt.next_retry_at
@@ -480,7 +822,85 @@ router.get('/current', requireAuth, async (req, res) => {
                 LIMIT 1
               ) AS next_payment_retry_at
        FROM users
-       WHERE id = $1`,
+       LEFT JOIN LATERAL (
+         SELECT recovery.status, recovery.reference
+         FROM (
+           SELECT adjustment.status, adjustment.id::text AS reference,
+                  COALESCE(adjustment.confirmed_at, adjustment.updated_at, adjustment.created_at) AS occurred_at
+           FROM recovery_billing_adjustments adjustment
+           WHERE adjustment.user_id = users.id
+             AND adjustment.paddle_environment = COALESCE(NULLIF(LOWER(users.paddle_environment), ''), 'production')
+             AND adjustment.paddle_subscription_id = users.paddle_subscription_id
+           UNION ALL
+           SELECT attempt.metadata->>'recovery_adjustment_capture_status' AS status,
+                  'payment_attempt:' || attempt.id::text AS reference,
+                  attempt.updated_at AS occurred_at
+           FROM payment_attempts attempt
+           WHERE attempt.user_id = users.id
+             AND attempt.metadata->>'recovery_adjustment_capture_status' IN ('retryable_failed', 'manual_required')
+             AND COALESCE(attempt.metadata->>'recovery_adjustment_ineligible', '') = ''
+             AND COALESCE(NULLIF(LOWER(attempt.paddle_environment), ''), 'production')
+               = COALESCE(NULLIF(LOWER(users.paddle_environment), ''), 'production')
+             AND COALESCE(
+               attempt.payload->'data'->>'subscription_id',
+               attempt.payload->'data'->>'subscriptionId',
+               attempt.payload->>'subscription_id',
+               attempt.payload->>'subscriptionId'
+             ) = users.paddle_subscription_id
+           UNION ALL
+           SELECT 'superseded' AS status,
+                  'payment_attempt:' || attempt.id::text AS reference,
+                  attempt.updated_at AS occurred_at
+           FROM payment_attempts attempt
+           WHERE attempt.user_id = users.id
+             AND COALESCE(attempt.metadata->>'recovery_adjustment_ineligible', '') <> ''
+             AND COALESCE(NULLIF(LOWER(attempt.paddle_environment), ''), 'production')
+               = COALESCE(NULLIF(LOWER(users.paddle_environment), ''), 'production')
+             AND COALESCE(
+               attempt.payload->'data'->>'subscription_id',
+               attempt.payload->'data'->>'subscriptionId',
+               attempt.payload->>'subscription_id',
+               attempt.payload->>'subscriptionId'
+             ) = users.paddle_subscription_id
+           UNION ALL
+           SELECT 'pending' AS status,
+                  'payment_attempt:' || attempt.id::text AS reference,
+                  attempt.updated_at AS occurred_at
+           FROM payment_attempts attempt
+           WHERE attempt.user_id = users.id
+             AND (
+               attempt.metadata->>'resolved_by' = 'subscription_get_reconciliation_pending'
+               OR (
+                 attempt.status = 'succeeded'
+                 AND (
+                   attempt.metadata->>'resolved_by' IN ('webhook', 'automatic_retry', 'admin_retry')
+                   OR (
+                     attempt.metadata->>'resolved_by' IN ('authoritative_reconciliation', 'subscription_get_reconciliation')
+                     AND attempt.metadata->>'transaction_id' = attempt.transaction_id
+                   )
+                 )
+               )
+             )
+             AND COALESCE(attempt.metadata->>'recovery_adjustment_ineligible', '') = ''
+             AND COALESCE(NULLIF(LOWER(attempt.paddle_environment), ''), 'production')
+               = COALESCE(NULLIF(LOWER(users.paddle_environment), ''), 'production')
+             AND COALESCE(
+               attempt.payload->'data'->>'subscription_id',
+               attempt.payload->'data'->>'subscriptionId',
+               attempt.payload->>'subscription_id',
+               attempt.payload->>'subscriptionId'
+             ) = users.paddle_subscription_id
+             AND NOT EXISTS (
+               SELECT 1 FROM recovery_billing_adjustments adjustment
+               WHERE adjustment.paddle_environment
+                 = COALESCE(NULLIF(LOWER(attempt.paddle_environment), ''), 'production')
+                 AND adjustment.recovery_transaction_id = attempt.transaction_id
+             )
+         ) recovery
+         ORDER BY recovery.occurred_at DESC
+         LIMIT 1
+       ) latest_recovery ON TRUE
+       WHERE users.id = $1`,
       [req.userId],
     )
 
@@ -499,7 +919,7 @@ router.get('/current', requireAuth, async (req, res) => {
        LIMIT 1`,
       [req.userId, paddle.environment],
     )
-    const latestSubscription = subscriptionResult.rows[0] || null
+    let latestSubscription = subscriptionResult.rows[0] || null
 
     if (!latestSubscription) {
       console.warn('[subscriptions.current] No subscription row found in subscriptions table', { userId: req.userId })
@@ -520,20 +940,56 @@ router.get('/current', requireAuth, async (req, res) => {
     const hasValidPaddleDates = [paddleCurrentPeriodStart, paddleCurrentPeriodEnd, paddleNextBillingDate]
       .every((value) => value && !Number.isNaN(new Date(value).getTime()))
 
+    if (planCost.paddleSubscriptionPayload) {
+      const providerReconciliation = await reconcilePaddleSubscriptionState({
+        user,
+        paddlePayload: planCost.paddleSubscriptionPayload,
+        paddle,
+        source: 'subscriptions.current',
+      })
+
+      if (providerReconciliation.user) {
+        Object.assign(user, providerReconciliation.user)
+        latestSubscription = {
+          ...latestSubscription,
+          status: providerReconciliation.snapshot?.storedStatus || latestSubscription?.status || null,
+        }
+      } else if (providerReconciliation.reason === 'concurrent_state_change') {
+        const latestStateResult = await pool.query(
+          `SELECT subscription_status, subscription_plan, current_period_end,
+                  subscription_renewal_date, next_billing_date, cancellation_effective_at,
+                  paddle_customer_id, paddle_subscription_id, paddle_environment,
+                  last_paddle_event_at
+           FROM users
+           WHERE id = $1`,
+          [user.id],
+        )
+        if (latestStateResult.rows[0]) {
+          Object.assign(user, latestStateResult.rows[0])
+        }
+      }
+    }
+
     if (
-      paddleSubscription.id === user.paddle_subscription_id
-      && (!isPastDueRecovery || paddleSubscription.customer_id === user.paddle_customer_id)
-      && paddlePlan === planKey
-      && (isPastDueRecovery ? paddleStatus === 'active' : ['active', 'trialing'].includes(paddleStatus))
-      && (isPastDueRecovery ? hasValidPaddleDates : Boolean(paddleCurrentPeriodEnd && paddleNextBillingDate))
-      && (
-        isPastDueRecovery
-        ||
-        isoOrNull(user.current_period_end) !== isoOrNull(paddleCurrentPeriodEnd)
-        || isoOrNull(user.subscription_renewal_date) !== isoOrNull(paddleCurrentPeriodEnd)
-        || isoOrNull(user.next_billing_date) !== isoOrNull(paddleNextBillingDate)
-      )
+      !isPastDueRecovery
+      && paddleStatus === 'active'
+      && normalizeStatus(user.subscription_status) === 'active'
+      && !user.cancellation_effective_at
     ) {
+      const heldRecoveryTransactionId = await resolveHeldGetRecoveryAttempts(user, paddle)
+      await processRecoveredTransactionImmediately(user.id, heldRecoveryTransactionId, paddle)
+    }
+
+    if (
+      isPastDueRecovery
+      &&
+      paddleSubscription.id === user.paddle_subscription_id
+      && paddleSubscription.customer_id === user.paddle_customer_id
+      && paddlePlan === planKey
+      && paddleStatus === 'active'
+      && hasValidPaddleDates
+    ) {
+      const exactRecoveryTransactionId = await resolveExactRecoveredTransactionId(user, paddle)
       const reconciliation = await pool.query(
         `WITH reconciled_user AS (
            UPDATE users
@@ -565,8 +1021,15 @@ router.get('/current', requireAuth, async (req, res) => {
            RETURNING id
          ), resolved_attempts AS (
            UPDATE payment_attempts
-           SET status = 'succeeded', next_retry_at = NULL, updated_at = NOW(),
-               metadata = COALESCE(metadata, '{}'::jsonb) || '{"resolved_by":"subscription_get_reconciliation"}'::jsonb
+           SET status = CASE WHEN transaction_id=$14 THEN 'succeeded' ELSE status END,
+               next_retry_at = NULL,
+               updated_at = NOW(),
+               metadata = COALESCE(metadata, '{}'::jsonb) || CASE
+                 WHEN $14::text IS NULL
+                   THEN '{"resolved_by":"subscription_get_reconciliation_pending"}'::jsonb
+                 WHEN transaction_id=$14 THEN $15::jsonb
+                 ELSE '{"resolved_by":"subscription_get_reconciliation","recovery_adjustment_ineligible":"superseded_by_exact_recovery"}'::jsonb
+               END
            WHERE $9
              AND EXISTS (SELECT 1 FROM reconciled_user)
              AND user_id = $1
@@ -603,6 +1066,11 @@ router.get('/current', requireAuth, async (req, res) => {
           user.cancellation_effective_at || null,
           user.last_paddle_event_at || null,
           user.paddle_customer_id,
+          exactRecoveryTransactionId,
+          JSON.stringify({
+            resolved_by: 'subscription_get_reconciliation',
+            transaction_id: exactRecoveryTransactionId,
+          }),
         ],
       )
 
@@ -614,6 +1082,13 @@ router.get('/current', requireAuth, async (req, res) => {
           user.subscription_status = paddleStatus
           user.next_payment_retry_at = null
           user.cancellation_effective_at = null
+          if (isRecoveryBillingAdjustmentEnabled(paddle.environment)) {
+            user.recovery_adjustment_status = 'pending'
+            user.recovery_adjustment_reference = exactRecoveryTransactionId
+              ? `transaction:${exactRecoveryTransactionId}`
+              : null
+          }
+          await processRecoveredTransactionImmediately(user.id, exactRecoveryTransactionId, paddle)
         }
       } else if (isPastDueRecovery) {
         const currentResult = await pool.query(
@@ -675,16 +1150,23 @@ router.get('/current', requireAuth, async (req, res) => {
           && !user.has_payment_attempts
           && ['inactive', 'no_subscription', 'none', 'free', ''].includes(normalizeStatus(user.subscription_status)),
         renewalDate: isFinalCancellation ? null : isoOrNull(user.subscription_renewal_date || user.current_period_end),
-        nextBillingDate: isFinalCancellation ? null : isoOrNull(user.next_billing_date || user.current_period_end),
+        nextBillingDate: isFinalCancellation ? null : isoOrNull(user.next_billing_date),
         nextRetryAt: ['past_due', 'payment_failed'].includes(normalizeStatus(user.subscription_status))
           ? isoOrNull(user.next_payment_retry_at)
           : null,
+        recoveryAdjustmentStatus: isFinalCancellation ? null : (user.recovery_adjustment_status || null),
+        recoveryAdjustmentReference: isFinalCancellation ? null : (user.recovery_adjustment_reference || null),
+        recoveryAdjustmentEnabled: isRecoveryBillingAdjustmentEnabled(paddle.environment),
         cancellationEffectiveAt,
         cancelAtPeriodEnd: hasScheduledCancellation,
         paymentMethod: isFinalCancellation ? null : user.payment_method_last4
           ? `${user.payment_method_brand || 'Card'} •••• ${user.payment_method_last4}`
           : hasBillingPortalAccess ? 'Card on file' : null,
-        latestRecordStatus: hasScheduledCancellation ? (latestSubscription?.status || 'cancellation_scheduled') : (latestSubscription?.status || null),
+        latestRecordStatus: isFinalCancellation
+          ? normalizeStatus(user.subscription_status)
+          : hasScheduledCancellation
+            ? (latestSubscription?.status || 'cancellation_scheduled')
+            : (latestSubscription?.status || null),
         latestRecordCreatedAt: isoOrNull(latestSubscription?.created_at),
       },
     })
@@ -1090,12 +1572,24 @@ router.post('/change-plan', requireAuth, async (req, res) => {
 
 router.post('/cancel', requireAuth, async (req, res) => {
   const { reason, acceptOffer } = req.body || {}
+  let providerAccepted = false
+  let providerConfirmed = false
+  let providerRequestId = null
+  let paddleEnvironment = null
+  let providerSubscriptionId = null
+  let providerStatus = null
+  let effectiveAt = null
+  let reconciliationResult = null
 
   try {
-    console.info('[subscriptions.cancel] Cancel request received', { userId: req.userId, reason })
+    console.info('[subscriptions.cancel] Cancel request received', {
+      userId: req.userId,
+      hasReason: Boolean(reason),
+    })
     const userResult = await pool.query(
-      `SELECT id, email, subscription_status, subscription_plan, paddle_subscription_id, current_period_end,
-              paddle_environment
+      `SELECT id, email, subscription_status, subscription_plan, subscription_renewal_date,
+              next_billing_date, cancellation_effective_at, current_period_end,
+              paddle_customer_id, paddle_subscription_id, paddle_environment, last_paddle_event_at
        FROM users
        WHERE id = $1`,
       [req.userId],
@@ -1112,64 +1606,189 @@ router.post('/cancel', requireAuth, async (req, res) => {
     }
 
     const paddle = resolvePaddleConfigForUser(user)
+    paddleEnvironment = paddle.environment
+    providerSubscriptionId = user.paddle_subscription_id
 
-    const cancellationPayload = await paddleRequest(`/subscriptions/${user.paddle_subscription_id}/cancel`, {
-      method: 'POST',
-    }, paddle)
-    const cancellationData = cancellationPayload?.data || cancellationPayload || {}
-    const scheduledChange = cancellationData?.scheduled_change || cancellationData?.scheduledChange || null
-    const effectiveAt = scheduledChange?.effective_at
-      || scheduledChange?.effectiveAt
-      || cancellationData?.current_billing_period?.ends_at
-      || user.current_period_end
-      || new Date()
-    const providerStatus = normalizeStatus(cancellationData?.status)
-    const storedStatus = providerStatus || normalizeStatus(user.subscription_status) || 'active'
+    const currentResponse = await paddleRequestWithMetadata(
+      `/subscriptions/${user.paddle_subscription_id}`,
+      {},
+      paddle,
+    )
+    providerRequestId = currentResponse.paddleRequestId
+    let confirmedPayload = currentResponse.payload
+    let inspection = inspectCancellationProviderState(user, confirmedPayload, paddle)
+    let eligibility = assertCancellationEligible(inspection, confirmedPayload)
+    providerStatus = inspection.snapshot.providerStatus
 
-    const client = await pool.connect()
+    console.info('[subscriptions.cancel] Provider state inspected', {
+      userId: req.userId,
+      environment: paddle.environment,
+      providerSubscriptionId,
+      providerStatus,
+      paddleRequestId: providerRequestId,
+      scheduledAction: getScheduledAction(confirmedPayload) || null,
+      eligibility,
+    })
 
-    try {
-      await client.query('BEGIN')
-      await client.query(
-        `UPDATE users
-         SET subscription_status = $1,
-             cancellation_effective_at = $2,
-             cancellation_reason = $3,
-             updated_at = NOW()
-         WHERE id = $4`,
-        [storedStatus, effectiveAt, reason || null, req.userId],
-      )
+    if (eligibility === 'already_ended') {
+      providerConfirmed = true
+      const reconciliation = await reconcilePaddleSubscriptionState({
+        user,
+        paddlePayload: confirmedPayload,
+        paddle,
+        source: 'subscription_cancel_command',
+      })
+      reconciliationResult = reconciliation.reason
+      if (!['updated', 'already_current'].includes(reconciliation.reason)) {
+        throw new BillingError('CANCELLATION_PROVIDER_STATE_UNVERIFIED', {
+          reason: reconciliation.reason,
+        })
+      }
 
-      await client.query(
-        `INSERT INTO subscription_change_events (user_id, from_plan, to_plan, change_type, effective_at, reason, metadata)
-         VALUES ($1, $2, NULL, 'cancel', $3, $4, $5::jsonb)`,
-        [req.userId, user.subscription_plan || 'monthly', effectiveAt, reason || null, JSON.stringify({ acceptOffer: !!acceptOffer })],
-      )
-      await client.query('COMMIT')
-    } catch (error) {
-      await client.query('ROLLBACK').catch(() => {})
-      throw error
-    } finally {
-      client.release()
+      effectiveAt = reconciliation.snapshot?.cancellationEffectiveAt || null
+      console.info('[subscriptions.cancel] Subscription was already ended at Paddle', {
+        userId: req.userId,
+        environment: paddle.environment,
+        providerSubscriptionId,
+        providerStatus,
+        effectiveAt,
+        paddleRequestId: providerRequestId,
+        reconciliationResult,
+      })
+      return res.json({
+        status: 'ok',
+        alreadyCancelled: true,
+        message: 'This subscription is already cancelled.',
+        effectiveAt,
+      })
     }
+
+    const providerAlreadyScheduled = eligibility === 'already_scheduled'
+    if (!providerAlreadyScheduled) {
+      const cancellationResponse = await paddleRequestWithMetadata(
+        `/subscriptions/${user.paddle_subscription_id}/cancel`,
+        {
+          method: 'POST',
+          body: JSON.stringify({ effective_from: 'next_billing_period' }),
+        },
+        paddle,
+      )
+      providerAccepted = true
+      providerRequestId = cancellationResponse.paddleRequestId
+      confirmedPayload = cancellationResponse.payload
+      inspection = inspectCancellationProviderState(user, confirmedPayload, paddle)
+
+      try {
+        assertCancellationConfirmed(inspection)
+      } catch {
+        const confirmationResponse = await paddleRequestWithMetadata(
+          `/subscriptions/${user.paddle_subscription_id}`,
+          {},
+          paddle,
+        )
+        providerRequestId = confirmationResponse.paddleRequestId || providerRequestId
+        confirmedPayload = confirmationResponse.payload
+        inspection = inspectCancellationProviderState(user, confirmedPayload, paddle)
+      }
+    }
+
+    const confirmedSnapshot = assertCancellationConfirmed(inspection)
+    providerConfirmed = true
+    providerStatus = confirmedSnapshot.providerStatus
+    effectiveAt = confirmedSnapshot.scheduledCancellation.effectiveAt
+
+    const reconciliation = await reconcilePaddleSubscriptionState({
+      user,
+      paddlePayload: confirmedPayload,
+      paddle,
+      pendingProviderPlan: getPendingDowngradePlan(user, confirmedPayload, paddle),
+      source: 'subscription_cancel_command',
+    })
+    reconciliationResult = reconciliation.reason
+    if (!['updated', 'already_current'].includes(reconciliation.reason)) {
+      throw new BillingError('CANCELLATION_PROVIDER_STATE_UNVERIFIED', {
+        reason: reconciliation.reason,
+      })
+    }
+
+    const eventId = await persistCancellationAudit({
+      user,
+      effectiveAt,
+      reason,
+      acceptOffer,
+      paddle,
+      paddleRequestId: providerRequestId,
+      providerObservedAt: confirmedSnapshot.observedAt,
+      providerAlreadyScheduled,
+      reconciliationResult,
+    })
+
+    console.info('[subscriptions.cancel] Cancellation confirmed', {
+      userId: req.userId,
+      environment: paddle.environment,
+      providerSubscriptionId,
+      providerStatus,
+      effectiveAt,
+      eventId,
+      paddleRequestId: providerRequestId,
+      providerAlreadyScheduled,
+      reconciliationResult,
+    })
 
     return res.json({
       status: 'ok',
+      alreadyScheduled: providerAlreadyScheduled,
       message: 'Cancellation scheduled. Full access remains available through the end of the current paid period.',
-      effectiveAt: new Date(effectiveAt).toISOString(),
+      effectiveAt,
     })
   } catch (error) {
-    await logErrorToDatabase('subscriptions.cancel.failed', error, { userId: req.userId })
+    await logBillingErrorSafely('subscriptions.cancel.failed', error, {
+      userId: req.userId,
+      environment: paddleEnvironment,
+      providerSubscriptionId,
+      providerStatus,
+      effectiveAt,
+      paddleRequestId: providerRequestId,
+      providerAccepted,
+      providerConfirmed,
+      reconciliationResult,
+      code: error.code || 'UNKNOWN',
+      ...error.details,
+    })
+
+    if (providerConfirmed) {
+      return res.status(202).json({
+        status: 'syncing',
+        code: 'CANCELLATION_SYNC_PENDING',
+        message: 'Your cancellation is confirmed with Paddle. HireFlow is refreshing your billing status.',
+        effectiveAt,
+      })
+    }
+
+    if (providerAccepted) {
+      return sendBillingError(res, new BillingError('CANCELLATION_PROVIDER_STATE_UNVERIFIED'))
+    }
+
+    if (error instanceof BillingError) {
+      return sendBillingError(res, error)
+    }
+
     return res.status(500).json({ error: 'Unable to cancel subscription' })
   }
 })
 
 router.post('/keep-subscription', requireAuth, async (req, res) => {
   let providerCancellationRemoved = false
+  let providerContinuationConfirmed = false
+  let providerRequestId = null
+  let paddleEnvironment = null
+  let providerSubscriptionId = null
+  let providerStatus = null
 
   try {
     const userResult = await pool.query(
-      `SELECT id, subscription_status, subscription_plan, paddle_subscription_id, paddle_environment
+      `SELECT id, subscription_status, subscription_plan, cancellation_effective_at,
+              paddle_customer_id, paddle_subscription_id, paddle_environment
        FROM users
        WHERE id = $1`,
       [req.userId],
@@ -1180,9 +1799,17 @@ router.post('/keep-subscription', requireAuth, async (req, res) => {
     if (!user.paddle_subscription_id) return res.status(409).json({ error: BILLING_PROVIDER_MISSING_ERROR })
 
     const paddle = resolvePaddleConfigForUser(user)
-    const currentPayload = await paddleRequest(`/subscriptions/${user.paddle_subscription_id}`, {}, paddle)
+    paddleEnvironment = paddle.environment
+    providerSubscriptionId = user.paddle_subscription_id
+    const currentResponse = await paddleRequestWithMetadata(
+      `/subscriptions/${user.paddle_subscription_id}`,
+      {},
+      paddle,
+    )
+    providerRequestId = currentResponse.paddleRequestId
+    const currentPayload = currentResponse.payload
     const current = currentPayload?.data || currentPayload || {}
-    const providerStatus = normalizeStatus(current.status)
+    providerStatus = normalizeStatus(current.status)
     const scheduledChange = current?.scheduled_change || current?.scheduledChange || null
     const scheduledAction = normalizeStatus(scheduledChange?.action || scheduledChange?.type)
 
@@ -1194,7 +1821,22 @@ router.post('/keep-subscription', requireAuth, async (req, res) => {
       })
     }
 
+    if (
+      ['canceled', 'cancelled'].includes(normalizeStatus(user.subscription_status))
+      && !isFutureDate(user.cancellation_effective_at)
+    ) {
+      return res.status(409).json({
+        code: 'SUBSCRIPTION_ALREADY_ENDED',
+        error: 'This subscription has already ended. Choose a plan to subscribe again.',
+        redirectTo: '/pricing?reason=subscribe_again',
+      })
+    }
+
     const providerAlreadyContinuing = !scheduledAction.includes('cancel') && ['active', 'trialing'].includes(providerStatus)
+
+    if (scheduledAction && !scheduledAction.includes('cancel')) {
+      throw new BillingError('CANCELLATION_CHANGE_CONFLICT', { scheduledAction })
+    }
 
     if (!scheduledAction.includes('cancel') && !providerAlreadyContinuing) {
       return res.status(409).json({
@@ -1203,17 +1845,79 @@ router.post('/keep-subscription', requireAuth, async (req, res) => {
       })
     }
 
+    const localAlreadyContinuing = providerAlreadyContinuing
+      && !user.cancellation_effective_at
+      && ['active', 'trialing'].includes(normalizeStatus(user.subscription_status))
+    if (localAlreadyContinuing) {
+      const continuation = inspectContinuationProviderState(user, currentPayload)
+      if (!continuation.isContinuing) {
+        throw new BillingError('KEEP_SUBSCRIPTION_FAILED', {
+          reason: continuation.identityMatches
+            ? 'provider_continuation_dates_missing'
+            : 'provider_subscription_ownership_mismatch',
+        })
+      }
+      providerContinuationConfirmed = true
+      console.info('[subscriptions.keep] Subscription was already continuing', {
+        userId: req.userId,
+        environment: paddle.environment,
+        providerSubscriptionId,
+        providerStatus,
+        paddleRequestId: providerRequestId,
+      })
+      return res.json({
+        status: 'ok',
+        alreadyContinuing: true,
+        message: 'Your subscription is already set to continue.',
+        subscription: {
+          status: providerStatus,
+          cancellationEffectiveAt: null,
+          nextBillingDate: continuation.nextBillingDate.toISOString(),
+        },
+      })
+    }
+
     let updatedPayload = currentPayload
     if (!providerAlreadyContinuing) {
-      updatedPayload = await paddleRequest(`/subscriptions/${user.paddle_subscription_id}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ scheduled_change: null }),
-      }, paddle)
+      const updateResponse = await paddleRequestWithMetadata(
+        `/subscriptions/${user.paddle_subscription_id}`,
+        {
+          method: 'PATCH',
+          body: JSON.stringify({ scheduled_change: null }),
+        },
+        paddle,
+      )
+      updatedPayload = updateResponse.payload
+      providerRequestId = updateResponse.paddleRequestId
       providerCancellationRemoved = true
     }
-    const updated = updatedPayload?.data || updatedPayload || {}
-    const dates = extractBillingDates(updatedPayload)
-    const restoredStatus = normalizeStatus(updated.status) || 'active'
+
+    let continuation = inspectContinuationProviderState(user, updatedPayload)
+    if (!continuation.isContinuing) {
+      const confirmationResponse = await paddleRequestWithMetadata(
+        `/subscriptions/${user.paddle_subscription_id}`,
+        {},
+        paddle,
+      )
+      providerRequestId = confirmationResponse.paddleRequestId || providerRequestId
+      updatedPayload = confirmationResponse.payload
+      continuation = inspectContinuationProviderState(user, updatedPayload)
+    }
+    if (!continuation.isContinuing) {
+      throw new BillingError('KEEP_SUBSCRIPTION_FAILED', {
+        reason: continuation.identityMatches
+          ? 'provider_continuation_not_confirmed'
+          : 'provider_subscription_ownership_mismatch',
+      })
+    }
+
+    providerContinuationConfirmed = true
+    providerStatus = continuation.providerStatus
+    const dates = {
+      currentPeriodEnd: continuation.currentPeriodEnd.toISOString(),
+      nextBillingDate: continuation.nextBillingDate.toISOString(),
+    }
+    const restoredStatus = continuation.providerStatus
 
     const client = await pool.connect()
     try {
@@ -1235,6 +1939,8 @@ router.post('/keep-subscription', requireAuth, async (req, res) => {
         [req.userId, user.subscription_plan || 'monthly', JSON.stringify({
           source: 'billing_page',
           paddle_subscription_id: user.paddle_subscription_id,
+          paddle_environment: paddle.environment,
+          paddle_request_id: providerRequestId,
           provider_schedule_already_clear: providerAlreadyContinuing,
         })],
       )
@@ -1246,6 +1952,15 @@ router.post('/keep-subscription', requireAuth, async (req, res) => {
       client.release()
     }
 
+    console.info('[subscriptions.keep] Subscription continuation confirmed', {
+      userId: req.userId,
+      environment: paddle.environment,
+      providerSubscriptionId,
+      providerStatus,
+      paddleRequestId: providerRequestId,
+      providerScheduleAlreadyClear: providerAlreadyContinuing,
+    })
+
     return res.json({
       status: 'ok',
       message: 'Your subscription will continue and your normal renewal schedule has been restored.',
@@ -1256,9 +1971,19 @@ router.post('/keep-subscription', requireAuth, async (req, res) => {
       },
     })
   } catch (error) {
-    await logErrorToDatabase('subscriptions.keep.failed', error, { userId: req.userId })
+    await logBillingErrorSafely('subscriptions.keep.failed', error, {
+      userId: req.userId,
+      environment: paddleEnvironment,
+      providerSubscriptionId,
+      providerStatus,
+      paddleRequestId: providerRequestId,
+      providerCancellationRemoved,
+      providerContinuationConfirmed,
+      code: error.code || 'UNKNOWN',
+      ...error.details,
+    })
 
-    if (providerCancellationRemoved) {
+    if (providerCancellationRemoved || providerContinuationConfirmed) {
       return res.status(202).json({
         status: 'syncing',
         code: 'KEEP_SUBSCRIPTION_SYNC_PENDING',

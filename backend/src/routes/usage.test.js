@@ -59,6 +59,7 @@ test('buildResumeAnalysisUsageResponse exposes UI-ready quota fields', () => {
     periodEnd: '2026-06-01T00:00:00.000Z',
     percentageUsed: 75,
     warningLevel: 'approaching',
+    nextRevalidationAt: '2026-06-01T00:00:00.000Z',
   })
 })
 
@@ -178,6 +179,18 @@ test('server availability blocks creation when reservations consume all remainin
   assert.equal(payload.canCreateAnalysis, false)
 })
 
+test('usage response exposes the nearest server-known revalidation boundary', () => {
+  const payload = buildResumeAnalysisUsageResponse({
+    limit: 800,
+    used: 799,
+    periodStart: new Date('2026-05-01T00:00:00.000Z'),
+    periodEnd: new Date('2026-06-01T00:00:00.000Z'),
+    nextRevalidationAt: new Date('2026-05-20T12:00:00.000Z'),
+  })
+
+  assert.equal(payload.nextRevalidationAt, '2026-05-20T12:00:00.000Z')
+})
+
 test('flagged usage response uses the billing-anniversary period and canonical ledger count', async (t) => {
   const previousFlag = process.env.RESUME_QUOTA_RESERVATIONS_ENABLED
   process.env.RESUME_QUOTA_RESERVATIONS_ENABLED = 'true'
@@ -223,6 +236,7 @@ test('flagged usage response reports enforcement-consistent availability after a
       if (sql.includes('FROM users')) return { rows: [{ id: 11, subscription_status: 'active', quota_anchor_at: '2026-01-20T08:30:00.000Z' }] }
       if (sql.includes('FROM usage_overrides')) return { rows: [] }
       if (sql.includes('FROM usage_log')) return { rows: [{ usage_count: 790 }] }
+      if (sql.includes('SELECT MIN(reservation.expires_at)')) return { rows: [{ next_availability_change_at: '2026-07-30T12:00:00.000Z' }] }
       if (sql.includes('FROM resume_quota_reservations')) return { rows: [{ reserved_count: 5 }] }
       return { rows: [] }
     })
@@ -233,6 +247,10 @@ test('flagged usage response reports enforcement-consistent availability after a
     assert.equal(payload.remaining, 10)
     assert.equal(payload.available, 5)
     assert.equal(payload.canCreateAnalysis, true)
+    const expectedTransition = new Date('2026-07-30T12:00:00.000Z') < new Date(payload.periodEnd)
+      ? '2026-07-30T12:00:00.000Z'
+      : payload.periodEnd
+    assert.equal(payload.nextRevalidationAt, expectedTransition)
   } finally {
     if (previousFlag === undefined) delete process.env.RESUME_QUOTA_RESERVATIONS_ENABLED
     else process.env.RESUME_QUOTA_RESERVATIONS_ENABLED = previousFlag

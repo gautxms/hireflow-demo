@@ -95,6 +95,7 @@ test('older and partial successful responses receive safe availability fallbacks
   assert.equal(legacy.available, 788)
   assert.equal(legacy.canCreateAnalysis, true)
   assert.equal(legacy.percentageUsed, 1)
+  assert.equal(legacy.nextRevalidationAt, periodEnd)
 })
 
 test('active-reservation availability can be lower than consumed remaining', () => {

@@ -3,6 +3,7 @@ import app from './server.js'
 import { runMigrations } from './db/migrate.js'
 import { initializeDatabase, ensurePasswordResetTables, ensurePaymentTrackingTables, pool } from './db/client.js'
 import { retryFailedPayments } from './services/paymentRetry.js'
+import { runRecoveryBillingAdjustments } from './services/recoveryBillingAdjustment.js'
 import { startAnalyticsCron } from './services/analytics.js'
 import { logEmailConfigStatus } from './services/emailService.js'
 import { initializeJobQueue } from './services/jobQueue.js'
@@ -21,10 +22,12 @@ function startPaymentRetryCron() {
   const runPaymentRetry = async () => {
     try {
       const retriedCount = await retryFailedPayments()
+      const adjustmentCount = await runRecoveryBillingAdjustments()
 
       if (retriedCount > 0) {
         console.log(`[Payment Retry] Processed ${retriedCount} due payment attempt(s)`)
       }
+      if (adjustmentCount > 0) console.log(`[Recovery Billing] Processed ${adjustmentCount} adjustment candidate(s)`)
     } catch (error) {
       console.error('[Payment Retry] Cron execution failed:', error)
     }

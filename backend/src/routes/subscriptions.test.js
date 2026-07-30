@@ -2,7 +2,7 @@ import test, { after } from 'node:test'
 import assert from 'node:assert/strict'
 import jwt from 'jsonwebtoken'
 
-import subscriptionsRouter from './subscriptions.js'
+import subscriptionsRouter, { selectExactRecoveredTransaction } from './subscriptions.js'
 import { pool } from '../db/client.js'
 
 const BILLING_PROVIDER_MISSING_ERROR = 'Subscription cannot be changed because billing provider subscription is missing. Please contact support.'
@@ -58,6 +58,7 @@ function resetPaddleEnv() {
   delete process.env.PADDLE_TEST_UPGRADE_KEY
   delete process.env.PADDLE_TEST_ANNUAL_PRICE_ID
   delete process.env.PADDLE_TEST_MONTHLY_PRICE_ID
+  delete process.env.PADDLE_PAST_DUE_RECOVERY_BILLING_ADJUSTMENT_ENVIRONMENTS
 }
 
 function activeMonthlyUser() {
@@ -76,6 +77,48 @@ function activeAnnualUser() {
     ...activeMonthlyUser(),
     subscription_plan: 'annual',
   }
+}
+
+function activeCancellationUser(overrides = {}) {
+  return {
+    ...activeMonthlyUser(),
+    paddle_customer_id: 'ctm_123',
+    subscription_renewal_date: '2027-08-28T00:00:00.000Z',
+    next_billing_date: '2027-08-28T00:00:00.000Z',
+    current_period_end: '2027-08-28T00:00:00.000Z',
+    cancellation_effective_at: null,
+    last_paddle_event_at: null,
+    ...overrides,
+  }
+}
+
+function paddleMonthlySubscription(overrides = {}) {
+  return {
+    id: 'sub_123',
+    customer_id: 'ctm_123',
+    status: 'active',
+    updated_at: '2026-07-28T10:00:00.000Z',
+    items: [{ price: { id: 'pri_monthly', billing_cycle: { interval: 'month' } }, quantity: 1 }],
+    current_billing_period: {
+      starts_at: '2027-07-28T00:00:00.000Z',
+      ends_at: '2027-08-28T00:00:00.000Z',
+    },
+    next_billed_at: '2027-08-28T00:00:00.000Z',
+    scheduled_change: null,
+    ...overrides,
+  }
+}
+
+function scheduledCancellationSubscription(overrides = {}) {
+  return paddleMonthlySubscription({
+    updated_at: '2026-07-28T10:01:00.000Z',
+    next_billed_at: null,
+    scheduled_change: {
+      action: 'cancel',
+      effective_at: '2027-08-28T00:00:00.000Z',
+    },
+    ...overrides,
+  })
 }
 
 function enableTestUpgrade() {
@@ -110,7 +153,7 @@ async function invokeRoute(path, body = {}) {
   return res
 }
 
-function installDbMock(user) {
+function installDbMock(user, { failOn } = {}) {
   const calls = []
   const connectCalls = []
 
@@ -122,8 +165,19 @@ function installDbMock(user) {
   pool.query = async (sql, params) => {
     calls.push({ sql, params })
 
+    if (failOn && String(sql).includes(failOn)) {
+      throw new Error(`pool failure on ${failOn}`)
+    }
+
     if (String(sql).includes('FROM users')) {
       return { rows: user ? [user] : [] }
+    }
+
+    if (String(sql).includes('WITH updated_user AS')) {
+      return {
+        rows: [{ user_persisted: true, event_id: 'event_123' }],
+        rowCount: 1,
+      }
     }
 
     return { rows: [], rowCount: 1 }
@@ -156,6 +210,37 @@ function installClientMock({ failOn } = {}) {
   }
 
   return { client, clientCalls, connectCalls }
+}
+
+function installCurrentReconciliationDbMock(user, { userUpdateRowCount = 1 } = {}) {
+  const calls = []
+  const clientCalls = []
+  const client = {
+    async query(sql, params = []) {
+      clientCalls.push({ sql: String(sql), params })
+      if (/UPDATE users/.test(String(sql))) {
+        return {
+          rows: userUpdateRowCount ? [{ id: user.id }] : [],
+          rowCount: userUpdateRowCount,
+        }
+      }
+      return { rows: [], rowCount: 1 }
+    },
+    release() {
+      clientCalls.push({ sql: 'RELEASE', params: [] })
+    },
+  }
+
+  pool.connect = async () => client
+  pool.query = async (sql, params = []) => {
+    calls.push({ sql: String(sql), params })
+    if (String(sql).includes('FROM users')) {
+      return { rows: [user], rowCount: 1 }
+    }
+    return { rows: [], rowCount: 0 }
+  }
+
+  return { calls, clientCalls }
 }
 
 function assertTransactionSequence(clientCalls, updatePattern, { includesProjection = false } = {}) {
@@ -265,6 +350,45 @@ test('GET /api/subscriptions/current returns cancelAtPeriodEnd true when Paddle 
 
   assert.equal(res.statusCode, 200)
   assert.equal(res.payload.subscription.cancelAtPeriodEnd, true)
+})
+
+test('GET /api/subscriptions/current persists Paddle scheduled cancellation with no next billing date', async () => {
+  resetPaddleEnv()
+  const currentUser = {
+    ...activeAnnualUser(),
+    paddle_customer_id: 'ctm_123',
+    subscription_renewal_date: '2027-01-07T00:00:00.000Z',
+    next_billing_date: '2027-01-07T00:00:00.000Z',
+    cancellation_effective_at: null,
+  }
+  const { clientCalls } = installCurrentReconciliationDbMock(currentUser)
+  mockPaddleResponse({
+    payload: {
+      data: {
+        id: 'sub_123',
+        customer_id: 'ctm_123',
+        status: 'active',
+        updated_at: '2026-07-28T08:00:00.000Z',
+        items: [{ price: { id: 'pri_annual', billing_cycle: { interval: 'year' } } }],
+        current_billing_period: { ends_at: '2027-01-07T00:00:00.000Z' },
+        next_billed_at: null,
+        scheduled_change: {
+          action: 'cancel',
+          effective_at: '2027-01-07T00:00:00.000Z',
+        },
+      },
+    },
+  })
+
+  const res = await invokeRoute('/current')
+
+  assert.equal(res.statusCode, 200)
+  assert.equal(res.payload.subscription.status, 'active')
+  assert.equal(res.payload.subscription.cancelAtPeriodEnd, true)
+  assert.equal(res.payload.subscription.cancellationEffectiveAt, '2027-01-07T00:00:00.000Z')
+  assert.equal(res.payload.subscription.nextBillingDate, null)
+  const update = clientCalls.find(({ sql }) => /UPDATE users/.test(String(sql)))
+  assert.equal(update.params[5], null)
 })
 
 test('GET /api/subscriptions/current does not return cancelAtPeriodEnd true when cancellation_effective_at is missing or past', async () => {
@@ -532,7 +656,9 @@ test('GET /api/subscriptions/current keeps local pricing for users without Paddl
 function authoritativeAnnualSubscription(overrides = {}) {
   return { data: {
     id: 'sub_123',
+    customer_id: 'ctm_123',
     status: 'active',
+    updated_at: '2026-07-21T12:00:00.000Z',
     items: [{ price: { id: 'pri_annual', billing_cycle: { interval: 'year' }, unit_price: { amount: '99900', currency_code: 'USD' } } }],
     current_billing_period: { ends_at: '2027-07-21T00:00:00.000Z' },
     next_billed_at: '2027-07-21T00:00:00.000Z',
@@ -544,10 +670,11 @@ test('GET /api/subscriptions/current moves earlier local dates forward from veri
   resetPaddleEnv()
   const user = {
     ...activeAnnualUser(),
+    paddle_customer_id: 'ctm_123',
     subscription_renewal_date: '2026-08-20T00:00:00.000Z',
     next_billing_date: '2027-07-21T00:00:00.000Z',
   }
-  const { calls } = installDbMock(user)
+  const { clientCalls } = installCurrentReconciliationDbMock(user)
   mockPaddleResponse({ payload: authoritativeAnnualSubscription() })
 
   const res = await invokeRoute('/current')
@@ -555,16 +682,24 @@ test('GET /api/subscriptions/current moves earlier local dates forward from veri
   assert.equal(res.statusCode, 200)
   assert.equal(res.payload.subscription.renewalDate, '2027-07-21T00:00:00.000Z')
   assert.equal(res.payload.subscription.nextBillingDate, '2027-07-21T00:00:00.000Z')
-  const repair = calls.find(({ sql }) => String(sql).includes('subscription_renewal_date = $2'))
+  const repair = clientCalls.find(({ sql }) => String(sql).includes('subscription_renewal_date = CASE'))
   assert.ok(repair)
-  assert.deepEqual(repair.params.slice(0, 6), [123, '2027-07-21T00:00:00.000Z', '2027-07-21T00:00:00.000Z', 'sub_123', 'annual', 'active'])
-  assert.doesNotMatch(repair.sql, />= current_period_end/)
+  assert.deepEqual(repair.params.slice(0, 6), [
+    123,
+    'active',
+    'annual',
+    false,
+    '2027-07-21T00:00:00.000Z',
+    '2027-07-21T00:00:00.000Z',
+  ])
+  assert.match(repair.sql, /last_paddle_event_at IS NOT DISTINCT FROM \$14::timestamptz/)
 })
 
 test('GET /api/subscriptions/current moves incorrectly later local dates backward from verified Paddle state', async () => {
   resetPaddleEnv()
-  const { calls } = installDbMock({
+  const { clientCalls } = installCurrentReconciliationDbMock({
     ...activeAnnualUser(),
+    paddle_customer_id: 'ctm_123',
     current_period_end: '2028-07-21T00:00:00.000Z',
     subscription_renewal_date: '2028-07-21T00:00:00.000Z',
     next_billing_date: '2028-07-21T00:00:00.000Z',
@@ -575,7 +710,7 @@ test('GET /api/subscriptions/current moves incorrectly later local dates backwar
 
   assert.equal(res.payload.subscription.renewalDate, '2027-07-21T00:00:00.000Z')
   assert.equal(res.payload.subscription.nextBillingDate, '2027-07-21T00:00:00.000Z')
-  assert.ok(calls.some(({ sql }) => String(sql).includes('subscription_renewal_date = $2')))
+  assert.ok(clientCalls.some(({ sql }) => String(sql).includes('subscription_renewal_date = CASE')))
 })
 
 test('GET /api/subscriptions/current does not reconcile a different Paddle plan or subscription ID', async () => {
@@ -594,12 +729,58 @@ test('GET /api/subscriptions/current does not reconcile a different Paddle plan 
   }
 })
 
-test('GET /api/subscriptions/current does not reconcile non-current Paddle statuses or missing dates', async () => {
+test('GET /api/subscriptions/current repairs verified Past Due and canceled provider states', async () => {
+  resetPaddleEnv()
+
+  const scenarios = [
+    {
+      overrides: { status: 'past_due', next_billed_at: null },
+      expectedStatus: 'past_due',
+      expectedNextBilling: null,
+    },
+    {
+      overrides: {
+        status: 'canceled',
+        canceled_at: '2020-07-28T08:00:00.000Z',
+        current_billing_period: null,
+        next_billed_at: null,
+        items: [],
+      },
+      expectedStatus: 'cancelled',
+      expectedNextBilling: null,
+    },
+  ]
+
+  for (const scenario of scenarios) {
+    const currentUser = {
+      ...activeAnnualUser(),
+      paddle_customer_id: 'ctm_123',
+      subscription_renewal_date: '2028-07-21T00:00:00.000Z',
+      next_billing_date: '2028-07-21T00:00:00.000Z',
+      recovery_adjustment_status: 'pending',
+      recovery_adjustment_reference: 'payment_attempt:42',
+    }
+    const { clientCalls } = installCurrentReconciliationDbMock(currentUser)
+    mockPaddleResponse({ payload: authoritativeAnnualSubscription(scenario.overrides) })
+    const res = await invokeRoute('/current')
+
+    assert.equal(res.statusCode, 200)
+    assert.equal(res.payload.subscription.status, scenario.expectedStatus)
+    assert.equal(res.payload.subscription.nextBillingDate, scenario.expectedNextBilling)
+    if (scenario.expectedStatus === 'cancelled') {
+      assert.equal(res.payload.subscription.renewalDate, null)
+      assert.equal(res.payload.subscription.latestRecordStatus, 'cancelled')
+      assert.equal(res.payload.subscription.recoveryAdjustmentStatus, null)
+      assert.equal(res.payload.subscription.recoveryAdjustmentReference, null)
+    }
+    assert.ok(clientCalls.some(({ sql }) => /UPDATE users/.test(String(sql))))
+  }
+})
+
+test('GET /api/subscriptions/current fails closed on unsupported provider state or incomplete active dates', async () => {
   resetPaddleEnv()
 
   for (const overrides of [
-    { status: 'past_due' },
-    { status: 'canceled' },
     { status: null },
     { current_billing_period: null },
     { next_billed_at: null },
@@ -608,7 +789,7 @@ test('GET /api/subscriptions/current does not reconcile non-current Paddle statu
     mockPaddleResponse({ payload: authoritativeAnnualSubscription(overrides) })
     await invokeRoute('/current')
 
-    assert.ok(!calls.some(({ sql }) => String(sql).includes('subscription_renewal_date = $2')))
+    assert.ok(!calls.some(({ sql }) => String(sql).includes('UPDATE users')))
   }
 })
 
@@ -636,6 +817,34 @@ function authoritativeMonthlyRecovery() {
   } }
 }
 
+test('GET reconciliation selects the latest exact completed local recovery transaction', () => {
+  const user = recoverableMonthlyUser()
+  const paddle = {
+    priceIdsByPlan: { monthly: 'pri_monthly', annual: 'pri_annual' },
+    noTrialPriceIdsByPlan: {},
+    legacyPriceIdsByPlan: {},
+  }
+  const transaction = (id, capturedAt, overrides = {}) => ({
+    id,
+    origin: 'subscription_recurring',
+    status: 'completed',
+    customer_id: 'ctm_123',
+    subscription_id: 'sub_123',
+    details: { totals: { grand_total: '9900' } },
+    payments: [{ status: 'captured', captured_at: capturedAt }],
+    items: [{ quantity: 1, price: { id: 'pri_monthly', billing_cycle: { interval: 'month' } } }],
+    ...overrides,
+  })
+  const selected = selectExactRecoveredTransaction([
+    transaction('txn_old', '2026-06-27T00:00:00Z'),
+    transaction('txn_recovered', '2026-07-27T00:00:00Z'),
+    transaction('txn_unrecorded', '2026-07-28T00:00:00Z'),
+    transaction('txn_wrong_customer', '2026-07-29T00:00:00Z', { customer_id: 'ctm_other' }),
+  ], ['txn_old', 'txn_recovered', 'txn_wrong_customer'], user, paddle)
+
+  assert.equal(selected.id, 'txn_recovered')
+})
+
 test('GET /api/subscriptions/current atomically recovers the same Past Due lifecycle and resolves retries', async () => {
   resetPaddleEnv()
   const user = recoverableMonthlyUser()
@@ -652,6 +861,83 @@ test('GET /api/subscriptions/current atomically recovers the same Past Due lifec
   assert.match(recovery.sql, /last_paddle_event_at IS NOT DISTINCT FROM \$12::timestamptz/)
   assert.match(recovery.sql, /WHEN \$9 THEN GREATEST\(COALESCE\(last_paddle_event_at, NOW\(\)\), NOW\(\)\)/)
   assert.match(recovery.sql, /EXISTS \(SELECT 1 FROM reconciled_user\)/)
+  assert.match(recovery.sql, /status = CASE WHEN transaction_id=\$14 THEN 'succeeded' ELSE status END/)
+  assert.match(recovery.sql, /next_retry_at = NULL/)
+  assert.match(recovery.sql, /WHEN \$14::text IS NULL[\s\S]*subscription_get_reconciliation_pending/)
+})
+
+test('GET reconciliation reports a new recovery as pending instead of reusing an older terminal state', async () => {
+  resetPaddleEnv()
+  process.env.PADDLE_PAST_DUE_RECOVERY_BILLING_ADJUSTMENT_ENVIRONMENTS = 'production'
+  const user = recoverableMonthlyUser({
+    recovery_adjustment_status: 'confirmed',
+    recovery_adjustment_reference: 'old-adjustment',
+  })
+  const { calls } = installDbMock(user)
+  mockPaddleResponse({ payload: authoritativeMonthlyRecovery() })
+
+  const res = await invokeRoute('/current')
+
+  assert.equal(res.statusCode, 200)
+  assert.equal(res.payload.subscription.status, 'active')
+  assert.equal(res.payload.subscription.recoveryAdjustmentStatus, 'pending')
+  assert.equal(res.payload.subscription.recoveryAdjustmentReference, null)
+  assert.match(calls[0].sql, /SELECT 'pending' AS status/)
+  assert.match(calls[0].sql, /subscription_get_reconciliation_pending/)
+  assert.match(calls[0].sql, /NOT EXISTS \([\s\S]*recovery_billing_adjustments adjustment/)
+})
+
+test('GET /api/subscriptions/current records only the exact provider-confirmed recovered attempt', async () => {
+  resetPaddleEnv()
+  process.env.PADDLE_PAST_DUE_RECOVERY_BILLING_ADJUSTMENT_ENVIRONMENTS = 'production'
+  const user = recoverableMonthlyUser()
+  let reconciliationParams = null
+  const dbCalls = []
+  pool.connect = async () => { throw new Error('pool.connect should not be called') }
+  pool.query = async (sql, params) => {
+    dbCalls.push({ sql: String(sql), params })
+    if (/SELECT transaction_id\s+FROM payment_attempts/.test(String(sql))) {
+      return { rows: [{ transaction_id: 'txn_old' }, { transaction_id: 'txn_recovered' }], rowCount: 2 }
+    }
+    if (String(sql).includes('WITH reconciled_user AS')) {
+      reconciliationParams = params
+      return { rows: [], rowCount: 1 }
+    }
+    if (String(sql).includes('FROM subscriptions')) return { rows: [], rowCount: 0 }
+    if (String(sql).includes('FROM users')) return { rows: [user], rowCount: 1 }
+    return { rows: [], rowCount: 0 }
+  }
+  const transaction = (id, capturedAt) => ({
+    id,
+    origin: 'subscription_recurring',
+    status: 'completed',
+    customer_id: 'ctm_123',
+    subscription_id: 'sub_123',
+    details: { totals: { grand_total: '9900' } },
+    payments: [{ status: 'captured', captured_at: capturedAt }],
+    items: [{ quantity: 1, price: { id: 'pri_monthly', billing_cycle: { interval: 'month' } } }],
+  })
+  const paddleCalls = mockPaddleSequence([
+    { payload: authoritativeMonthlyRecovery() },
+    { payload: { data: [
+      transaction('txn_old', '2026-06-27T00:00:00Z'),
+      transaction('txn_recovered', '2026-07-27T00:00:00Z'),
+    ] } },
+  ])
+
+  const res = await invokeRoute('/current')
+
+  assert.equal(res.statusCode, 200)
+  assert.equal(reconciliationParams[13], 'txn_recovered')
+  assert.deepEqual(JSON.parse(reconciliationParams[14]), {
+    resolved_by: 'subscription_get_reconciliation',
+    transaction_id: 'txn_recovered',
+  })
+  assert.match(paddleCalls[1].url, /transactions\?subscription_id=sub_123&customer_id=ctm_123&per_page=30/)
+  const immediateDiscovery = dbCalls.find(({ sql }) => /SELECT pa\.\*/.test(sql))
+  const immediateClaim = dbCalls.find(({ sql }) => /WITH claimable AS/.test(sql))
+  assert.deepEqual(immediateDiscovery.params, [['production'], true, 123, 'txn_recovered'])
+  assert.deepEqual(immediateClaim.params, [['production'], true, 123, 'txn_recovered'])
 })
 
 test('GET /api/subscriptions/current does not revive a cancellation committed during Paddle refresh', async () => {
@@ -709,6 +995,45 @@ test('GET /api/subscriptions/current preserves a newer failure committed during 
   assert.equal(res.statusCode, 200)
   assert.equal(res.payload.subscription.status, 'payment_failed')
   assert.equal(res.payload.subscription.nextRetryAt, '2026-07-22T10:00:00.000Z')
+})
+
+test('GET /api/subscriptions/current exposes durable missing-capture manual review state', async () => {
+  resetPaddleEnv()
+  const { calls } = installDbMock({
+    ...activeMonthlyUser(),
+    paddle_customer_id: 'ctm_123',
+    paddle_environment: 'production',
+    recovery_adjustment_status: 'manual_required',
+    recovery_adjustment_reference: 'payment_attempt:42',
+  })
+  mockPaddleResponse()
+
+  const res = await invokeRoute('/current')
+
+  assert.equal(res.statusCode, 200)
+  assert.equal(res.payload.subscription.recoveryAdjustmentStatus, 'manual_required')
+  assert.equal(res.payload.subscription.recoveryAdjustmentReference, 'payment_attempt:42')
+  assert.equal(res.payload.subscription.recoveryAdjustmentEnabled, false)
+  assert.match(calls[0].sql, /recovery_adjustment_capture_status/)
+  assert.match(calls[0].sql, /'superseded' AS status[\s\S]*recovery_adjustment_ineligible/)
+  assert.match(calls[0].sql, /COALESCE\(adjustment\.confirmed_at, adjustment\.updated_at, adjustment\.created_at\) AS occurred_at/)
+  assert.match(calls[0].sql, /ORDER BY recovery\.occurred_at DESC/)
+})
+
+test('GET /api/subscriptions/current exposes recovery adjustment rollout applicability', async () => {
+  resetPaddleEnv()
+  process.env.PADDLE_PAST_DUE_RECOVERY_BILLING_ADJUSTMENT_ENVIRONMENTS = 'production'
+  installDbMock({
+    ...activeMonthlyUser(),
+    paddle_customer_id: 'ctm_123',
+    paddle_environment: 'production',
+  })
+  mockPaddleResponse()
+
+  const res = await invokeRoute('/current')
+
+  assert.equal(res.statusCode, 200)
+  assert.equal(res.payload.subscription.recoveryAdjustmentEnabled, true)
 })
 
 test('POST /api/subscriptions/change-plan-preview uses gated test annual price for valid upgradeTestKey', async () => {
@@ -1380,15 +1705,13 @@ test('POST /api/subscriptions/change-plan uses one checked-out client after Padd
 test('POST /api/subscriptions/keep-subscription removes Paddle scheduled cancellation without a charge', async () => {
   resetPaddleEnv()
   installDbMock({
-    id: 123,
-    subscription_status: 'active',
-    subscription_plan: 'monthly',
-    paddle_subscription_id: 'sub_123',
+    ...activeCancellationUser(),
+    cancellation_effective_at: '2027-08-28T00:00:00.000Z',
     paddle_environment: 'production',
   })
   const paddleCalls = mockPaddleSequence([
-    { payload: { data: { id: 'sub_123', status: 'active', scheduled_change: { action: 'cancel', effective_at: '2026-08-01T00:00:00.000Z' } } } },
-    { payload: { data: { id: 'sub_123', status: 'active', scheduled_change: null, next_billed_at: '2026-08-01T00:00:00.000Z', current_billing_period: { ends_at: '2026-08-01T00:00:00.000Z' } } } },
+    { payload: { data: scheduledCancellationSubscription() } },
+    { payload: { data: paddleMonthlySubscription({ updated_at: '2026-07-28T10:02:00.000Z' }) } },
   ])
   const { clientCalls } = installClientMock()
 
@@ -1407,14 +1730,15 @@ test('POST /api/subscriptions/keep-subscription removes Paddle scheduled cancell
 test('POST /api/subscriptions/keep-subscription reconciles local state when Paddle already removed cancellation', async () => {
   resetPaddleEnv()
   installDbMock({
-    id: 123,
-    subscription_status: 'active',
-    subscription_plan: 'annual',
-    paddle_subscription_id: 'sub_123',
+    ...activeCancellationUser({ subscription_plan: 'annual' }),
+    cancellation_effective_at: '2027-08-01T00:00:00.000Z',
     paddle_environment: 'production',
   })
   const paddleCalls = mockPaddleSequence([
-    { payload: { data: { id: 'sub_123', status: 'active', scheduled_change: null, next_billed_at: '2027-08-01T00:00:00.000Z' } } },
+    { payload: { data: paddleMonthlySubscription({
+      current_billing_period: { ends_at: '2027-08-01T00:00:00.000Z' },
+      next_billed_at: '2027-08-01T00:00:00.000Z',
+    }) } },
   ])
   const { clientCalls } = installClientMock()
 
@@ -1432,15 +1756,20 @@ test('POST /api/subscriptions/keep-subscription reconciles local state when Padd
 test('POST /api/subscriptions/keep-subscription reports sync pending when Paddle succeeds before a local database failure', async () => {
   resetPaddleEnv()
   installDbMock({
-    id: 123,
-    subscription_status: 'active',
-    subscription_plan: 'annual',
-    paddle_subscription_id: 'sub_123',
+    ...activeCancellationUser({ subscription_plan: 'annual' }),
+    cancellation_effective_at: '2027-08-01T00:00:00.000Z',
     paddle_environment: 'production',
   })
   const paddleCalls = mockPaddleSequence([
-    { payload: { data: { id: 'sub_123', status: 'active', scheduled_change: { action: 'cancel', effective_at: '2027-08-01T00:00:00.000Z' } } } },
-    { payload: { data: { id: 'sub_123', status: 'active', scheduled_change: null } } },
+    { payload: { data: scheduledCancellationSubscription({
+      scheduled_change: { action: 'cancel', effective_at: '2027-08-01T00:00:00.000Z' },
+      current_billing_period: { ends_at: '2027-08-01T00:00:00.000Z' },
+    }) } },
+    { payload: { data: paddleMonthlySubscription({
+      updated_at: '2026-07-28T10:02:00.000Z',
+      current_billing_period: { ends_at: '2027-08-01T00:00:00.000Z' },
+      next_billed_at: '2027-08-01T00:00:00.000Z',
+    }) } },
   ])
   const { clientCalls } = installClientMock({ failOn: 'INSERT INTO subscription_change_events' })
 
@@ -1452,6 +1781,28 @@ test('POST /api/subscriptions/keep-subscription reports sync pending when Paddle
   assert.match(res.payload.message, /subscription will continue/i)
   assert.equal(paddleCalls.length, 2)
   assertRollbackSequence(clientCalls)
+})
+
+test('POST /api/subscriptions/keep-subscription is idempotent when Paddle and HireFlow already continue', async () => {
+  resetPaddleEnv()
+  const { connectCalls } = installDbMock({
+    ...activeCancellationUser(),
+    paddle_environment: 'production',
+  })
+  const paddleCalls = mockPaddleSequence([
+    {
+      headers: { 'request-id': 'req_keep_current' },
+      payload: { data: paddleMonthlySubscription() },
+    },
+  ])
+
+  const res = await invokeRoute('/keep-subscription')
+
+  assert.equal(res.statusCode, 200)
+  assert.equal(res.payload.alreadyContinuing, true)
+  assert.equal(res.payload.subscription.nextBillingDate, '2027-08-28T00:00:00.000Z')
+  assert.equal(paddleCalls.length, 1)
+  assert.equal(connectCalls.length, 0)
 })
 
 test('POST /api/subscriptions/keep-subscription sends fully ended users to a new paid checkout', async () => {
@@ -1469,6 +1820,27 @@ test('POST /api/subscriptions/keep-subscription sends fully ended users to a new
   assert.equal(res.statusCode, 409)
   assert.equal(res.payload.code, 'SUBSCRIPTION_ALREADY_ENDED')
   assert.equal(res.payload.redirectTo, '/pricing?reason=subscribe_again')
+  assert.equal(connectCalls.length, 0)
+})
+
+test('POST /api/subscriptions/keep-subscription does not revive a terminal local lifecycle from an active provider snapshot', async () => {
+  resetPaddleEnv()
+  const { connectCalls } = installDbMock({
+    ...activeCancellationUser(),
+    subscription_status: 'cancelled',
+    cancellation_effective_at: '2026-07-20T00:00:00.000Z',
+    paddle_environment: 'production',
+  })
+  const paddleCalls = mockPaddleSequence([
+    { payload: { data: paddleMonthlySubscription() } },
+  ])
+
+  const res = await invokeRoute('/keep-subscription')
+
+  assert.equal(res.statusCode, 409)
+  assert.equal(res.payload.code, 'SUBSCRIPTION_ALREADY_ENDED')
+  assert.equal(res.payload.redirectTo, '/pricing?reason=subscribe_again')
+  assert.equal(paddleCalls.length, 1)
   assert.equal(connectCalls.length, 0)
 })
 
@@ -1637,19 +2009,19 @@ test('POST /api/subscriptions/cancel rejects missing Paddle subscription ID with
 test('POST /api/subscriptions/cancel does not checkout client or mutate locally when Paddle cancel fails', async () => {
   resetPaddleEnv()
   const { calls, connectCalls } = installDbMock({
-    id: 123,
-    email: 'user@example.com',
-    subscription_status: 'active',
-    subscription_plan: 'monthly',
-    paddle_subscription_id: 'sub_123',
-    current_period_end: '2026-07-01T00:00:00.000Z',
+    ...activeCancellationUser(),
+    paddle_environment: 'production',
   })
-  mockPaddleResponse({ ok: false, status: 500, payload: { error: 'paddle unavailable' } })
+  const paddleCalls = mockPaddleSequence([
+    { payload: { data: paddleMonthlySubscription() } },
+    { ok: false, status: 500, payload: { error: 'paddle unavailable' } },
+  ])
 
   const res = await invokeRoute('/cancel', { reason: 'too expensive' })
 
-  assert.equal(res.statusCode, 500)
-  assert.deepEqual(res.payload, { error: 'Unable to cancel subscription' })
+  assert.equal(res.statusCode, 502)
+  assert.equal(res.payload.code, 'PADDLE_SUBSCRIPTION_UPDATE_FAILED')
+  assert.equal(paddleCalls.length, 2)
   assert.equal(mutationCalls(calls).length, 0)
   assert.equal(connectCalls.length, 0)
 })
@@ -1657,14 +2029,16 @@ test('POST /api/subscriptions/cancel does not checkout client or mutate locally 
 test('POST /api/subscriptions/cancel uses one checked-out client after Paddle cancel succeeds', async () => {
   resetPaddleEnv()
   const { calls } = installDbMock({
-    id: 123,
-    email: 'user@example.com',
-    subscription_status: 'active',
-    subscription_plan: 'monthly',
-    paddle_subscription_id: 'sub_123',
-    current_period_end: '2026-07-01T00:00:00.000Z',
+    ...activeCancellationUser(),
+    paddle_environment: 'production',
   })
-  const paddleCalls = mockPaddleResponse()
+  const paddleCalls = mockPaddleSequence([
+    { payload: { data: paddleMonthlySubscription() } },
+    {
+      headers: { 'request-id': 'req_cancel_123' },
+      payload: { data: scheduledCancellationSubscription() },
+    },
+  ])
   const { clientCalls, connectCalls } = installClientMock()
 
   const res = await invokeRoute('/cancel', { reason: 'too expensive', acceptOffer: false })
@@ -1672,12 +2046,62 @@ test('POST /api/subscriptions/cancel uses one checked-out client after Paddle ca
   assert.equal(res.statusCode, 200)
   assert.equal(res.payload.status, 'ok')
   assert.equal(typeof res.payload.message, 'string')
-  assert.equal(res.payload.effectiveAt, '2026-07-01T00:00:00.000Z')
-  assert.equal(paddleCalls.length, 1)
-  assert.equal(mutationCalls(calls).length, 0)
+  assert.equal(res.payload.effectiveAt, '2027-08-28T00:00:00.000Z')
+  assert.equal(res.payload.alreadyScheduled, false)
+  assert.equal(paddleCalls.length, 2)
+  assert.deepEqual(JSON.parse(paddleCalls[1].options.body), {
+    effective_from: 'next_billing_period',
+  })
+  const auditCall = calls.find(({ sql }) => String(sql).includes('WITH updated_user AS'))
+  assert.ok(auditCall)
+  assert.match(auditCall.sql, /WHERE NOT EXISTS/)
+  assert.equal(JSON.parse(auditCall.params[5]).paddle_request_id, 'req_cancel_123')
   assert.equal(connectCalls.length, 1)
-  assertTransactionSequence(clientCalls, /UPDATE users/)
-  assert.equal(clientCalls[1].params[0], 'active', 'scheduled cancellation keeps the locally active status')
+  assert.equal(clientCalls.length, 5)
+  assert.equal(clientCalls[0].sql, 'BEGIN')
+  assert.match(clientCalls[1].sql, /UPDATE users/)
+  assert.match(clientCalls[2].sql, /INSERT INTO subscriptions/)
+  assert.equal(clientCalls[3].sql, 'COMMIT')
+  assert.equal(clientCalls[4].sql, 'RELEASE')
+})
+
+test('POST /api/subscriptions/cancel allows cancellation during a pending annual-to-monthly downgrade', async () => {
+  resetPaddleEnv()
+  const user = activeCancellationUser({
+    subscription_plan: 'annual',
+    paddle_environment: 'production',
+  })
+  installDbMock(user)
+  const pendingDowngrade = {
+    ...paddleMonthlySubscription(),
+    custom_data: {
+      hireflowPlanChange: {
+        fromPlan: 'annual',
+        toPlan: 'monthly',
+        outcome: 'pending',
+      },
+    },
+  }
+  const paddleCalls = mockPaddleSequence([
+    { payload: { data: pendingDowngrade } },
+    { payload: { data: {
+      ...pendingDowngrade,
+      updated_at: '2026-07-28T10:01:00.000Z',
+      next_billed_at: null,
+      scheduled_change: {
+        action: 'cancel',
+        effective_at: '2027-08-28T00:00:00.000Z',
+      },
+    } } },
+  ])
+  const { clientCalls } = installClientMock()
+
+  const res = await invokeRoute('/cancel', { reason: 'too expensive' })
+
+  assert.equal(res.statusCode, 200)
+  assert.equal(res.payload.status, 'ok')
+  assert.equal(paddleCalls.length, 2)
+  assert.equal(clientCalls[1].params[2], 'annual')
 })
 
 test('POST /api/subscriptions/cancel routes an explicitly sandbox user to the sandbox API', async () => {
@@ -1689,45 +2113,200 @@ test('POST /api/subscriptions/cancel routes an explicitly sandbox user to the sa
   process.env.PADDLE_SANDBOX_ANNUAL_PRICE_ID = 'pri_sandbox_annual'
 
   installDbMock({
-    id: 123,
+    ...activeCancellationUser(),
     email: 'sandbox-user@example.com',
-    subscription_status: 'active',
-    subscription_plan: 'monthly',
+    paddle_customer_id: 'ctm_sandbox_123',
     paddle_subscription_id: 'sub_sandbox_123',
     paddle_environment: 'sandbox',
-    current_period_end: '2026-07-01T00:00:00.000Z',
   })
-  const paddleCalls = mockPaddleResponse()
+  const sandboxSubscription = {
+    ...paddleMonthlySubscription(),
+    id: 'sub_sandbox_123',
+    customer_id: 'ctm_sandbox_123',
+    items: [{ price: { id: 'pri_sandbox_monthly', billing_cycle: { interval: 'month' } }, quantity: 1 }],
+  }
+  const paddleCalls = mockPaddleSequence([
+    { payload: { data: sandboxSubscription } },
+    { payload: { data: {
+      ...scheduledCancellationSubscription(),
+      id: 'sub_sandbox_123',
+      customer_id: 'ctm_sandbox_123',
+      items: [{ price: { id: 'pri_sandbox_monthly', billing_cycle: { interval: 'month' } }, quantity: 1 }],
+    } } },
+  ])
   installClientMock()
 
   const res = await invokeRoute('/cancel', { reason: 'sandbox verification' })
 
   assert.equal(res.statusCode, 200)
-  assert.equal(paddleCalls.length, 1)
-  assert.equal(paddleCalls[0].url, 'https://sandbox-api.paddle.test/subscriptions/sub_sandbox_123/cancel')
-  assert.equal(paddleCalls[0].options.headers.Authorization, 'Bearer sandbox-key')
+  assert.equal(paddleCalls.length, 2)
+  assert.equal(paddleCalls[0].url, 'https://sandbox-api.paddle.test/subscriptions/sub_sandbox_123')
+  assert.equal(paddleCalls[1].url, 'https://sandbox-api.paddle.test/subscriptions/sub_sandbox_123/cancel')
+  assert.equal(paddleCalls[1].options.headers.Authorization, 'Bearer sandbox-key')
 })
 
-test('POST /api/subscriptions/cancel rolls back and releases checked-out client on local DB failure', async () => {
+test('POST /api/subscriptions/cancel returns syncing after Paddle confirmation and local DB failure', async () => {
   resetPaddleEnv()
-  const { calls } = installDbMock({
-    id: 123,
-    email: 'user@example.com',
-    subscription_status: 'active',
-    subscription_plan: 'monthly',
-    paddle_subscription_id: 'sub_123',
-    current_period_end: '2026-07-01T00:00:00.000Z',
+  installDbMock({
+    ...activeCancellationUser(),
+    paddle_environment: 'production',
   })
-  mockPaddleResponse()
-  const { clientCalls, connectCalls } = installClientMock({ failOn: 'INSERT INTO subscription_change_events' })
+  mockPaddleSequence([
+    { payload: { data: paddleMonthlySubscription() } },
+    { payload: { data: scheduledCancellationSubscription() } },
+  ])
+  const { clientCalls, connectCalls } = installClientMock({ failOn: 'INSERT INTO subscriptions' })
 
   const res = await invokeRoute('/cancel', { reason: 'too expensive' })
 
-  assert.equal(res.statusCode, 500)
-  assert.deepEqual(res.payload, { error: 'Unable to cancel subscription' })
-  assert.equal(mutationCalls(calls).length, 0)
+  assert.equal(res.statusCode, 202)
+  assert.equal(res.payload.code, 'CANCELLATION_SYNC_PENDING')
+  assert.equal(res.payload.effectiveAt, '2027-08-28T00:00:00.000Z')
   assert.equal(connectCalls.length, 1)
   assertRollbackSequence(clientCalls)
+})
+
+test('POST /api/subscriptions/cancel returns syncing when the provider state persists but audit persistence fails', async () => {
+  resetPaddleEnv()
+  installDbMock(
+    {
+      ...activeCancellationUser(),
+      paddle_environment: 'production',
+    },
+    { failOn: 'WITH updated_user AS' },
+  )
+  mockPaddleSequence([
+    { payload: { data: paddleMonthlySubscription() } },
+    { payload: { data: scheduledCancellationSubscription() } },
+  ])
+  installClientMock()
+
+  const res = await invokeRoute('/cancel', { reason: 'too expensive' })
+
+  assert.equal(res.statusCode, 202)
+  assert.equal(res.payload.code, 'CANCELLATION_SYNC_PENDING')
+  assert.equal(res.payload.effectiveAt, '2027-08-28T00:00:00.000Z')
+})
+
+test('POST /api/subscriptions/cancel is idempotent when cancellation is already scheduled', async () => {
+  resetPaddleEnv()
+  const { calls } = installDbMock({
+    ...activeCancellationUser(),
+    cancellation_effective_at: null,
+    paddle_environment: 'production',
+  })
+  const paddleCalls = mockPaddleSequence([
+    {
+      headers: { 'request-id': 'req_existing_cancel' },
+      payload: { data: scheduledCancellationSubscription() },
+    },
+  ])
+  installClientMock()
+
+  const res = await invokeRoute('/cancel', { reason: 'too expensive' })
+
+  assert.equal(res.statusCode, 200)
+  assert.equal(res.payload.alreadyScheduled, true)
+  assert.equal(paddleCalls.length, 1)
+  assert.doesNotMatch(paddleCalls[0].url, /\/cancel$/)
+  const auditCall = calls.find(({ sql }) => String(sql).includes('WITH updated_user AS'))
+  assert.ok(auditCall)
+  assert.equal(JSON.parse(auditCall.params[5]).provider_schedule_already_present, true)
+})
+
+test('POST /api/subscriptions/cancel is idempotent when Paddle already ended the subscription', async () => {
+  resetPaddleEnv()
+  installDbMock({
+    ...activeCancellationUser(),
+    paddle_environment: 'production',
+  })
+  const paddleCalls = mockPaddleSequence([
+    { payload: { data: paddleMonthlySubscription({
+      status: 'canceled',
+      updated_at: '2026-07-28T10:01:00.000Z',
+      current_billing_period: null,
+      next_billed_at: null,
+      canceled_at: '2026-07-28T10:01:00.000Z',
+    }) } },
+  ])
+  installClientMock()
+
+  const res = await invokeRoute('/cancel', { reason: 'too expensive' })
+
+  assert.equal(res.statusCode, 200)
+  assert.equal(res.payload.alreadyCancelled, true)
+  assert.equal(paddleCalls.length, 1)
+})
+
+for (const [providerStatus, expectedCode] of [
+  ['past_due', 'CANCELLATION_NOT_ALLOWED_PAST_DUE'],
+  ['paused', 'CANCELLATION_NOT_ALLOWED_PAUSED'],
+]) {
+  test(`POST /api/subscriptions/cancel rejects provider ${providerStatus} with a specific error`, async () => {
+    resetPaddleEnv()
+    const { connectCalls } = installDbMock({
+      ...activeCancellationUser(),
+      paddle_environment: 'production',
+    })
+    const paddleCalls = mockPaddleSequence([
+      { payload: { data: paddleMonthlySubscription({
+        status: providerStatus,
+        current_billing_period: providerStatus === 'paused' ? null : { ends_at: '2027-08-28T00:00:00.000Z' },
+        next_billed_at: null,
+      }) } },
+    ])
+
+    const res = await invokeRoute('/cancel', { reason: 'too expensive' })
+
+    assert.equal(res.statusCode, 409)
+    assert.equal(res.payload.code, expectedCode)
+    assert.equal(paddleCalls.length, 1)
+    assert.equal(connectCalls.length, 0)
+  })
+}
+
+test('POST /api/subscriptions/cancel rejects a conflicting scheduled pause', async () => {
+  resetPaddleEnv()
+  const { connectCalls } = installDbMock({
+    ...activeCancellationUser(),
+    paddle_environment: 'production',
+  })
+  const paddleCalls = mockPaddleSequence([
+    { payload: { data: paddleMonthlySubscription({
+      scheduled_change: {
+        action: 'pause',
+        effective_at: '2027-08-28T00:00:00.000Z',
+      },
+    }) } },
+  ])
+
+  const res = await invokeRoute('/cancel', { reason: 'too expensive' })
+
+  assert.equal(res.statusCode, 409)
+  assert.equal(res.payload.code, 'CANCELLATION_CHANGE_CONFLICT')
+  assert.equal(paddleCalls.length, 1)
+  assert.equal(connectCalls.length, 0)
+})
+
+test('POST /api/subscriptions/cancel fails when an ambiguous 2xx Paddle response cannot be confirmed', async () => {
+  resetPaddleEnv()
+  const { connectCalls } = installDbMock({
+    ...activeCancellationUser(),
+    paddle_environment: 'production',
+  })
+  const paddleCalls = mockPaddleSequence([
+    { payload: { data: paddleMonthlySubscription() } },
+    { payload: { data: { id: 'sub_123' } } },
+    { payload: { data: paddleMonthlySubscription({ updated_at: '2026-07-28T10:02:00.000Z' }) } },
+  ])
+
+  const res = await invokeRoute('/cancel', { reason: 'too expensive' })
+
+  assert.equal(res.statusCode, 502)
+  assert.equal(res.payload.code, 'CANCELLATION_PROVIDER_STATE_UNVERIFIED')
+  assert.equal(res.payload.error, 'HireFlow could not verify the current subscription state with Paddle. Reload Billing before trying again.')
+  assert.equal(paddleCalls.length, 3)
+  assert.equal(connectCalls.length, 0)
 })
 
 test('POST /api/subscriptions/change-plan-preview treats single legacy monthly recurring item as base plan', async () => {

@@ -9,6 +9,7 @@ import {
 } from '../middleware/subscriptionCheck.js'
 import {
   getActiveResumeQuotaReservationCount,
+  getNextResumeQuotaAvailabilityChangeAt,
   isResumeQuotaReservationsEnabled,
 } from '../services/resumeQuotaReservations.js'
 import { resolveResumeQuotaPeriod } from '../utils/resumeQuotaPeriod.js'
@@ -34,6 +35,7 @@ export function buildResumeAnalysisUsageResponse({
   periodStart,
   periodEnd = getMonthEnd(periodStart),
   reserved = 0,
+  nextRevalidationAt = periodEnd,
 }) {
   const normalizedLimit = Number(limit || 0)
   const normalizedUsed = Number(used || 0)
@@ -53,6 +55,7 @@ export function buildResumeAnalysisUsageResponse({
     periodEnd: periodEnd.toISOString(),
     percentageUsed,
     warningLevel: resolveResumeAnalysisUsageWarningLevel(normalizedUsed, normalizedLimit),
+    nextRevalidationAt: new Date(nextRevalidationAt).toISOString(),
   }
 }
 
@@ -100,6 +103,17 @@ router.get('/resume-analysis', async (req, res) => {
         periodEnd: period.end,
       })
       : 0
+    const nextReservationChangeAt = reservationsEnabled
+      ? await getNextResumeQuotaAvailabilityChangeAt({
+        userId: req.userId,
+        periodStart: period.start,
+        periodEnd: period.end,
+      })
+      : null
+    const nextRevalidationAt = nextReservationChangeAt
+      && new Date(nextReservationChangeAt).getTime() < period.end.getTime()
+      ? new Date(nextReservationChangeAt)
+      : period.end
 
     return res.json(buildResumeAnalysisUsageResponse({
       limit,
@@ -107,6 +121,7 @@ router.get('/resume-analysis', async (req, res) => {
       periodStart: period.start,
       periodEnd: period.end,
       reserved,
+      nextRevalidationAt,
     }))
   } catch (error) {
     console.error('[Usage] Failed to load resume analysis usage:', error)

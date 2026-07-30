@@ -3,10 +3,12 @@ import assert from 'node:assert/strict'
 import {
   getCheckoutBlockReason,
   isTrialEligibleForUser,
+  prepareCheckoutSubscriptionState,
   persistVerifiedCheckoutSubscription,
   selectReturningCheckoutTransaction,
   validatePaddleCheckoutPlan,
 } from './paddleCheckout.js'
+import { reconcilePaddleSubscriptionState } from '../services/paddleSubscriptionReconciliation.js'
 
 function paddle(overrides = {}) {
   return {
@@ -111,6 +113,65 @@ test('checkout blocks active, payment-recovery, paused, and scheduled-cancellati
     { reason: 'cancellation_scheduled', redirectTo: '/billing' },
   )
   assert.equal(getCheckoutBlockReason({ subscription_status: 'cancelled', cancellation_effective_at: '2025-01-01' }, { status: 'canceled' }, new Date('2026-01-01')), null)
+})
+
+test('checkout preflight repairs a stale local Active state before deciding whether to block resubscription', async () => {
+  const calls = []
+  const client = {
+    async query(sql, params = []) {
+      calls.push({ sql: String(sql), params })
+      if (/UPDATE users/.test(String(sql))) return { rowCount: 1, rows: [{ id: 42 }] }
+      return { rowCount: 1, rows: [] }
+    },
+    release() {},
+  }
+  const db = { async connect() { return client } }
+  const paddleConfig = {
+    environment: 'sandbox',
+    priceIdsByPlan: { monthly: 'pri_monthly', annual: 'pri_annual' },
+    noTrialPriceIdsByPlan: {},
+    legacyPriceIdsByPlan: {},
+  }
+  const currentUser = {
+    id: 42,
+    subscription_status: 'active',
+    subscription_plan: 'monthly',
+    paddle_customer_id: 'ctm_123',
+    paddle_subscription_id: 'sub_123',
+    paddle_environment: 'sandbox',
+    current_period_end: '2026-07-28T00:00:00.000Z',
+    subscription_renewal_date: '2026-07-28T00:00:00.000Z',
+    next_billing_date: '2026-07-28T00:00:00.000Z',
+    cancellation_effective_at: '2026-07-28T00:00:00.000Z',
+    last_paddle_event_at: '2026-07-27T00:00:00.000Z',
+  }
+  const providerSubscription = {
+    id: 'sub_123',
+    customer_id: 'ctm_123',
+    status: 'canceled',
+    updated_at: '2026-07-28T08:00:00.000Z',
+    canceled_at: '2026-07-28T00:00:00.000Z',
+    current_billing_period: null,
+    next_billed_at: null,
+    items: [],
+  }
+
+  const preflight = await prepareCheckoutSubscriptionState({
+    user: currentUser,
+    paddle: paddleConfig,
+    providerSubscription,
+    reconcile: (args) => reconcilePaddleSubscriptionState({ ...args, db }),
+  })
+
+  assert.equal(preflight.providerSubscriptionVerified, true)
+  assert.equal(preflight.reconciliationReason, 'updated')
+  assert.equal(preflight.user.subscription_status, 'cancelled')
+  assert.equal(preflight.user.next_billing_date, null)
+  assert.equal(
+    getCheckoutBlockReason(preflight.user, providerSubscription, new Date('2026-07-29T00:00:00.000Z')),
+    null,
+  )
+  assert.ok(calls.some(({ sql }) => /UPDATE users/.test(sql)))
 })
 
 test('selectReturningCheckoutTransaction only selects a completed paid returning checkout for the same user and environment', () => {

@@ -28,6 +28,9 @@ export function normalizeResumeAnalysisQuota(payload) {
     periodStart: typeof payload.periodStart === 'string' ? payload.periodStart : null,
     periodEnd: typeof payload.periodEnd === 'string' ? payload.periodEnd : null,
     warningLevel: typeof payload.warningLevel === 'string' ? payload.warningLevel : null,
+    nextRevalidationAt: typeof payload.nextRevalidationAt === 'string'
+      ? payload.nextRevalidationAt
+      : (typeof payload.periodEnd === 'string' ? payload.periodEnd : null),
     canCreateAnalysis: explicitAllowed ?? available > 0,
   }
 }
