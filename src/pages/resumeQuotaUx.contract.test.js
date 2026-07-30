@@ -26,9 +26,11 @@ test('both entry points refresh canonical quota after accepted initialization an
 })
 
 
-test('Analyses retires a completed preflight attempt without discarding ambiguous retries', () => {
+test('both submission paths retire completed preflight attempts without discarding ambiguous retries', () => {
   assert.match(analysesSource, /if \(released\) retireResumeQuotaBatchKey\(quotaBatchKey\)/)
   assert.match(analysesSource, /remainingUploadResults[\s\S]*retireResumeQuotaBatchKey\(quotaBatchKey\)[\s\S]*await resumeQuota\.refresh\(\)/)
+  assert.match(uploaderSource, /if \(released\) retireResumeQuotaBatchKey\(quotaBatchKey\)/)
+  assert.match(uploaderSource, /remainingUploadResults[\s\S]*retireResumeQuotaBatchKey\(quotaBatchKey\)[\s\S]*await resumeQuota\.refresh\(\)/)
 })
 
 test('quota blocking preserves historical navigation and selected-file controls', () => {

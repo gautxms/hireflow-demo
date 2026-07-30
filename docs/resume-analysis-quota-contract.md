@@ -125,9 +125,9 @@ unmounts. This revalidation changes no reservation or accounting semantics.
   reserve the same batch twice.
 - The client retains that key across an unknown preflight outcome, so a lost
   response can recover the original reservation instead of allocating another.
-  The Analyses flow retires it only after sessions are definitively initialized
-  or an unused reservation release succeeds; a later intentional rerun then gets
-  a fresh key.
+  Both analysis-submission flows retire it only after sessions are definitively
+  initialized or an unused reservation release succeeds; a later intentional
+  rerun then gets a fresh key.
 - Reservations expire after two hours if a client abandons an upload.
 - Clients explicitly release every unused unit when initial session creation
   fails; successful sibling sessions continue instead of being abandoned.

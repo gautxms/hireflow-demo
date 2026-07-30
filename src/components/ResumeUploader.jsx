@@ -29,6 +29,7 @@ import {
   buildResumeQuotaFileIdentity,
   preflightResumeQuota,
   releaseResumeQuotaBatch,
+  retireResumeQuotaBatchKey,
 } from '../utils/resumeQuotaPreflight.js'
 import { formatResumeQuotaRejection, formatResumeQuotaResetDate, getBatchQuotaGuidance, isResumeQuotaRejection } from '../utils/resumeAnalysisQuota.js'
 
@@ -516,15 +517,17 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
         try {
           firstUpload = await initializeUpload(uploadedFiles[0], analysisId, 0)
         } catch (firstInitError) {
+          let released = false
           if (quotaReservationId) {
             await releaseResumeQuotaBatch({
               apiBase: API_BASE,
               token,
               reservationId: quotaReservationId,
-            }).catch((releaseError) => {
+            }).then(() => { released = true }).catch((releaseError) => {
               console.warn('[HireFlow] Failed to release unused quota after first init error:', releaseError)
             })
           }
+          if (released) retireResumeQuotaBatchKey(quotaBatchKey)
           throw firstInitError
         }
         analysisId = analysisId || firstUpload.analysisId
@@ -559,6 +562,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
             })
           }
         }
+        retireResumeQuotaBatchKey(quotaBatchKey)
         await resumeQuota.refresh()
 
         for (const uploadSession of [firstUpload, ...remainingUploads]) {
