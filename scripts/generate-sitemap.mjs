@@ -105,12 +105,10 @@ async function generateSitemap() {
     .filter((route) => !NON_INDEXABLE_ROUTES.has(route))
     .sort()
 
-  const lastmod = new Date().toISOString().split('T')[0]
-
   const urlEntries = allRoutes
     .map((route) => {
       const absoluteUrl = new URL(route, SITE_URL).toString()
-      return `  <url>\n    <loc>${xmlEscape(absoluteUrl)}</loc>\n    <lastmod>${lastmod}</lastmod>\n  </url>`
+      return `  <url>\n    <loc>${xmlEscape(absoluteUrl)}</loc>\n  </url>`
     })
     .join('\n')
 

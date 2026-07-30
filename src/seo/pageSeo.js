@@ -1,5 +1,6 @@
 const DEFAULT_SITE_URL = 'https://hireflow.dev'
 const DEFAULT_OG_IMAGE = '/og-default.png'
+const ORGANIZATION_LOGO = '/hireflow-logo.png'
 const LINKEDIN_COMPANY_URL = 'https://www.linkedin.com/company/hireflow-dev/'
 
 export const BRAND_SAME_AS = [LINKEDIN_COMPANY_URL]
@@ -103,7 +104,7 @@ function buildBrandStructuredData(siteUrl = DEFAULT_SITE_URL) {
         name: 'HireFlow',
         alternateName: 'HireFlow.dev',
         url: normalizedSiteUrl,
-        logo: `${normalizedSiteUrl}${DEFAULT_OG_IMAGE}`,
+        logo: `${normalizedSiteUrl}${ORGANIZATION_LOGO}`,
         description: SEO_DEFAULTS.description,
         sameAs: BRAND_SAME_AS,
       },

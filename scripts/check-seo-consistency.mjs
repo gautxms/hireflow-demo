@@ -7,8 +7,17 @@ const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 const projectRoot = path.resolve(__dirname, '..')
 const distDir = path.join(projectRoot, 'dist')
-const sitemapPath = path.join(projectRoot, 'public', 'sitemap.xml')
+const publicDir = path.join(projectRoot, 'public')
+const sitemapPath = path.join(publicDir, 'sitemap.xml')
+const manifestPath = path.join(publicDir, 'site.webmanifest')
+const sitemapGeneratorPath = path.join(projectRoot, 'scripts', 'generate-sitemap.mjs')
 const prerenderScriptPath = path.join(projectRoot, 'scripts', 'prerender-public-routes.mjs')
+const REQUIRED_PUBLIC_ASSETS = [
+  'hireflow-icon.png',
+  'hireflow-logo.png',
+  'og-default.png',
+  'site.webmanifest',
+]
 const SITE_URL = 'https://hireflow.dev'
 const LEGACY_DOMAIN = 'hireflow.ai'
 const EXPECTED_PRERENDERED_SITEMAP_ROUTES = new Set(Object.keys(PUBLIC_PAGE_SEO))
@@ -69,6 +78,8 @@ function getSitemapUrls(sitemapXml) {
 const sitemapXml = await fs.readFile(sitemapPath, 'utf8')
 const sitemapUrls = getSitemapUrls(sitemapXml)
 const sitemapRoutes = sitemapUrls.map(routeFromUrl)
+const sitemapGeneratorSource = await fs.readFile(sitemapGeneratorPath, 'utf8')
+const manifest = JSON.parse(await fs.readFile(manifestPath, 'utf8'))
 const prerenderSource = await fs.readFile(prerenderScriptPath, 'utf8')
 const prerenderRoutes = getPrerenderRoutes(prerenderSource)
 const noindexRoutes = Object.keys(PUBLIC_PAGE_SEO).filter((route) => {
@@ -77,7 +88,19 @@ const noindexRoutes = Object.keys(PUBLIC_PAGE_SEO).filter((route) => {
 })
 
 assert(!sitemapXml.includes(LEGACY_DOMAIN), 'Sitemap must not reference hireflow.ai.')
+assert(!sitemapXml.includes('<lastmod>'), 'Sitemap lastmod values must be omitted unless they represent substantive per-page updates.')
+assert(!sitemapGeneratorSource.includes('<lastmod>'), 'Sitemap generator must not emit deployment-time lastmod values.')
 assert(sitemapUrls.every((url) => url.startsWith(`${SITE_URL}/`) || url === SITE_URL), 'Sitemap URLs must use https://hireflow.dev.')
+
+for (const asset of REQUIRED_PUBLIC_ASSETS) {
+  assert(await pathExists(path.join(publicDir, asset)), `Required public SEO asset is missing: ${asset}`)
+}
+
+for (const icon of manifest.icons || []) {
+  const iconPath = String(icon.src || '').replace(/^\/+/, '')
+  assert(iconPath, 'Every web manifest icon must have a src.')
+  assert(await pathExists(path.join(publicDir, iconPath)), `Web manifest icon is missing: ${icon.src}`)
+}
 
 for (const route of noindexRoutes) {
   assert(!sitemapRoutes.includes(route), `Noindex route ${route} must not be listed in sitemap.xml.`)
