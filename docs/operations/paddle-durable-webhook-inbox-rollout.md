@@ -23,9 +23,11 @@ completed. It must therefore be drained before any new instance writes
 6. Verify there are no unexpected `processing` or `retryable_failed` rows.
 
 While the gate is off, new events retain the prior completion-time deduplication
-behavior. The compatibility reader still returns a retryable 503 for unfinished
-durable rows, so a rollback or mixed configuration cannot falsely acknowledge
-those rows as complete.
+behavior. The compatibility reader never treats unfinished durable rows as
+completed: it uses the same fenced reclaim path for eligible retryable or
+abandoned work, while an active claim or concurrent loser receives retryable
+503. A rollback or mixed configuration therefore cannot falsely acknowledge an
+unfinished row as complete.
 
 Do not enable the durable mode during this first rolling deployment.
 
@@ -57,5 +59,7 @@ If durable processing is unhealthy:
 5. Disable the flag only after unfinished rows are completed or explicitly
    reconciled.
 
-With the flag disabled, completed duplicates remain suppressed and unfinished
-durable rows receive a retryable response instead of a false success.
+With the flag disabled, completed duplicates remain suppressed. Eligible
+unfinished rows can still be reclaimed through the durable ownership path, and
+active or concurrently owned work receives a retryable response instead of a
+false success.
