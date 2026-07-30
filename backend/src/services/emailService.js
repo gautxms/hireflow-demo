@@ -57,7 +57,7 @@ function getBrandingValues() {
   return {
     companyName: process.env.COMPANY_NAME || 'HireFlow',
     supportEmail: process.env.SUPPORT_EMAIL || 'Hello@hireflow.dev',
-    logoUrl: process.env.COMPANY_LOGO_URL || `${appUrl}/vite.svg`,
+    logoUrl: process.env.COMPANY_LOGO_URL || `${appUrl}/hireflow-logo.png`,
     appUrl,
     year: String(new Date().getUTCFullYear()),
     unsubscribeBaseUrl: `${appUrl}${unsubscribePath}`,

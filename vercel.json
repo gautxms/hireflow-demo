@@ -74,5 +74,19 @@
       "source": "/admin/(.*)",
       "destination": "/index.html"
     }
+  ],
+  "trailingSlash": false,
+  "redirects": [
+    {
+      "source": "/:path*",
+      "has": [
+        {
+          "type": "host",
+          "value": "www.hireflow.dev"
+        }
+      ],
+      "destination": "https://hireflow.dev/:path*",
+      "permanent": true
+    }
   ]
 }
