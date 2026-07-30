@@ -31,7 +31,7 @@ import {
   releaseResumeQuotaBatch,
   retireResumeQuotaBatchKey,
 } from '../utils/resumeQuotaPreflight.js'
-import { formatResumeQuotaRejection, formatResumeQuotaResetDate, getBatchQuotaGuidance, isResumeQuotaRejection } from '../utils/resumeAnalysisQuota.js'
+import { formatResumeAnalysisCreationBlocked, formatResumeQuotaRejection, formatResumeQuotaResetDate, getBatchQuotaGuidance, isResumeAnalysisAccessBlocked, isResumeQuotaRejection } from '../utils/resumeAnalysisQuota.js'
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 const RESUME_UPLOAD_STATE_KEY = 'hireflow_resume_upload_state_v1'
@@ -407,7 +407,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
     }
     if (resumeQuota.status === 'idle' || resumeQuota.status === 'loading') return
     if (resumeQuota.status === 'success' && resumeQuota.quota?.canCreateAnalysis === false) {
-      setError(formatResumeQuotaRejection({}, resumeQuota.quota))
+      setError(formatResumeAnalysisCreationBlocked(resumeQuota.quota))
       return
     }
     const batchGuidance = getBatchQuotaGuidance(resumeQuota.status === 'success' ? resumeQuota.quota : null, uploadedFiles.length)
@@ -1094,6 +1094,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
     ? Math.round((uploadProgress.completed / uploadProgress.total) * 100)
     : 0
   const quotaBlocked = resumeQuota.status === 'success' && resumeQuota.quota?.canCreateAnalysis === false
+  const quotaAccessBlocked = quotaBlocked && isResumeAnalysisAccessBlocked(resumeQuota.quota)
   const quotaPending = resumeQuota.status === 'idle' || resumeQuota.status === 'loading'
   const quotaBatchGuidance = getBatchQuotaGuidance(resumeQuota.status === 'success' ? resumeQuota.quota : null, uploadedFiles.length)
   const quotaResetDate = formatResumeQuotaResetDate(resumeQuota.quota?.periodEnd)
@@ -1258,7 +1259,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
         )}
 
         {quotaPending ? <div className="resume-quota-callout" role="status"><strong>Checking resume allowance</strong><p>Submission will be available after the current allowance is confirmed.</p></div> : null}
-        {quotaBlocked ? <div className="resume-quota-callout" role="status"><strong>Resume-analysis limit reached</strong><p>Existing analyses and results remain available.{quotaResetDate ? ` Your allowance resets on ${quotaResetDate}.` : ''}</p></div> : null}
+        {quotaBlocked ? <div className="resume-quota-callout" role="status"><strong>{quotaAccessBlocked ? 'Active subscription required' : 'Resume-analysis limit reached'}</strong><p>{quotaAccessBlocked ? 'An active subscription is required to analyze new resumes. Existing analyses and results remain available.' : `Existing analyses and results remain available.${quotaResetDate ? ` Your allowance resets on ${quotaResetDate}.` : ''}`}</p></div> : null}
         {!quotaBlocked && quotaBatchGuidance ? <div className="resume-quota-callout resume-quota-callout--warning" role="status"><strong>Reduce this batch</strong><p>{quotaBatchGuidance}</p></div> : null}
 
         {error && (
