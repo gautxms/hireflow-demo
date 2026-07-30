@@ -93,9 +93,11 @@ includes active capacity reservations that have not reached provider start.
 The additive `available` field is the amount that atomic enforcement can accept
 now: `max(limit - used - active reserved, 0)`. `canCreateAnalysis` is the
 authoritative server decision for whether at least one new resume may be
-submitted and is equivalent to `available > 0`. When reservation enforcement is
-disabled, there is no active reservation capacity to subtract and `available`
-equals `remaining`.
+submitted. It is true only when `canUsePaidMutation(user) && available > 0`,
+so past-due, expired, inactive, and other read-only users are not advertised as
+able to submit even when unused quota capacity remains. When reservation
+enforcement is disabled, there is no active reservation capacity to subtract and
+`available` equals `remaining`.
 
 Customer UI must use `available` and `canCreateAnalysis` for submission guidance,
 while it may use `used`, `percentageUsed`, and `warningLevel` to describe actual
