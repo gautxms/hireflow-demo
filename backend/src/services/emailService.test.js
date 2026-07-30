@@ -74,3 +74,26 @@ test('recipient domain safe logging helper only returns domain', async () => {
   const mod = await loadService()
   assert.equal(mod.__emailServiceTestUtils.getRecipientDomain('person@sub.example.com'), 'sub.example.com')
 })
+
+test('email templates use the HireFlow brand logo by default', async () => {
+  resetEnv({
+    FRONTEND_ORIGIN: 'https://hireflow.example',
+    APP_ORIGIN: '',
+    COMPANY_LOGO_URL: '',
+  })
+  const mod = await loadService()
+  const preview = await mod.previewEmailTemplate('verification')
+
+  assert.equal(preview.values.logoUrl, 'https://hireflow.example/hireflow-logo.png')
+  assert.match(preview.html, /src="https:\/\/hireflow\.example\/hireflow-logo\.png"/)
+  assert.doesNotMatch(preview.html, /vite\.svg/)
+})
+
+test('email templates honor a configured company logo URL', async () => {
+  resetEnv({ COMPANY_LOGO_URL: 'https://cdn.example.com/custom-logo.png' })
+  const mod = await loadService()
+  const preview = await mod.previewEmailTemplate('welcome')
+
+  assert.equal(preview.values.logoUrl, 'https://cdn.example.com/custom-logo.png')
+  assert.match(preview.html, /src="https:\/\/cdn\.example\.com\/custom-logo\.png"/)
+})
