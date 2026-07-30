@@ -15,7 +15,7 @@ import {
   releaseResumeQuotaBatch,
   retireResumeQuotaBatchKey,
 } from '../utils/resumeQuotaPreflight.js'
-import { formatResumeQuotaRejection, formatResumeQuotaResetDate, getBatchQuotaGuidance, isResumeQuotaRejection } from '../utils/resumeAnalysisQuota.js'
+import { formatResumeAnalysisCreationBlocked, formatResumeQuotaRejection, formatResumeQuotaResetDate, getBatchQuotaGuidance, isResumeAnalysisAccessBlocked, isResumeQuotaRejection } from '../utils/resumeAnalysisQuota.js'
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 const MAX_FILE_SIZE = 25 * 1024 * 1024
@@ -407,7 +407,7 @@ export default function AnalysesPage({ isReadOnly = false }) {
     if (nextValidationErrors.name || nextValidationErrors.files) return
     if (resumeQuota.status === 'idle' || resumeQuota.status === 'loading') return
     if (resumeQuota.status === 'success' && resumeQuota.quota?.canCreateAnalysis === false) {
-      setSubmitError(formatResumeQuotaRejection({}, resumeQuota.quota))
+      setSubmitError(formatResumeAnalysisCreationBlocked(resumeQuota.quota))
       return
     }
     const batchGuidance = getBatchQuotaGuidance(resumeQuota.status === 'success' ? resumeQuota.quota : null, filesSnapshot.length)
@@ -812,6 +812,7 @@ function CreateAnalysisModal({ isOpen, isSubmitting, analysisName, onAnalysisNam
   if (!isOpen) return null
 
   const quotaBlocked = quotaStatus === 'success' && quota?.canCreateAnalysis === false
+  const quotaAccessBlocked = quotaBlocked && isResumeAnalysisAccessBlocked(quota)
   const quotaPending = quotaStatus === 'idle' || quotaStatus === 'loading'
   const batchGuidance = getBatchQuotaGuidance(quotaStatus === 'success' ? quota : null, selectedFiles.length)
   const resetDate = formatResumeQuotaResetDate(quota?.periodEnd)
@@ -823,7 +824,7 @@ function CreateAnalysisModal({ isOpen, isSubmitting, analysisName, onAnalysisNam
         <form onSubmit={onSubmit} className="analyses-modal__form" noValidate>
           <div className="analyses-modal__scrollable">
             {quotaPending ? <div className="analyses-modal__quota-callout" role="status"><strong>Checking resume allowance</strong><p>Submission will be available after the current allowance is confirmed.</p></div> : null}
-            {quotaBlocked ? <div className="analyses-modal__quota-callout" role="status"><strong>Resume-analysis limit reached</strong><p>Existing analyses and results remain available.{resetDate ? ` Your allowance resets on ${resetDate}.` : ''}</p></div> : null}
+            {quotaBlocked ? <div className="analyses-modal__quota-callout" role="status"><strong>{quotaAccessBlocked ? 'Active subscription required' : 'Resume-analysis limit reached'}</strong><p>{quotaAccessBlocked ? 'An active subscription is required to analyze new resumes. Existing analyses and results remain available.' : `Existing analyses and results remain available.${resetDate ? ` Your allowance resets on ${resetDate}.` : ''}`}</p></div> : null}
             {!quotaBlocked && batchGuidance ? <div className="analyses-modal__quota-callout analyses-modal__quota-callout--warning" role="status"><strong>Reduce this batch</strong><p>{batchGuidance}</p></div> : null}
             <div className="analyses-modal__field"><label htmlFor="analysis-name">Analysis name</label><input className="analyses-modal__control" ref={nameInputRef} id="analysis-name" value={analysisName} onChange={(event) => onAnalysisNameChange(event.target.value)} aria-invalid={Boolean(validationErrors.name)} aria-describedby={validationErrors.name ? 'analysis-name-error' : undefined} />{validationErrors.name && <p id="analysis-name-error" role="alert" className="analyses-modal__error">{validationErrors.name}</p>}</div>
           <div className="analyses-modal__field"><label htmlFor="analysis-jd">Job description</label><select className="analyses-modal__control" id="analysis-jd" value={selectedJobDescriptionId} onChange={(event) => onSelectedJobDescriptionIdChange(event.target.value)}><option value="">{ANALYZE_WITHOUT_JOB_DESCRIPTION_LABEL}</option>{jobDescriptions.map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}</select></div>
