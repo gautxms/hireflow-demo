@@ -17,6 +17,24 @@ process.env.PADDLE_TEST_ANNUAL_PRICE_ID = 'pri_test_annual'
 process.env.PADDLE_TEST_MONTHLY_PRICE_ID = 'pri_test_monthly'
 process.env.PADDLE_SANDBOX_MONTHLY_LEGACY_PRICE_IDS = 'pri_legacy_monthly'
 process.env.PADDLE_SANDBOX_ANNUAL_LEGACY_PRICE_IDS = 'pri_legacy_annual'
+process.env.PADDLE_DURABLE_WEBHOOK_INBOX_ENABLED = 'true'
+
+test('durable webhook inbox rollout defaults off and requires an explicit true value', async (t) => {
+  const originalValue = process.env.PADDLE_DURABLE_WEBHOOK_INBOX_ENABLED
+  const { isDurableWebhookInboxEnabled } = await import('./paddleWebhook.js')
+  t.after(() => {
+    process.env.PADDLE_DURABLE_WEBHOOK_INBOX_ENABLED = originalValue
+  })
+
+  delete process.env.PADDLE_DURABLE_WEBHOOK_INBOX_ENABLED
+  assert.equal(isDurableWebhookInboxEnabled(), false)
+
+  process.env.PADDLE_DURABLE_WEBHOOK_INBOX_ENABLED = 'false'
+  assert.equal(isDurableWebhookInboxEnabled(), false)
+
+  process.env.PADDLE_DURABLE_WEBHOOK_INBOX_ENABLED = 'TRUE'
+  assert.equal(isDurableWebhookInboxEnabled(), true)
+})
 
 test('completed-payment webhook defers provider adjustment work until after durable event recording', () => {
   const source = readFileSync(new URL('./paddleWebhook.js', import.meta.url), 'utf8')
@@ -95,7 +113,9 @@ test('inbox heartbeat retains exact ownership across repeated lease renewals and
     heartbeatIntervalMs: 5,
   })
 
-  await delay(35)
+  for (let attempt = 0; calls.length < 2 && attempt < 50; attempt += 1) {
+    await delay(5)
+  }
   await lease.assertOwned()
   assert.ok(calls.length >= 2)
   assert.ok(calls.every(({ sql }) => /processing_token = \$5/.test(sql)))
@@ -384,6 +404,119 @@ test('POST /api/paddle/webhook durably claims the event before billing mutations
   assert.ok(billingMutationIndex > claimIndex)
   assert.ok(completionIndex > billingMutationIndex)
 })
+
+test('disabled durable rollout preserves legacy completion ordering without creating non-terminal rows', async (t) => {
+  const originalValue = process.env.PADDLE_DURABLE_WEBHOOK_INBOX_ENABLED
+  process.env.PADDLE_DURABLE_WEBHOOK_INBOX_ENABLED = 'false'
+  t.after(() => {
+    process.env.PADDLE_DURABLE_WEBHOOK_INBOX_ENABLED = originalValue
+  })
+
+  const rawBody = JSON.stringify(buildSubscriptionUpdatedPayload({
+    event_id: 'evt_legacy_compatible_rollout',
+  }))
+  const calls = []
+
+  t.mock.method(pool, 'query', async (sql) => {
+    const query = String(sql)
+    calls.push(query)
+    if (query.includes('FROM paddle_webhook_events')) return { rowCount: 0, rows: [] }
+    if (query.includes('FROM users')) {
+      return { rowCount: 1, rows: [{ id: 42, paddle_customer_id: 'ctm_test_123' }] }
+    }
+    return { rowCount: 1, rows: [{ event_id: 'evt_legacy_compatible_rollout' }] }
+  })
+
+  const { response } = await postWebhook({ body: rawBody, signature: signBody(rawBody) })
+
+  assert.equal(response.status, 200)
+  const billingMutationIndex = calls.findIndex((sql) => /UPDATE users/.test(sql))
+  const completionIndex = calls.findIndex((sql) => /INSERT INTO paddle_webhook_events/.test(sql))
+  assert.ok(billingMutationIndex >= 0)
+  assert.ok(completionIndex > billingMutationIndex)
+  assert.equal(
+    calls.some((sql) => /VALUES[\s\S]*'processing'/.test(sql)),
+    false,
+  )
+  assert.equal(
+    calls.some((sql) => /SET last_attempt_at = NOW\(\)/.test(sql)),
+    false,
+  )
+})
+
+test('disabled durable rollout leaves a failed event unrecorded so Paddle can redeliver it', async (t) => {
+  const originalValue = process.env.PADDLE_DURABLE_WEBHOOK_INBOX_ENABLED
+  process.env.PADDLE_DURABLE_WEBHOOK_INBOX_ENABLED = 'false'
+  t.after(() => {
+    process.env.PADDLE_DURABLE_WEBHOOK_INBOX_ENABLED = originalValue
+  })
+
+  const rawBody = JSON.stringify(buildSubscriptionUpdatedPayload({
+    event_id: 'evt_legacy_compatible_failure',
+  }))
+  const calls = []
+
+  t.mock.method(pool, 'query', async (sql) => {
+    const query = String(sql)
+    calls.push(query)
+    if (query.includes('FROM paddle_webhook_events')) return { rowCount: 0, rows: [] }
+    if (query.includes('FROM users')) throw new Error('temporary database failure')
+    return { rowCount: 1, rows: [] }
+  })
+
+  const { response } = await postWebhook({ body: rawBody, signature: signBody(rawBody) })
+
+  assert.equal(response.status, 500)
+  assert.equal(calls.some((sql) => /INSERT INTO paddle_webhook_events/.test(sql)), false)
+  assert.equal(calls.some((sql) => /status = 'retryable_failed'/.test(sql)), false)
+})
+
+for (const status of ['processing', 'retryable_failed']) {
+  test(`disabled durable rollout never acknowledges a ${status} row as completed`, async (t) => {
+    const originalValue = process.env.PADDLE_DURABLE_WEBHOOK_INBOX_ENABLED
+    process.env.PADDLE_DURABLE_WEBHOOK_INBOX_ENABLED = 'false'
+    t.after(() => {
+      process.env.PADDLE_DURABLE_WEBHOOK_INBOX_ENABLED = originalValue
+    })
+
+    const payload = buildSubscriptionUpdatedPayload({
+      event_id: `evt_legacy_compatible_${status}`,
+    })
+    const rawBody = JSON.stringify(payload)
+    const payloadHash = crypto.createHash('sha256').update(rawBody, 'utf8').digest('hex')
+    const calls = []
+
+    t.mock.method(pool, 'query', async (sql) => {
+      const query = String(sql)
+      calls.push(query)
+      if (query.includes('FROM paddle_webhook_events')) {
+        return {
+          rowCount: 1,
+          rows: [{
+            event_id: payload.event_id,
+            payload_hash: payloadHash,
+            status,
+            attempt_count: 1,
+            last_attempt_at: new Date().toISOString(),
+          }],
+        }
+      }
+      if (/UPDATE paddle_webhook_events[\s\S]+SET status = 'processing'/.test(query)) {
+        return { rowCount: 0, rows: [] }
+      }
+      return { rowCount: 1, rows: [] }
+    })
+
+    const { response, payload: responsePayload } = await postWebhook({
+      body: rawBody,
+      signature: signBody(rawBody),
+    })
+
+    assert.equal(response.status, 503)
+    assert.equal(responsePayload.retryable, true)
+    assert.equal(calls.some((sql) => /FROM users|UPDATE users|INSERT INTO subscriptions/.test(sql)), false)
+  })
+}
 
 test('POST /api/paddle/webhook acknowledges a completed inbox event without replaying billing mutations', async (t) => {
   const payload = buildSubscriptionUpdatedPayload({

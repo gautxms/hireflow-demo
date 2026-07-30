@@ -31,6 +31,11 @@ import {
 const router = express.Router()
 const WEBHOOK_PROCESSING_LEASE_SECONDS = 120
 const WEBHOOK_HEARTBEAT_INTERVAL_MS = 40_000
+const DURABLE_WEBHOOK_INBOX_FLAG = 'PADDLE_DURABLE_WEBHOOK_INBOX_ENABLED'
+
+export function isDurableWebhookInboxEnabled(environment = process.env) {
+  return String(environment?.[DURABLE_WEBHOOK_INBOX_FLAG] || '').trim().toLowerCase() === 'true'
+}
 
 async function paddleApiRequest(path, options = {}, paddle) {
   const response = await fetch(`${paddle.apiBaseUrl}${path}`, {
@@ -490,6 +495,78 @@ async function claimWebhookInboxEvent({
     : { claimed: false, duplicate: true, status: 'processing' }
 }
 
+async function claimLegacyCompatibleWebhookEvent({
+  eventId,
+  eventType,
+  payloadHash,
+  payload,
+  environment,
+}) {
+  const existing = await getWebhookInboxEvent(eventId)
+
+  if (!existing) {
+    return { claimed: true, legacy: true }
+  }
+
+  if (existing.payload_hash && existing.payload_hash !== payloadHash) {
+    return { claimed: false, conflict: true }
+  }
+
+  if (normalizeInboxStatus(existing.status) === 'completed') {
+    return { claimed: false, duplicate: true, status: 'completed' }
+  }
+
+  // Once durable processing is enabled, a rollback or mixed deployment can
+  // still encounter an unfinished durable row. Reuse the fenced durable claim
+  // path instead of acknowledging unfinished work or creating a second legacy
+  // processor.
+  return claimWebhookInboxEvent({
+    eventId,
+    eventType,
+    payloadHash,
+    payload,
+    environment,
+  })
+}
+
+async function completeLegacyCompatibleWebhookEvent({
+  eventId,
+  eventType,
+  payloadHash,
+  payload,
+  environment,
+}) {
+  const result = await pool.query(
+    `INSERT INTO paddle_webhook_events (
+       event_id,
+       event_type,
+       payload_hash,
+       payload,
+       paddle_environment,
+       status,
+       attempt_count,
+       first_received_at,
+       last_attempt_at,
+       processed_at,
+       completed_at
+     )
+     VALUES ($1, $2, $3, $4::jsonb, $5, 'completed', 1, NOW(), NOW(), NOW(), NOW())
+     ON CONFLICT (event_id) DO NOTHING
+     RETURNING event_id`,
+    [eventId, eventType || 'unknown', payloadHash, JSON.stringify(payload), environment],
+  )
+
+  if (result.rowCount > 0) return
+
+  const racedEvent = await getWebhookInboxEvent(eventId)
+  if (racedEvent?.payload_hash && racedEvent.payload_hash !== payloadHash) {
+    throw new Error('Paddle webhook event id was reused with a different payload')
+  }
+  if (normalizeInboxStatus(racedEvent?.status) !== 'completed') {
+    throw new Error('Paddle webhook legacy-compatible completion raced with durable processing')
+  }
+}
+
 async function completeWebhookInboxEvent(eventId, payloadHash, environment, attemptCount, processingToken) {
   const result = await pool.query(
     `UPDATE paddle_webhook_events
@@ -687,6 +764,7 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment) {
 
   const dedupeEventId = getEventDeduplicationId(payload, rawBody)
   const payloadHash = crypto.createHash('sha256').update(rawBody || '', 'utf8').digest('hex')
+  const durableInboxEnabled = isDurableWebhookInboxEnabled()
   let inboxClaimed = false
   let inboxAttemptCount = null
   let inboxProcessingToken = null
@@ -695,13 +773,16 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment) {
   const postProcessingTasks = []
 
   try {
-    const inboxClaim = await claimWebhookInboxEvent({
+    const claimInput = {
       eventId: dedupeEventId,
       eventType,
       payloadHash,
       payload,
       environment: paddle.environment,
-    })
+    }
+    const inboxClaim = durableInboxEnabled
+      ? await claimWebhookInboxEvent(claimInput)
+      : await claimLegacyCompatibleWebhookEvent(claimInput)
 
     if (inboxClaim.conflict) {
       console.error('[Paddle webhook] rejected reused event id with different payload', {
@@ -725,16 +806,18 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment) {
         duplicate: true,
       })
     }
-    inboxClaimed = true
-    inboxAttemptCount = inboxClaim.attemptCount
-    inboxProcessingToken = inboxClaim.processingToken
-    inboxLease = createWebhookInboxLease({
-      eventId: dedupeEventId,
-      payloadHash,
-      environment: paddle.environment,
-      attemptCount: inboxAttemptCount,
-      processingToken: inboxProcessingToken,
-    })
+    if (!inboxClaim.legacy) {
+      inboxClaimed = true
+      inboxAttemptCount = inboxClaim.attemptCount
+      inboxProcessingToken = inboxClaim.processingToken
+      inboxLease = createWebhookInboxLease({
+        eventId: dedupeEventId,
+        payloadHash,
+        environment: paddle.environment,
+        attemptCount: inboxAttemptCount,
+        processingToken: inboxProcessingToken,
+      })
+    }
 
     const nextStatus = mapToSubscriptionStatus(eventType, payload)
     const providerEventAt = getProviderEventTimestamp(payload)
@@ -1136,17 +1219,27 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment) {
     // the inbox is completed. Otherwise a crash (or selection failure) in this
     // window would make every Paddle redelivery look like a completed duplicate.
     for (const task of completionTasks) {
-      await inboxLease.assertOwned()
+      await inboxLease?.assertOwned()
       await task()
-      await inboxLease.assertOwned()
+      await inboxLease?.assertOwned()
     }
-    await inboxLease.finish(() => completeWebhookInboxEvent(
-      dedupeEventId,
-      payloadHash,
-      paddle.environment,
-      inboxAttemptCount,
-      inboxProcessingToken,
-    ))
+    if (inboxLease) {
+      await inboxLease.finish(() => completeWebhookInboxEvent(
+        dedupeEventId,
+        payloadHash,
+        paddle.environment,
+        inboxAttemptCount,
+        inboxProcessingToken,
+      ))
+    } else {
+      await completeLegacyCompatibleWebhookEvent({
+        eventId: dedupeEventId,
+        eventType,
+        payloadHash,
+        payload,
+        environment: paddle.environment,
+      })
+    }
     for (const task of postProcessingTasks) {
       try {
         await task()
