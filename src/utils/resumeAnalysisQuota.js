@@ -35,12 +35,23 @@ export function normalizeResumeAnalysisQuota(payload) {
   }
 }
 
+export function isResumeAnalysisAccessBlocked(quota) {
+  return quota?.canCreateAnalysis === false && finiteNonNegative(quota?.available) > 0
+}
+
 export function getResumeAllowanceTone(quota) {
-  if (!quota) return 'unavailable'
+  if (!quota || isResumeAnalysisAccessBlocked(quota)) return 'unavailable'
   if (quota.canCreateAnalysis === false || quota.available <= 0 || quota.warningLevel === 'exceeded') return 'reached'
   if (quota.warningLevel === 'critical' || quota.percentageUsed >= 90) return 'warning'
   if (quota.warningLevel === 'approaching' || quota.percentageUsed >= 75) return 'info'
   return 'neutral'
+}
+
+export function formatResumeAnalysisCreationBlocked(quota) {
+  if (isResumeAnalysisAccessBlocked(quota)) {
+    return 'An active subscription is required to analyze new resumes. Existing analyses and results remain available.'
+  }
+  return formatResumeQuotaRejection({}, quota)
 }
 
 export function formatResumeQuotaResetDate(value, locale = 'en-GB') {
