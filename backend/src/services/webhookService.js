@@ -5,6 +5,15 @@ const WEBHOOK_TIMEOUT_MS = 8_000
 const MAX_RETRY_ATTEMPTS = 3
 const RETRY_DELAY_MINUTES = 10
 
+class WebhookDeliveryLogError extends Error {
+  constructor(errors) {
+    super('One or more webhook deliveries could not be durably recorded')
+    this.name = 'WebhookDeliveryLogError'
+    this.code = 'WEBHOOK_DELIVERY_LOG_FAILED'
+    this.errors = errors
+  }
+}
+
 const SUPPORTED_EVENTS = new Set([
   'parse.completed',
   'user.created',
@@ -113,13 +122,20 @@ async function performDelivery({ webhook, eventType, payload, attempt = 1 }) {
     ],
   )
 
-  await pool.query(
-    `UPDATE integration_webhooks
-     SET last_triggered_at = NOW(),
-         updated_at = NOW()
-     WHERE id = $1`,
-    [webhook.id],
-  )
+  try {
+    await pool.query(
+      `UPDATE integration_webhooks
+       SET last_triggered_at = NOW(),
+           updated_at = NOW()
+       WHERE id = $1`,
+      [webhook.id],
+    )
+  } catch (error) {
+    // The delivery log above is the durable source for success/retry state.
+    // Metadata refresh must not turn a recorded delivery into an unrecorded
+    // failure that causes the caller to redeliver it.
+    console.error('[Webhooks] Failed to update last-triggered metadata:', error?.message || error)
+  }
 
   return logInsert.rows[0]
 }
@@ -219,7 +235,7 @@ export async function removeWebhook(id) {
   return result.rows[0] || null
 }
 
-export async function triggerWebhook(eventType, payload) {
+export async function triggerWebhook(eventType, payload, { requireDurableLog = false } = {}) {
   if (!SUPPORTED_EVENTS.has(eventType) || eventType === '*') {
     console.warn('[Webhooks] Unsupported event ignored:', eventType)
     return []
@@ -234,6 +250,7 @@ export async function triggerWebhook(eventType, payload) {
   )
 
   const deliveries = []
+  const deliveryLogErrors = []
   for (const webhook of result.rows) {
     try {
       const log = await performDelivery({
@@ -245,7 +262,12 @@ export async function triggerWebhook(eventType, payload) {
       deliveries.push(log)
     } catch (error) {
       console.error('[Webhooks] Delivery failed with unhandled error:', error?.message || error)
+      deliveryLogErrors.push(error)
     }
+  }
+
+  if (requireDurableLog && deliveryLogErrors.length > 0) {
+    throw new WebhookDeliveryLogError(deliveryLogErrors)
   }
 
   return deliveries
