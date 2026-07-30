@@ -1,0 +1,761 @@
+{
+    "analyzed_at":  "2026-07-30T10:13:40.3977567Z",
+    "sitemap_urls":  [
+                         "https://hireflow.dev/",
+                         "https://hireflow.dev/about",
+                         "https://hireflow.dev/ai-disclosure",
+                         "https://hireflow.dev/ai-resume-screening",
+                         "https://hireflow.dev/automated-candidate-shortlisting",
+                         "https://hireflow.dev/bulk-resume-analysis",
+                         "https://hireflow.dev/contact",
+                         "https://hireflow.dev/cookie-policy",
+                         "https://hireflow.dev/help",
+                         "https://hireflow.dev/pricing",
+                         "https://hireflow.dev/privacy",
+                         "https://hireflow.dev/refund-policy",
+                         "https://hireflow.dev/resume-scoring-ai",
+                         "https://hireflow.dev/terms",
+                         "https://hireflow.dev/trust"
+                     ],
+    "pages":  [
+                  {
+                      "url":  "https://hireflow.dev/",
+                      "status":  200,
+                      "final_url":  "https://hireflow.dev/",
+                      "content_type":  "text/html; charset=utf-8",
+                      "bytes":  4699,
+                      "title":  "HireFlow – AI Hiring Platform",
+                      "title_length":  29,
+                      "description":  "HireFlow helps teams hire faster using AI-powered resume screening, interviews, and candidate ranking.",
+                      "description_length":  102,
+                      "canonical":  "https://hireflow.dev",
+                      "robots":  "index, follow",
+                      "lang":  "en",
+                      "h1_count":  1,
+                      "headings":  [
+                                       {
+                                           "level":  1,
+                                           "text":  "Hire Smarter. Faster."
+                                       },
+                                       {
+                                           "level":  2,
+                                           "text":  "Why teams choose HireFlow"
+                                       },
+                                       {
+                                           "level":  3,
+                                           "text":  "AI Screening"
+                                       },
+                                       {
+                                           "level":  3,
+                                           "text":  "Structured Review"
+                                       },
+                                       {
+                                           "level":  3,
+                                           "text":  "Smart Analytics"
+                                       }
+                                   ],
+                      "word_count":  74,
+                      "schema_types":  [
+                                           "Organization",
+                                           "WebSite"
+                                       ],
+                      "og_title":  "HireFlow – AI Hiring Platform",
+                      "og_description":  "HireFlow helps teams hire faster using AI-powered resume screening, interviews, and candidate ranking.",
+                      "og_url":  "https://hireflow.dev",
+                      "og_image":  "https://hireflow.dev/og-default.png",
+                      "twitter_card":  "summary_large_image",
+                      "links":  [
+                                    "https://hireflow.dev/pricing"
+                                ],
+                      "images":  [
+
+                                 ],
+                      "headers":  {
+                                      "strict_transport_security":  "max-age=63072000",
+                                      "content_security_policy":  null,
+                                      "x_content_type_options":  null,
+                                      "referrer_policy":  null,
+                                      "permissions_policy":  null,
+                                      "cache_control":  "public, max-age=0, must-revalidate",
+                                      "content_encoding":  null
+                                  }
+                  },
+                  {
+                      "url":  "https://hireflow.dev/about",
+                      "status":  200,
+                      "final_url":  "https://hireflow.dev/about",
+                      "content_type":  "text/html; charset=utf-8",
+                      "bytes":  2823,
+                      "title":  "About HireFlow",
+                      "title_length":  14,
+                      "description":  "Learn how HireFlow is preparing practical AI-assisted resume screening for faster, more structured candidate review.",
+                      "description_length":  116,
+                      "canonical":  "https://hireflow.dev/about",
+                      "robots":  "index, follow",
+                      "lang":  "en",
+                      "h1_count":  1,
+                      "headings":  [
+                                       {
+                                           "level":  1,
+                                           "text":  "About HireFlow"
+                                       }
+                                   ],
+                      "word_count":  19,
+                      "schema_types":  [
+                                           "Organization",
+                                           "WebSite"
+                                       ],
+                      "og_title":  "About HireFlow",
+                      "og_description":  "Learn how HireFlow is preparing practical AI-assisted resume screening for faster, more structured candidate review.",
+                      "og_url":  "https://hireflow.dev/about",
+                      "og_image":  "https://hireflow.dev/og-default.png",
+                      "twitter_card":  "summary_large_image",
+                      "links":  [
+
+                                ],
+                      "images":  [
+
+                                 ],
+                      "headers":  {
+                                      "strict_transport_security":  "max-age=63072000",
+                                      "content_security_policy":  null,
+                                      "x_content_type_options":  null,
+                                      "referrer_policy":  null,
+                                      "permissions_policy":  null,
+                                      "cache_control":  "public, max-age=0, must-revalidate",
+                                      "content_encoding":  null
+                                  }
+                  },
+                  {
+                      "url":  "https://hireflow.dev/ai-disclosure",
+                      "status":  200,
+                      "final_url":  "https://hireflow.dev/ai-disclosure",
+                      "content_type":  "text/html; charset=utf-8",
+                      "bytes":  2814,
+                      "title":  "HireFlow AI Disclosure",
+                      "title_length":  22,
+                      "description":  "Learn how HireFlow uses AI-assisted resume analysis as decision support, not automated hiring decisions.",
+                      "description_length":  104,
+                      "canonical":  "https://hireflow.dev/ai-disclosure",
+                      "robots":  "index, follow",
+                      "lang":  "en",
+                      "h1_count":  1,
+                      "headings":  [
+                                       {
+                                           "level":  1,
+                                           "text":  "AI Disclosure"
+                                       }
+                                   ],
+                      "word_count":  16,
+                      "schema_types":  [
+                                           "Organization",
+                                           "WebSite"
+                                       ],
+                      "og_title":  "HireFlow AI Disclosure",
+                      "og_description":  "Learn how HireFlow uses AI-assisted resume analysis as decision support, not automated hiring decisions.",
+                      "og_url":  "https://hireflow.dev/ai-disclosure",
+                      "og_image":  "https://hireflow.dev/og-default.png",
+                      "twitter_card":  "summary_large_image",
+                      "links":  [
+
+                                ],
+                      "images":  [
+
+                                 ],
+                      "headers":  {
+                                      "strict_transport_security":  "max-age=63072000",
+                                      "content_security_policy":  null,
+                                      "x_content_type_options":  null,
+                                      "referrer_policy":  null,
+                                      "permissions_policy":  null,
+                                      "cache_control":  "public, max-age=0, must-revalidate",
+                                      "content_encoding":  null
+                                  }
+                  },
+                  {
+                      "url":  "https://hireflow.dev/ai-resume-screening",
+                      "status":  200,
+                      "final_url":  "https://hireflow.dev/ai-resume-screening",
+                      "content_type":  "text/html; charset=utf-8",
+                      "bytes":  3044,
+                      "title":  "AI Resume Screening Software for Faster Hiring | HireFlow",
+                      "title_length":  57,
+                      "description":  "Speed up top-of-funnel hiring with AI resume screening that helps recruiters prioritize qualified candidates quickly and consistently.",
+                      "description_length":  134,
+                      "canonical":  "https://hireflow.dev/ai-resume-screening",
+                      "robots":  "index, follow",
+                      "lang":  "en",
+                      "h1_count":  1,
+                      "headings":  [
+                                       {
+                                           "level":  1,
+                                           "text":  "AI Resume Screening Software"
+                                       }
+                                   ],
+                      "word_count":  16,
+                      "schema_types":  [
+                                           "Organization",
+                                           "WebSite"
+                                       ],
+                      "og_title":  "AI Resume Screening Software for Faster Hiring | HireFlow",
+                      "og_description":  "Speed up top-of-funnel hiring with AI resume screening that helps recruiters prioritize qualified candidates quickly and consistently.",
+                      "og_url":  "https://hireflow.dev/ai-resume-screening",
+                      "og_image":  "https://hireflow.dev/og-default.png",
+                      "twitter_card":  "summary_large_image",
+                      "links":  [
+
+                                ],
+                      "images":  [
+
+                                 ],
+                      "headers":  {
+                                      "strict_transport_security":  "max-age=63072000",
+                                      "content_security_policy":  null,
+                                      "x_content_type_options":  null,
+                                      "referrer_policy":  null,
+                                      "permissions_policy":  null,
+                                      "cache_control":  "public, max-age=0, must-revalidate",
+                                      "content_encoding":  null
+                                  }
+                  },
+                  {
+                      "url":  "https://hireflow.dev/automated-candidate-shortlisting",
+                      "status":  200,
+                      "final_url":  "https://hireflow.dev/automated-candidate-shortlisting",
+                      "content_type":  "text/html; charset=utf-8",
+                      "bytes":  3025,
+                      "title":  "Automated Candidate Shortlisting Platform | HireFlow",
+                      "title_length":  52,
+                      "description":  "Automate candidate shortlisting with role-based analysis so your team can build higher-quality interview slates in less time.",
+                      "description_length":  125,
+                      "canonical":  "https://hireflow.dev/automated-candidate-shortlisting",
+                      "robots":  "index, follow",
+                      "lang":  "en",
+                      "h1_count":  1,
+                      "headings":  [
+                                       {
+                                           "level":  1,
+                                           "text":  "Automated Candidate Shortlisting"
+                                       }
+                                   ],
+                      "word_count":  18,
+                      "schema_types":  [
+                                           "Organization",
+                                           "WebSite"
+                                       ],
+                      "og_title":  "Automated Candidate Shortlisting Platform | HireFlow",
+                      "og_description":  "Automate candidate shortlisting with role-based analysis so your team can build higher-quality interview slates in less time.",
+                      "og_url":  "https://hireflow.dev/automated-candidate-shortlisting",
+                      "og_image":  "https://hireflow.dev/og-default.png",
+                      "twitter_card":  "summary_large_image",
+                      "links":  [
+
+                                ],
+                      "images":  [
+
+                                 ],
+                      "headers":  {
+                                      "strict_transport_security":  "max-age=63072000",
+                                      "content_security_policy":  null,
+                                      "x_content_type_options":  null,
+                                      "referrer_policy":  null,
+                                      "permissions_policy":  null,
+                                      "cache_control":  "public, max-age=0, must-revalidate",
+                                      "content_encoding":  null
+                                  }
+                  },
+                  {
+                      "url":  "https://hireflow.dev/bulk-resume-analysis",
+                      "status":  200,
+                      "final_url":  "https://hireflow.dev/bulk-resume-analysis",
+                      "content_type":  "text/html; charset=utf-8",
+                      "bytes":  2967,
+                      "title":  "Bulk Resume Analysis for High-Volume Recruiting | HireFlow",
+                      "title_length":  58,
+                      "description":  "Analyze large resume batches with role-based scoring and fast triage workflows built for high-volume hiring teams.",
+                      "description_length":  114,
+                      "canonical":  "https://hireflow.dev/bulk-resume-analysis",
+                      "robots":  "index, follow",
+                      "lang":  "en",
+                      "h1_count":  1,
+                      "headings":  [
+                                       {
+                                           "level":  1,
+                                           "text":  "Bulk Resume Analysis"
+                                       }
+                                   ],
+                      "word_count":  17,
+                      "schema_types":  [
+                                           "Organization",
+                                           "WebSite"
+                                       ],
+                      "og_title":  "Bulk Resume Analysis for High-Volume Recruiting | HireFlow",
+                      "og_description":  "Analyze large resume batches with role-based scoring and fast triage workflows built for high-volume hiring teams.",
+                      "og_url":  "https://hireflow.dev/bulk-resume-analysis",
+                      "og_image":  "https://hireflow.dev/og-default.png",
+                      "twitter_card":  "summary_large_image",
+                      "links":  [
+
+                                ],
+                      "images":  [
+
+                                 ],
+                      "headers":  {
+                                      "strict_transport_security":  "max-age=63072000",
+                                      "content_security_policy":  null,
+                                      "x_content_type_options":  null,
+                                      "referrer_policy":  null,
+                                      "permissions_policy":  null,
+                                      "cache_control":  "public, max-age=0, must-revalidate",
+                                      "content_encoding":  null
+                                  }
+                  },
+                  {
+                      "url":  "https://hireflow.dev/contact",
+                      "status":  200,
+                      "final_url":  "https://hireflow.dev/contact",
+                      "content_type":  "text/html; charset=utf-8",
+                      "bytes":  2760,
+                      "title":  "Contact HireFlow",
+                      "title_length":  16,
+                      "description":  "Contact HireFlow for product help, sales conversations, billing, privacy requests, and launch questions.",
+                      "description_length":  104,
+                      "canonical":  "https://hireflow.dev/contact",
+                      "robots":  "index, follow",
+                      "lang":  "en",
+                      "h1_count":  1,
+                      "headings":  [
+                                       {
+                                           "level":  1,
+                                           "text":  "Contact HireFlow"
+                                       }
+                                   ],
+                      "word_count":  12,
+                      "schema_types":  [
+                                           "Organization",
+                                           "WebSite"
+                                       ],
+                      "og_title":  "Contact HireFlow",
+                      "og_description":  "Contact HireFlow for product help, sales conversations, billing, privacy requests, and launch questions.",
+                      "og_url":  "https://hireflow.dev/contact",
+                      "og_image":  "https://hireflow.dev/og-default.png",
+                      "twitter_card":  "summary_large_image",
+                      "links":  [
+
+                                ],
+                      "images":  [
+
+                                 ],
+                      "headers":  {
+                                      "strict_transport_security":  "max-age=63072000",
+                                      "content_security_policy":  null,
+                                      "x_content_type_options":  null,
+                                      "referrer_policy":  null,
+                                      "permissions_policy":  null,
+                                      "cache_control":  "public, max-age=0, must-revalidate",
+                                      "content_encoding":  null
+                                  }
+                  },
+                  {
+                      "url":  "https://hireflow.dev/cookie-policy",
+                      "status":  200,
+                      "final_url":  "https://hireflow.dev/cookie-policy",
+                      "content_type":  "text/html; charset=utf-8",
+                      "bytes":  2794,
+                      "title":  "HireFlow Cookie Policy",
+                      "title_length":  22,
+                      "description":  "Learn how HireFlow uses necessary cookies, optional analytics, and privacy-safe cookie preferences.",
+                      "description_length":  99,
+                      "canonical":  "https://hireflow.dev/cookie-policy",
+                      "robots":  "index, follow",
+                      "lang":  "en",
+                      "h1_count":  1,
+                      "headings":  [
+                                       {
+                                           "level":  1,
+                                           "text":  "Cookie Policy"
+                                       }
+                                   ],
+                      "word_count":  14,
+                      "schema_types":  [
+                                           "Organization",
+                                           "WebSite"
+                                       ],
+                      "og_title":  "HireFlow Cookie Policy",
+                      "og_description":  "Learn how HireFlow uses necessary cookies, optional analytics, and privacy-safe cookie preferences.",
+                      "og_url":  "https://hireflow.dev/cookie-policy",
+                      "og_image":  "https://hireflow.dev/og-default.png",
+                      "twitter_card":  "summary_large_image",
+                      "links":  [
+
+                                ],
+                      "images":  [
+
+                                 ],
+                      "headers":  {
+                                      "strict_transport_security":  "max-age=63072000",
+                                      "content_security_policy":  null,
+                                      "x_content_type_options":  null,
+                                      "referrer_policy":  null,
+                                      "permissions_policy":  null,
+                                      "cache_control":  "public, max-age=0, must-revalidate",
+                                      "content_encoding":  null
+                                  }
+                  },
+                  {
+                      "url":  "https://hireflow.dev/help",
+                      "status":  200,
+                      "final_url":  "https://hireflow.dev/help",
+                      "content_type":  "text/html; charset=utf-8",
+                      "bytes":  2750,
+                      "title":  "HireFlow Help Center",
+                      "title_length":  20,
+                      "description":  "Find onboarding guides, troubleshooting steps, and support resources in the HireFlow Help Center.",
+                      "description_length":  97,
+                      "canonical":  "https://hireflow.dev/help",
+                      "robots":  "index, follow",
+                      "lang":  "en",
+                      "h1_count":  1,
+                      "headings":  [
+                                       {
+                                           "level":  1,
+                                           "text":  "Help Center"
+                                       }
+                                   ],
+                      "word_count":  13,
+                      "schema_types":  [
+                                           "Organization",
+                                           "WebSite"
+                                       ],
+                      "og_title":  "HireFlow Help Center",
+                      "og_description":  "Find onboarding guides, troubleshooting steps, and support resources in the HireFlow Help Center.",
+                      "og_url":  "https://hireflow.dev/help",
+                      "og_image":  "https://hireflow.dev/og-default.png",
+                      "twitter_card":  "summary_large_image",
+                      "links":  [
+
+                                ],
+                      "images":  [
+
+                                 ],
+                      "headers":  {
+                                      "strict_transport_security":  "max-age=63072000",
+                                      "content_security_policy":  null,
+                                      "x_content_type_options":  null,
+                                      "referrer_policy":  null,
+                                      "permissions_policy":  null,
+                                      "cache_control":  "public, max-age=0, must-revalidate",
+                                      "content_encoding":  null
+                                  }
+                  },
+                  {
+                      "url":  "https://hireflow.dev/pricing",
+                      "status":  200,
+                      "final_url":  "https://hireflow.dev/pricing",
+                      "content_type":  "text/html; charset=utf-8",
+                      "bytes":  2856,
+                      "title":  "HireFlow Pricing",
+                      "title_length":  16,
+                      "description":  "Choose monthly or yearly HireFlow pricing plans with a one-time 7-day trial for eligible new accounts.",
+                      "description_length":  102,
+                      "canonical":  "https://hireflow.dev/pricing",
+                      "robots":  "index, follow",
+                      "lang":  "en",
+                      "h1_count":  1,
+                      "headings":  [
+                                       {
+                                           "level":  1,
+                                           "text":  "Choose your plan"
+                                       }
+                                   ],
+                      "word_count":  35,
+                      "schema_types":  [
+                                           "Organization",
+                                           "WebSite"
+                                       ],
+                      "og_title":  "HireFlow Pricing",
+                      "og_description":  "Choose monthly or yearly HireFlow pricing plans with a one-time 7-day trial for eligible new accounts.",
+                      "og_url":  "https://hireflow.dev/pricing",
+                      "og_image":  "https://hireflow.dev/og-default.png",
+                      "twitter_card":  "summary_large_image",
+                      "links":  [
+
+                                ],
+                      "images":  [
+
+                                 ],
+                      "headers":  {
+                                      "strict_transport_security":  "max-age=63072000",
+                                      "content_security_policy":  null,
+                                      "x_content_type_options":  null,
+                                      "referrer_policy":  null,
+                                      "permissions_policy":  null,
+                                      "cache_control":  "public, max-age=0, must-revalidate",
+                                      "content_encoding":  null
+                                  }
+                  },
+                  {
+                      "url":  "https://hireflow.dev/privacy",
+                      "status":  200,
+                      "final_url":  "https://hireflow.dev/privacy",
+                      "content_type":  "text/html; charset=utf-8",
+                      "bytes":  2825,
+                      "title":  "HireFlow Privacy Policy",
+                      "title_length":  23,
+                      "description":  "Learn how HireFlow processes account data, resumes, job descriptions, AI analysis results, and deletion requests.",
+                      "description_length":  113,
+                      "canonical":  "https://hireflow.dev/privacy",
+                      "robots":  "index, follow",
+                      "lang":  "en",
+                      "h1_count":  1,
+                      "headings":  [
+                                       {
+                                           "level":  1,
+                                           "text":  "Privacy Policy"
+                                       }
+                                   ],
+                      "word_count":  14,
+                      "schema_types":  [
+                                           "Organization",
+                                           "WebSite"
+                                       ],
+                      "og_title":  "HireFlow Privacy Policy",
+                      "og_description":  "Learn how HireFlow processes account data, resumes, job descriptions, AI analysis results, and deletion requests.",
+                      "og_url":  "https://hireflow.dev/privacy",
+                      "og_image":  "https://hireflow.dev/og-default.png",
+                      "twitter_card":  "summary_large_image",
+                      "links":  [
+
+                                ],
+                      "images":  [
+
+                                 ],
+                      "headers":  {
+                                      "strict_transport_security":  "max-age=63072000",
+                                      "content_security_policy":  null,
+                                      "x_content_type_options":  null,
+                                      "referrer_policy":  null,
+                                      "permissions_policy":  null,
+                                      "cache_control":  "public, max-age=0, must-revalidate",
+                                      "content_encoding":  null
+                                  }
+                  },
+                  {
+                      "url":  "https://hireflow.dev/refund-policy",
+                      "status":  200,
+                      "final_url":  "https://hireflow.dev/refund-policy",
+                      "content_type":  "text/html; charset=utf-8",
+                      "bytes":  2777,
+                      "title":  "HireFlow Refund Policy",
+                      "title_length":  22,
+                      "description":  "Read HireFlow refund terms for subscriptions, trials, and billing support response timelines.",
+                      "description_length":  93,
+                      "canonical":  "https://hireflow.dev/refund-policy",
+                      "robots":  "index, follow",
+                      "lang":  "en",
+                      "h1_count":  1,
+                      "headings":  [
+                                       {
+                                           "level":  1,
+                                           "text":  "Refund Policy"
+                                       }
+                                   ],
+                      "word_count":  15,
+                      "schema_types":  [
+                                           "Organization",
+                                           "WebSite"
+                                       ],
+                      "og_title":  "HireFlow Refund Policy",
+                      "og_description":  "Read HireFlow refund terms for subscriptions, trials, and billing support response timelines.",
+                      "og_url":  "https://hireflow.dev/refund-policy",
+                      "og_image":  "https://hireflow.dev/og-default.png",
+                      "twitter_card":  "summary_large_image",
+                      "links":  [
+
+                                ],
+                      "images":  [
+
+                                 ],
+                      "headers":  {
+                                      "strict_transport_security":  "max-age=63072000",
+                                      "content_security_policy":  null,
+                                      "x_content_type_options":  null,
+                                      "referrer_policy":  null,
+                                      "permissions_policy":  null,
+                                      "cache_control":  "public, max-age=0, must-revalidate",
+                                      "content_encoding":  null
+                                  }
+                  },
+                  {
+                      "url":  "https://hireflow.dev/resume-scoring-ai",
+                      "status":  200,
+                      "final_url":  "https://hireflow.dev/resume-scoring-ai",
+                      "content_type":  "text/html; charset=utf-8",
+                      "bytes":  2951,
+                      "title":  "Resume Scoring AI for Candidate Prioritization | HireFlow",
+                      "title_length":  57,
+                      "description":  "Use transparent resume scoring AI to align recruiters and hiring managers on stronger interview shortlists.",
+                      "description_length":  107,
+                      "canonical":  "https://hireflow.dev/resume-scoring-ai",
+                      "robots":  "index, follow",
+                      "lang":  "en",
+                      "h1_count":  1,
+                      "headings":  [
+                                       {
+                                           "level":  1,
+                                           "text":  "Resume Scoring AI"
+                                       }
+                                   ],
+                      "word_count":  18,
+                      "schema_types":  [
+                                           "Organization",
+                                           "WebSite"
+                                       ],
+                      "og_title":  "Resume Scoring AI for Candidate Prioritization | HireFlow",
+                      "og_description":  "Use transparent resume scoring AI to align recruiters and hiring managers on stronger interview shortlists.",
+                      "og_url":  "https://hireflow.dev/resume-scoring-ai",
+                      "og_image":  "https://hireflow.dev/og-default.png",
+                      "twitter_card":  "summary_large_image",
+                      "links":  [
+
+                                ],
+                      "images":  [
+
+                                 ],
+                      "headers":  {
+                                      "strict_transport_security":  "max-age=63072000",
+                                      "content_security_policy":  null,
+                                      "x_content_type_options":  null,
+                                      "referrer_policy":  null,
+                                      "permissions_policy":  null,
+                                      "cache_control":  "public, max-age=0, must-revalidate",
+                                      "content_encoding":  null
+                                  }
+                  },
+                  {
+                      "url":  "https://hireflow.dev/terms",
+                      "status":  200,
+                      "final_url":  "https://hireflow.dev/terms",
+                      "content_type":  "text/html; charset=utf-8",
+                      "bytes":  2758,
+                      "title":  "HireFlow Terms of Service",
+                      "title_length":  25,
+                      "description":  "Review the HireFlow Terms of Service for using our resume screening platform and related features.",
+                      "description_length":  98,
+                      "canonical":  "https://hireflow.dev/terms",
+                      "robots":  "index, follow",
+                      "lang":  "en",
+                      "h1_count":  1,
+                      "headings":  [
+                                       {
+                                           "level":  1,
+                                           "text":  "Terms of Service"
+                                       }
+                                   ],
+                      "word_count":  15,
+                      "schema_types":  [
+                                           "Organization",
+                                           "WebSite"
+                                       ],
+                      "og_title":  "HireFlow Terms of Service",
+                      "og_description":  "Review the HireFlow Terms of Service for using our resume screening platform and related features.",
+                      "og_url":  "https://hireflow.dev/terms",
+                      "og_image":  "https://hireflow.dev/og-default.png",
+                      "twitter_card":  "summary_large_image",
+                      "links":  [
+
+                                ],
+                      "images":  [
+
+                                 ],
+                      "headers":  {
+                                      "strict_transport_security":  "max-age=63072000",
+                                      "content_security_policy":  null,
+                                      "x_content_type_options":  null,
+                                      "referrer_policy":  null,
+                                      "permissions_policy":  null,
+                                      "cache_control":  "public, max-age=0, must-revalidate",
+                                      "content_encoding":  null
+                                  }
+                  },
+                  {
+                      "url":  "https://hireflow.dev/trust",
+                      "status":  200,
+                      "final_url":  "https://hireflow.dev/trust",
+                      "content_type":  "text/html; charset=utf-8",
+                      "bytes":  3027,
+                      "title":  "HireFlow Trust and Responsible AI",
+                      "title_length":  33,
+                      "description":  "Learn about HireFlow trust, privacy, responsible AI, safeguards, current limitations, and customer responsibilities for early-access recruiting workflows.",
+                      "description_length":  154,
+                      "canonical":  "https://hireflow.dev/trust",
+                      "robots":  "index, follow",
+                      "lang":  "en",
+                      "h1_count":  1,
+                      "headings":  [
+                                       {
+                                           "level":  1,
+                                           "text":  "Trust and responsible AI"
+                                       }
+                                   ],
+                      "word_count":  20,
+                      "schema_types":  [
+                                           "Organization",
+                                           "WebSite"
+                                       ],
+                      "og_title":  "HireFlow Trust and Responsible AI",
+                      "og_description":  "Learn about HireFlow trust, privacy, responsible AI, safeguards, current limitations, and customer responsibilities for early-access recruiting workflows.",
+                      "og_url":  "https://hireflow.dev/trust",
+                      "og_image":  "https://hireflow.dev/og-default.png",
+                      "twitter_card":  "summary_large_image",
+                      "links":  [
+
+                                ],
+                      "images":  [
+
+                                 ],
+                      "headers":  {
+                                      "strict_transport_security":  "max-age=63072000",
+                                      "content_security_policy":  null,
+                                      "x_content_type_options":  null,
+                                      "referrer_policy":  null,
+                                      "permissions_policy":  null,
+                                      "cache_control":  "public, max-age=0, must-revalidate",
+                                      "content_encoding":  null
+                                  }
+                  }
+              ],
+    "internal_link_checks":  [
+                                 {
+                                     "url":  "https://hireflow.dev/pricing",
+                                     "status":  200,
+                                     "final_url":  "https://hireflow.dev/pricing"
+                                 }
+                             ],
+    "variant_checks":  [
+                           {
+                               "url":  "http://hireflow.dev/",
+                               "status":  308,
+                               "final_url":  null,
+                               "title":  null
+                           },
+                           {
+                               "url":  "https://www.hireflow.dev/",
+                               "status":  200,
+                               "final_url":  "https://www.hireflow.dev/",
+                               "title":  "HireFlow – AI Hiring Platform"
+                           },
+                           {
+                               "url":  "https://hireflow.dev/about/",
+                               "status":  200,
+                               "final_url":  "https://hireflow.dev/about/",
+                               "title":  "About HireFlow"
+                           },
+                           {
+                               "url":  "https://hireflow.dev/this-page-should-not-exist-seo-audit",
+                               "status":  404,
+                               "final_url":  null,
+                               "title":  null
+                           }
+                       ]
+}
