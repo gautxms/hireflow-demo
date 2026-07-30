@@ -11,9 +11,11 @@ export default function ResumeAllowanceCard({ status, quota }) {
   const tone = getResumeAllowanceTone(quota)
   const resetDate = formatResumeQuotaResetDate(quota.periodEnd)
   const progress = Math.max(0, Math.min(quota.percentageUsed, 100))
-  const detail = tone === 'reached'
-    ? 'The resume-analysis limit has been reached. Existing analyses and results remain available.'
-    : tone === 'warning'
+  const detail = tone === 'unavailable'
+    ? 'An active subscription is required to analyze new resumes. Existing analyses and results remain available.'
+    : tone === 'reached'
+      ? 'The resume-analysis limit has been reached. Existing analyses and results remain available.'
+      : tone === 'warning'
       ? `Only ${quota.available} resume ${quota.available === 1 ? 'analysis is' : 'analyses are'} currently available.`
       : tone === 'info'
         ? `You have ${quota.available} resume analyses available this period.`
