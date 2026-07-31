@@ -13,7 +13,7 @@
   },
   "scripts": {
     "dev": "vite",
-    "build": "node scripts/generate-sitemap.mjs && vite build && node scripts/prerender-public-routes.mjs",
+    "build": "npm run test:route-classification && node scripts/generate-sitemap.mjs && vite build && vite build --ssr src/entry-server.jsx --outDir dist-ssr && node scripts/prerender-public-routes.mjs && npm run check:seo-consistency && npm run qa:brand-logo-consistency",
     "lint": "eslint . && npm run lint:primitives",
     "lint:duplicate-imports": "eslint \"backend/src/**/*.js\" --no-config-lookup --parser-options '{\"ecmaVersion\":\"latest\",\"sourceType\":\"module\"}' --rule \"no-duplicate-imports:error\"",
     "qa:admin-smoke": "node scripts/admin-smoke-checks.mjs",
@@ -34,7 +34,8 @@
     "check:dashboard-token-hygiene": "node scripts/check-dashboard-token-hygiene.mjs",
     "qa:dashboard-a11y-smoke": "node scripts/dashboard-a11y-smoke-checks.mjs",
     "qa:shortlist-design-gate": "node scripts/check-shortlist-design-constitution.mjs",
-    "check:seo-consistency": "node scripts/check-seo-consistency.mjs"
+    "check:seo-consistency": "node scripts/check-seo-consistency.mjs",
+    "test:route-classification": "node --test src/config/routeClassification.test.js src/appPublicRouteGuards.test.js src/main.staticPublicHydration.test.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.67.1",
