@@ -53,6 +53,7 @@ const migrationFiles = [
   '049-add-recovery-billing-adjustments',
   '050-add-durable-paddle-webhook-inbox',
   '051-add-paddle-webhook-retry-scheduling',
+  '052-backfill-paddle-webhook-verification-gap',
 ]
 
 async function ensureMigrationsTable(client) {

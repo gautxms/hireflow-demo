@@ -484,6 +484,24 @@ test('scheduled webhook retry migration is additive, preserves rows, and adds a 
   assert.match(sql, /paddle_environment, next_retry_at, last_attempt_at/)
 })
 
+test('verification-gap backfill follows retry scheduling and repairs only persisted payload rows', async () => {
+  const source = await readRunnerSource()
+  assert.ok(
+    source.indexOf("'051-add-paddle-webhook-retry-scheduling'") <
+      source.indexOf("'052-backfill-paddle-webhook-verification-gap'"),
+  )
+
+  const queries = []
+  const { up } = await import('./052-backfill-paddle-webhook-verification-gap.js')
+  await up({ async query(sql) { queries.push(String(sql)); return { rows: [] } } })
+  const sql = queries.join('\n')
+  assert.match(sql, /UPDATE paddle_webhook_events/)
+  assert.match(sql, /SET verified_at = COALESCE\(verified_at, first_received_at, created_at\)/)
+  assert.match(sql, /WHERE payload IS NOT NULL/)
+  assert.match(sql, /AND verified_at IS NULL/)
+  assert.doesNotMatch(sql, /DELETE|DROP|TRUNCATE/)
+})
+
 test('recovery billing adjustment migration is additive, durable, and uniquely idempotent', async () => {
   const queries = []
   const { up } = await import('./049-add-recovery-billing-adjustments.js')

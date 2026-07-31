@@ -130,6 +130,32 @@ test('two scheduled reclaimers atomically compete for the final permitted attemp
   assert.equal(schedulerAttempts, PADDLE_WEBHOOK_SCHEDULER_MAX_ATTEMPTS)
 })
 
+test('live reclaim records that a rolling-deployment row has passed signature verification', async (t) => {
+  const { reclaimWebhookInboxEvent } = await import('./paddleWebhook.js')
+  let capturedQuery = ''
+  t.mock.method(pool, 'query', async (sql) => {
+    capturedQuery = String(sql)
+    return {
+      rowCount: 1,
+      rows: [{ event_id: 'evt_live_reclaim_verification', attempt_count: 2, scheduler_attempt_count: 0 }],
+    }
+  })
+
+  await reclaimWebhookInboxEvent({
+    eventId: 'evt_live_reclaim_verification',
+    payloadHash: 'hash-live-reclaim-verification',
+    payload: { event_type: 'subscription.updated', data: {} },
+    environment: 'sandbox',
+    processingToken: crypto.randomUUID(),
+    source: 'live',
+  })
+
+  assert.match(
+    capturedQuery,
+    /verified_at\s*=\s*CASE\s+WHEN \$7 = 'live' THEN COALESCE\(verified_at, NOW\(\)\) ELSE verified_at END/,
+  )
+})
+
 function signBody(rawBody, secret = WEBHOOK_SECRET, timestamp = Math.floor(Date.now() / 1000)) {
   const hmac = crypto.createHmac('sha256', secret).update(`${timestamp}:${rawBody}`, 'utf8').digest('hex')
   return `ts=${timestamp};h1=${hmac}`
@@ -886,6 +912,44 @@ test('POST /api/paddle/webhook rejects an event id reused with a different signe
 
   assert.equal(response.status, 409)
   assert.equal(responsePayload.error, 'Webhook event payload conflict')
+  assert.equal(calls.some((sql) => /FROM users|UPDATE users|INSERT INTO subscriptions/.test(sql)), false)
+})
+
+test('POST /api/paddle/webhook acknowledges a signed redelivery of a terminal event without retrying work', async (t) => {
+  const payload = buildSubscriptionUpdatedPayload({
+    event_id: 'evt_terminal_inbox_redelivery',
+  })
+  const rawBody = JSON.stringify(payload)
+  const payloadHash = crypto.createHash('sha256').update(rawBody, 'utf8').digest('hex')
+  const calls = []
+
+  t.mock.method(pool, 'query', async (sql) => {
+    const query = String(sql)
+    calls.push(query)
+    if (query.includes('FROM paddle_webhook_events')) {
+      return {
+        rowCount: 1,
+        rows: [{
+          event_id: payload.event_id,
+          payload_hash: payloadHash,
+          paddle_environment: 'sandbox',
+          status: 'terminal_failed',
+          attempt_count: 7,
+        }],
+      }
+    }
+    return { rowCount: 1, rows: [] }
+  })
+
+  const { response, payload: responsePayload } = await postWebhook({
+    body: rawBody,
+    signature: signBody(rawBody),
+  })
+
+  assert.equal(response.status, 200)
+  assert.equal(response.headers.has('retry-after'), false)
+  assert.deepEqual(responsePayload, { received: true, duplicate: true })
+  assert.equal(calls.some((sql) => /SET status = 'processing'/.test(sql)), false)
   assert.equal(calls.some((sql) => /FROM users|UPDATE users|INSERT INTO subscriptions/.test(sql)), false)
 })
 
