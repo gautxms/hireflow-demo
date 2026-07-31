@@ -57,7 +57,7 @@ test('user shell routing resolves from canonical route paths', () => {
 })
 
 test('authenticated paid and read-only users keep public header and footer on landing route', () => {
-  assert.match(appSource, /if \(PUBLIC_ROUTE_PATHS\.has\(pathname\)\) \{[\s\S]*return false/)
+  assert.match(appSource, /if \(NON_SHELL_ROUTE_PATHS\.has\(pathname\)\) \{[\s\S]*return false/)
   assert.match(appSource, /<header className="site-header">/)
   assert.match(appSource, /<PublicFooter \/>/)
   assert.match(appSource, /canOpenWorkspaceDashboard \? \([\s\S]*Dashboard[\s\S]*\) : \(/)
