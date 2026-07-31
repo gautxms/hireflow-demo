@@ -32,7 +32,7 @@
     },
     {
       "source": "/cookie-policy",
-      "destination": "/index.html"
+      "destination": "/cookie-policy/index.html"
     },
     {
       "source": "/(billing|checkout|account|settings|job-descriptions)",
