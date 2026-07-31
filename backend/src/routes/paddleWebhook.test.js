@@ -58,6 +58,78 @@ test('inbox ownership writes fence stale attempts by environment, attempt, and p
   }
 })
 
+test('scheduled reclaim enforces the sixth-attempt boundary atomically for expired processing events', async (t) => {
+  const {
+    PADDLE_WEBHOOK_SCHEDULER_MAX_ATTEMPTS,
+    reclaimWebhookInboxEvent,
+  } = await import('./paddleWebhook.js')
+  let schedulerAttempts = PADDLE_WEBHOOK_SCHEDULER_MAX_ATTEMPTS - 1
+  let attemptCount = 10
+  let leaseExpired = true
+  const queries = []
+  t.mock.method(pool, 'query', async (sql, params) => {
+    queries.push({ sql: String(sql), params })
+    if (params[6] !== 'scheduled' || !leaseExpired || schedulerAttempts >= params[7]) {
+      return { rowCount: 0, rows: [] }
+    }
+    schedulerAttempts += 1
+    attemptCount += 1
+    return {
+      rowCount: 1,
+      rows: [{ event_id: params[0], attempt_count: attemptCount, scheduler_attempt_count: schedulerAttempts }],
+    }
+  })
+  const input = {
+    eventId: 'evt_final_scheduled_attempt',
+    payloadHash: 'hash-final-scheduled-attempt',
+    payload: { event_type: 'subscription.updated', data: {} },
+    environment: 'sandbox',
+    processingToken: 'a699835c-e2b8-4c98-b29d-89cb173941f8',
+    source: 'scheduled',
+  }
+
+  const finalAttempt = await reclaimWebhookInboxEvent(input)
+  assert.equal(finalAttempt.scheduler_attempt_count, PADDLE_WEBHOOK_SCHEDULER_MAX_ATTEMPTS)
+  assert.equal(finalAttempt.attempt_count, 11)
+  assert.equal(schedulerAttempts, PADDLE_WEBHOOK_SCHEDULER_MAX_ATTEMPTS)
+
+  const seventhAttempt = await reclaimWebhookInboxEvent({ ...input, processingToken: crypto.randomUUID() })
+  assert.equal(seventhAttempt, null)
+  assert.equal(attemptCount, 11)
+  assert.match(
+    queries[0].sql,
+    /status = 'processing'[\s\S]+\$7 <> 'scheduled'[\s\S]+scheduler_attempt_count, 0\) < \$8/,
+  )
+  assert.equal(queries[0].params[7], PADDLE_WEBHOOK_SCHEDULER_MAX_ATTEMPTS)
+
+  leaseExpired = false
+  schedulerAttempts = PADDLE_WEBHOOK_SCHEDULER_MAX_ATTEMPTS - 1
+  assert.equal(await reclaimWebhookInboxEvent({ ...input, processingToken: crypto.randomUUID() }), null)
+})
+
+test('two scheduled reclaimers atomically compete for the final permitted attempt', async (t) => {
+  const {
+    PADDLE_WEBHOOK_SCHEDULER_MAX_ATTEMPTS,
+    reclaimWebhookInboxEvent,
+  } = await import('./paddleWebhook.js')
+  let schedulerAttempts = PADDLE_WEBHOOK_SCHEDULER_MAX_ATTEMPTS - 1
+  t.mock.method(pool, 'query', async (_sql, params) => {
+    if (schedulerAttempts >= params[7]) return { rowCount: 0, rows: [] }
+    schedulerAttempts += 1
+    return { rowCount: 1, rows: [{ attempt_count: 6, scheduler_attempt_count: schedulerAttempts }] }
+  })
+  const base = {
+    eventId: 'evt_final_attempt_race', payloadHash: 'hash-final-race', payload: { event_type: 'subscription.updated' },
+    environment: 'production', source: 'scheduled',
+  }
+  const results = await Promise.all([
+    reclaimWebhookInboxEvent({ ...base, processingToken: crypto.randomUUID() }),
+    reclaimWebhookInboxEvent({ ...base, processingToken: crypto.randomUUID() }),
+  ])
+  assert.equal(results.filter(Boolean).length, 1)
+  assert.equal(schedulerAttempts, PADDLE_WEBHOOK_SCHEDULER_MAX_ATTEMPTS)
+})
+
 function signBody(rawBody, secret = WEBHOOK_SECRET, timestamp = Math.floor(Date.now() / 1000)) {
   const hmac = crypto.createHmac('sha256', secret).update(`${timestamp}:${rawBody}`, 'utf8').digest('hex')
   return `ts=${timestamp};h1=${hmac}`

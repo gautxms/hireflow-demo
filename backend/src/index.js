@@ -4,6 +4,7 @@ import { runMigrations } from './db/migrate.js'
 import { initializeDatabase, ensurePasswordResetTables, ensurePaymentTrackingTables, pool } from './db/client.js'
 import { retryFailedPayments } from './services/paymentRetry.js'
 import { runRecoveryBillingAdjustments } from './services/recoveryBillingAdjustment.js'
+import { startPaddleWebhookRetryWorker } from './services/paddleWebhookRetryWorker.js'
 import { startAnalyticsCron } from './services/analytics.js'
 import { logEmailConfigStatus } from './services/emailService.js'
 import { initializeJobQueue } from './services/jobQueue.js'
@@ -104,6 +105,7 @@ async function start() {
     registerParseResumeJobProcessor()
 
     startPaymentRetryCron()
+    startPaddleWebhookRetryWorker()
     startAnalyticsCron()
     startChunkUploadCleanupCron()
 

@@ -52,6 +52,7 @@ const migrationFiles = [
   '048-add-paddle-event-ordering-timestamp',
   '049-add-recovery-billing-adjustments',
   '050-add-durable-paddle-webhook-inbox',
+  '051-add-paddle-webhook-retry-scheduling',
 ]
 
 async function ensureMigrationsTable(client) {

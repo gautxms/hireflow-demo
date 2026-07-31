@@ -463,6 +463,27 @@ test('durable Paddle webhook inbox migration preserves completed legacy events a
   assert.match(sql, /idx_paddle_webhook_events_retryable/)
 })
 
+test('scheduled webhook retry migration follows the durable inbox migration', async () => {
+  const source = await readRunnerSource()
+  assert.ok(
+    source.indexOf("'050-add-durable-paddle-webhook-inbox'") <
+      source.indexOf("'051-add-paddle-webhook-retry-scheduling'"),
+  )
+})
+
+test('scheduled webhook retry migration is additive, preserves rows, and adds a due index', async () => {
+  const queries = []
+  const { up } = await import('./051-add-paddle-webhook-retry-scheduling.js')
+  await up({ async query(sql) { queries.push(String(sql)); return { rows: [] } } })
+  const sql = queries.join('\n')
+  assert.match(sql, /ADD COLUMN IF NOT EXISTS verified_at TIMESTAMPTZ/)
+  assert.match(sql, /ADD COLUMN IF NOT EXISTS scheduler_attempt_count INTEGER NOT NULL DEFAULT 0/)
+  assert.match(sql, /WHERE payload IS NOT NULL/)
+  assert.match(sql, /'terminal_failed'/)
+  assert.match(sql, /CREATE INDEX IF NOT EXISTS idx_paddle_webhook_events_scheduled_retry/)
+  assert.match(sql, /paddle_environment, next_retry_at, last_attempt_at/)
+})
+
 test('recovery billing adjustment migration is additive, durable, and uniquely idempotent', async () => {
   const queries = []
   const { up } = await import('./049-add-recovery-billing-adjustments.js')
