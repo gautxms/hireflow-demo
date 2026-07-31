@@ -6,14 +6,13 @@ import { PUBLIC_ROUTE_MANIFEST, PUBLIC_ROUTE_PATHS } from './config/publicRouteM
 const appSource = readFileSync(new URL('./App.jsx', import.meta.url), 'utf8')
 
 test('App derives public route paths from the shared manifest', () => {
-  assert.match(appSource, /import \\{ PUBLIC_ROUTE_PATHS \\} from '\\.\\/config\\/publicRouteManifest'/)
-  assert.doesNotMatch(appSource, /const PUBLIC_ROUTE_PATHS\\s*=\\s*new Set/)
+  assert.ok(appSource.includes("import { PUBLIC_ROUTE_PATHS } from './config/publicRouteManifest'"))
+  assert.ok(!appSource.includes('const PUBLIC_ROUTE_PATHS = new Set'))
   assert.deepEqual(
     [...PUBLIC_ROUTE_PATHS].sort(),
     PUBLIC_ROUTE_MANIFEST.map((route) => route.path).sort(),
   )
 })
-
 test('public marketing pages resolve from pathname before legacy currentPage fallback', () => {
   assert.match(appSource, /if \(INTENT_PAGE_ORDER\.includes\(resolvedPathname\)\) \{[\s\S]*<IntentLandingPage pathname=\{resolvedPathname\} \/>/)
   assert.match(appSource, /if \(resolvedPathname === '\/help'\) {[\s\S]*return <HelpPage/)
