@@ -383,7 +383,7 @@ function normalizeInboxStatus(status) {
 
 async function getWebhookInboxEvent(eventId) {
   const result = await pool.query(
-    `SELECT event_id, payload_hash, status, attempt_count, last_attempt_at
+    `SELECT event_id, payload_hash, paddle_environment, status, attempt_count, last_attempt_at
      FROM paddle_webhook_events
      WHERE event_id = $1
      LIMIT 1`,
@@ -405,6 +405,7 @@ export async function reclaimWebhookInboxEvent({ eventId, payloadHash, payload, 
          payload = COALESCE(payload, $3::jsonb),
          paddle_environment = COALESCE(paddle_environment, $4),
          processing_token = $5,
+         verified_at = CASE WHEN $7 = 'live' THEN COALESCE(verified_at, NOW()) ELSE verified_at END,
          scheduler_attempt_count = COALESCE(scheduler_attempt_count, 0) + CASE WHEN $7 = 'scheduled' THEN 1 ELSE 0 END
      WHERE event_id = $1
        AND payload_hash = $2
@@ -450,6 +451,11 @@ async function claimWebhookInboxEvent({
 
     if (normalizeInboxStatus(existing.status) === 'completed') {
       return { claimed: false, duplicate: true, status: 'completed' }
+    }
+
+    if (normalizeInboxStatus(existing.status) === 'terminal_failed'
+      && (!existing.paddle_environment || existing.paddle_environment === environment)) {
+      return { claimed: false, duplicate: true, status: 'terminal_failed' }
     }
 
     const attempt = await reclaimWebhookInboxEvent({
@@ -501,6 +507,11 @@ async function claimWebhookInboxEvent({
 
   if (normalizeInboxStatus(racedEvent?.status) === 'completed') {
     return { claimed: false, duplicate: true, status: 'completed' }
+  }
+
+  if (normalizeInboxStatus(racedEvent?.status) === 'terminal_failed'
+    && (!racedEvent?.paddle_environment || racedEvent.paddle_environment === environment)) {
+    return { claimed: false, duplicate: true, status: 'terminal_failed' }
   }
 
   const attempt = await reclaimWebhookInboxEvent({
@@ -783,6 +794,17 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment, storedEv
     }
 
     if (!inboxClaim.claimed) {
+      if (inboxClaim.status === 'terminal_failed') {
+        console.warn('[Paddle webhook] acknowledged terminal event redelivery', {
+          environment: paddle.environment,
+          eventType,
+          eventId: dedupeEventId,
+        })
+        return res.status(200).json({
+          received: true,
+          duplicate: true,
+        })
+      }
       if (inboxClaim.retryable || inboxClaim.status !== 'completed') {
         res.set('Retry-After', String(WEBHOOK_PROCESSING_LEASE_SECONDS))
         return res.status(503).json({
