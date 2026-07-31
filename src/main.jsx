@@ -1,5 +1,5 @@
 import React from 'react'
-import ReactDOM from 'react-dom/client'
+import ReactDOM, { hydrateRoot } from 'react-dom/client'
 import './styles/variables.css'
 import './styles/fonts.css'
 import './styles/public-content-pages.css'
@@ -10,6 +10,7 @@ import './index.css'
 import App from './App.jsx'
 import AppErrorBoundary from './components/AppErrorBoundary'
 import API_BASE from './config/api'
+import StaticPublicRouteBootstrap from './public/StaticPublicRouteBootstrap.jsx'
 
 const RECENT_CRASH_CONTEXT_KEY = 'hireflow_recent_crash_context_v1'
 
@@ -67,10 +68,28 @@ window.addEventListener('hireflow:telemetry', (event) => {
   })
 })
 
-ReactDOM.createRoot(document.getElementById('root')).render(
-  <React.StrictMode>
-    <AppErrorBoundary>
-      <App />
-    </AppErrorBoundary>
-  </React.StrictMode>,
-)
+const root = document.getElementById('root')
+
+if (root.hasAttribute('data-static-public-route')) {
+  import('./public/PublicRouteApp.jsx').then(({ default: PublicRouteApp }) => {
+    hydrateRoot(
+      root,
+      <React.StrictMode>
+        <AppErrorBoundary>
+          <StaticPublicRouteBootstrap
+            PublicRouteComponent={PublicRouteApp}
+            pathname={window.location.pathname}
+          />
+        </AppErrorBoundary>
+      </React.StrictMode>,
+    )
+  })
+} else {
+  ReactDOM.createRoot(root).render(
+    <React.StrictMode>
+      <AppErrorBoundary>
+        <App />
+      </AppErrorBoundary>
+    </React.StrictMode>,
+  )
+}
