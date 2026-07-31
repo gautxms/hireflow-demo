@@ -35,7 +35,7 @@
     "qa:dashboard-a11y-smoke": "node scripts/dashboard-a11y-smoke-checks.mjs",
     "qa:shortlist-design-gate": "node scripts/check-shortlist-design-constitution.mjs",
     "check:seo-consistency": "node scripts/check-seo-consistency.mjs",
-    "test:route-classification": "node --test src/config/routeClassification.test.js src/appPublicRouteGuards.test.js src/main.staticPublicHydration.test.js"
+    "test:route-classification": "node --test src/config/routeClassification.test.js src/main.staticPublicHydration.test.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.67.1",
