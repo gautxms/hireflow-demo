@@ -11,6 +11,7 @@ import App from './App.jsx'
 import AppErrorBoundary from './components/AppErrorBoundary'
 import API_BASE from './config/api'
 import StaticPublicRouteBootstrap from './public/StaticPublicRouteBootstrap.jsx'
+import { shouldHydrateStaticPublicRoute } from './public/staticPublicRouteHydration.js'
 
 const RECENT_CRASH_CONTEXT_KEY = 'hireflow_recent_crash_context_v1'
 
@@ -69,8 +70,12 @@ window.addEventListener('hireflow:telemetry', (event) => {
 })
 
 const root = document.getElementById('root')
+const shouldHydratePrerenderedRoute = shouldHydrateStaticPublicRoute({
+  hasPrerenderedPublicMarkup: root.hasAttribute('data-static-public-route'),
+  pathname: window.location.pathname,
+})
 
-if (root.hasAttribute('data-static-public-route')) {
+if (shouldHydratePrerenderedRoute) {
   import('./public/PublicRouteApp.jsx').then(({ default: PublicRouteApp }) => {
     hydrateRoot(
       root,
