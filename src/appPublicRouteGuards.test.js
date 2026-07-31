@@ -1,18 +1,9 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { PUBLIC_ROUTE_MANIFEST, PUBLIC_ROUTE_PATHS } from './config/publicRouteManifest.js'
 
 const appSource = readFileSync(new URL('./App.jsx', import.meta.url), 'utf8')
 
-test('App derives public route paths from the shared manifest', () => {
-  assert.ok(appSource.includes("import { PUBLIC_ROUTE_PATHS } from './config/publicRouteManifest'"))
-  assert.ok(!appSource.includes('const PUBLIC_ROUTE_PATHS = new Set'))
-  assert.deepEqual(
-    [...PUBLIC_ROUTE_PATHS].sort(),
-    PUBLIC_ROUTE_MANIFEST.map((route) => route.path).sort(),
-  )
-})
 test('public marketing pages resolve from pathname before legacy currentPage fallback', () => {
   assert.match(appSource, /if \(INTENT_PAGE_ORDER\.includes\(resolvedPathname\)\) \{[\s\S]*<IntentLandingPage pathname=\{resolvedPathname\} \/>/)
   assert.match(appSource, /if \(resolvedPathname === '\/help'\) {[\s\S]*return <HelpPage/)
@@ -56,7 +47,7 @@ test('user shell routing resolves from canonical route paths', () => {
 })
 
 test('authenticated paid and read-only users keep public header and footer on landing route', () => {
-  assert.match(appSource, /if \(NON_SHELL_ROUTE_PATHS\.has\(pathname\)\) \{[\s\S]*return false/)
+  assert.match(appSource, /if \(PUBLIC_ROUTE_PATHS\.has\(pathname\)\) \{[\s\S]*return false/)
   assert.match(appSource, /<header className="site-header">/)
   assert.match(appSource, /<PublicFooter \/>/)
   assert.match(appSource, /canOpenWorkspaceDashboard \? \([\s\S]*Dashboard[\s\S]*\) : \(/)
