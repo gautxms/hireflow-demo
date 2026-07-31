@@ -35,9 +35,16 @@ export async function runPaddleWebhookRetryWorker(dependencies = {}) {
      SET status = 'terminal_failed', next_retry_at = NULL, failed_at = COALESCE(failed_at, NOW()),
          last_error_code = 'SCHEDULER_ATTEMPTS_EXHAUSTED',
          last_error_message = 'Scheduled webhook retry limit exhausted'
-     WHERE status = 'retryable_failed'
-       AND verified_at IS NOT NULL
-       AND COALESCE(scheduler_attempt_count, 0) >= $1`,
+     WHERE verified_at IS NOT NULL
+       AND paddle_environment IN ('production', 'sandbox')
+       AND COALESCE(scheduler_attempt_count, 0) >= $1
+       AND (
+         status = 'retryable_failed'
+         OR (
+           status = 'processing'
+           AND (last_attempt_at IS NULL OR last_attempt_at <= NOW() - INTERVAL '120 seconds')
+         )
+       )`,
     [PADDLE_WEBHOOK_SCHEDULER_MAX_ATTEMPTS],
   )
   summary.terminal_failed += exhausted.rowCount
@@ -52,7 +59,9 @@ export async function runPaddleWebhookRetryWorker(dependencies = {}) {
          (status = 'retryable_failed' AND (next_retry_at IS NULL OR next_retry_at <= NOW())
           AND COALESCE(scheduler_attempt_count, 0) < $1)
          OR
-         (status = 'processing' AND (last_attempt_at IS NULL OR last_attempt_at <= NOW() - INTERVAL '120 seconds'))
+         (status = 'processing'
+          AND COALESCE(scheduler_attempt_count, 0) < $1
+          AND (last_attempt_at IS NULL OR last_attempt_at <= NOW() - INTERVAL '120 seconds'))
        )
      ORDER BY COALESCE(next_retry_at, last_attempt_at, first_received_at) ASC
      LIMIT $2`,

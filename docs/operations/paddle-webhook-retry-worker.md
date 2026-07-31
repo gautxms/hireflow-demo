@@ -20,7 +20,7 @@ not confer ownership: the PR #1208 compare-and-set claim remains authoritative.
 | Current state | Eligibility | Acquired transition | Result |
 | --- | --- | --- | --- |
 | `retryable_failed` | `next_retry_at` is null/due, verified payload, fewer than 6 scheduled attempts | `processing`, fresh token, increment both counters | `completed`, `retryable_failed`, or `terminal_failed` |
-| `processing` | heartbeat/lease is at least 120 seconds old | same reclaim contract | same outcomes |
+| `processing` | heartbeat/lease is at least 120 seconds old and fewer than 6 scheduled attempts | same reclaim contract | same outcomes |
 | `completed` | never | none | unchanged |
 | `terminal_failed` | never | none | unchanged |
 
@@ -30,6 +30,11 @@ fails, the row becomes `terminal_failed`. A Paddle redelivery may acquire a due
 non-terminal row before the scheduler, but uses the same token/attempt fencing.
 It cannot reopen a terminal row. Error fields are length-limited and must contain
 only sanitized categories/messages.
+
+If the worker crashes during the sixth scheduled attempt, the expired lease is
+atomically transitioned to `terminal_failed`; it is never acquired as a seventh
+scheduled attempt. The transition's lease predicate prevents it from overwriting
+a newer owner that renewed or reclaimed the event concurrently.
 
 The worker processes stored payloads only when `verified_at` proves they crossed
 the public signature boundary. New public requests still require a valid Paddle

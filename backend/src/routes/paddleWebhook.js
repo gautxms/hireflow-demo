@@ -392,7 +392,7 @@ async function getWebhookInboxEvent(eventId) {
   return result.rows[0] || null
 }
 
-async function reclaimWebhookInboxEvent({ eventId, payloadHash, payload, environment, processingToken, source = 'live' }) {
+export async function reclaimWebhookInboxEvent({ eventId, payloadHash, payload, environment, processingToken, source = 'live' }) {
   const retryResult = await pool.query(
     `UPDATE paddle_webhook_events
      SET status = 'processing',
@@ -417,6 +417,7 @@ async function reclaimWebhookInboxEvent({ eventId, payloadHash, payload, environ
          )
          OR (
            status = 'processing'
+           AND ($7 <> 'scheduled' OR COALESCE(scheduler_attempt_count, 0) < $8)
            AND (
              last_attempt_at IS NULL
              OR last_attempt_at <= NOW() - ($6::integer * INTERVAL '1 second')

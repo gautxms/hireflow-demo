@@ -67,8 +67,17 @@ test('candidate lookup encodes due time, expired lease, environment, terminal an
   const db = { async query(sql, params) { calls.push({ sql, params }); return { rowCount: 0, rows: [] } } }
   await runPaddleWebhookRetryWorker({ db, env: enabled, processEvent: async () => ({ outcome: 'completed' }) })
   assert.match(calls[0].sql, /status = 'retryable_failed'/)
+  assert.match(
+    calls[0].sql,
+    /status = 'processing'[\s\S]+last_attempt_at <= NOW\(\) - INTERVAL '120 seconds'/,
+  )
+  assert.match(calls[0].sql, /COALESCE\(scheduler_attempt_count, 0\) >= \$1/)
   assert.match(calls[1].sql, /next_retry_at IS NULL OR next_retry_at <= NOW\(\)/)
   assert.match(calls[1].sql, /last_attempt_at <= NOW\(\) - INTERVAL '120 seconds'/)
+  assert.match(
+    calls[1].sql,
+    /status = 'processing'[\s\S]+COALESCE\(scheduler_attempt_count, 0\) < \$1/,
+  )
   assert.match(calls[1].sql, /paddle_environment IN \('production', 'sandbox'\)/)
   assert.match(calls[1].sql, /LIMIT \$2/)
   assert.deepEqual(calls[1].params, [6, DEFAULT_PADDLE_WEBHOOK_RETRY_BATCH_SIZE])
@@ -78,4 +87,35 @@ test('disabled worker performs no database reads', async () => {
   const db = { async query() { assert.fail('database should not be queried') } }
   const summary = await runPaddleWebhookRetryWorker({ db, env: {} })
   assert.equal(summary.scanned, 0)
+})
+
+test('an expired capped processing attempt is terminalized without starting processing', async () => {
+  const calls = []
+  let processingCalls = 0
+  const db = {
+    async query(sql, params) {
+      calls.push({ sql: String(sql), params })
+      if (calls.length === 1) return { rowCount: 1, rows: [] }
+      return { rowCount: 0, rows: [] }
+    },
+  }
+  const summary = await runPaddleWebhookRetryWorker({
+    db,
+    env: enabled,
+    processEvent: async () => {
+      processingCalls += 1
+      return { outcome: 'completed' }
+    },
+  })
+
+  assert.equal(processingCalls, 0)
+  assert.equal(summary.terminal_failed, 1)
+  assert.equal(summary.scanned, 0)
+  assert.match(calls[0].sql, /SET status = 'terminal_failed'/)
+  assert.match(calls[0].sql, /paddle_environment IN \('production', 'sandbox'\)/)
+  assert.match(calls[0].sql, /COALESCE\(scheduler_attempt_count, 0\) >= \$1/)
+  assert.match(
+    calls[0].sql,
+    /status = 'processing'[\s\S]+last_attempt_at <= NOW\(\) - INTERVAL '120 seconds'/,
+  )
 })
