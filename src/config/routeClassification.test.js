@@ -1,5 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import { PUBLIC_ROUTE_MANIFEST, PUBLIC_ROUTE_PATHS } from './publicRouteManifest.js'
 import {
   PROTECTED_ROUTE_EXACT_PATHS,
   ROUTE_ACCESS,
@@ -46,4 +48,14 @@ test('validation rejects contradictory protected metadata', () => {
 
 test('authoritative protected exact routes are unique', () => {
   assert.equal(new Set(PROTECTED_ROUTE_EXACT_PATHS).size, PROTECTED_ROUTE_EXACT_PATHS.length)
+})
+
+test('App derives public route paths from the shared manifest', () => {
+  const appSource = readFileSync(new URL('../App.jsx', import.meta.url), 'utf8')
+  assert.ok(appSource.includes("import { PUBLIC_ROUTE_PATHS } from './config/publicRouteManifest'"))
+  assert.ok(!appSource.includes('const PUBLIC_ROUTE_PATHS = new Set'))
+  assert.deepEqual(
+    [...PUBLIC_ROUTE_PATHS].sort(),
+    PUBLIC_ROUTE_MANIFEST.map((route) => route.path).sort(),
+  )
 })
