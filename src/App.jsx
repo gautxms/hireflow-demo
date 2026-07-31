@@ -49,6 +49,7 @@ import { loadPublicRouteChunk } from './utils/lazyRouteLoader'
 import API_BASE from './config/api'
 import IntentLandingPage from './pages/seo/IntentLandingPage'
 import { INTENT_PAGE_ORDER } from './pages/seo/intentPages'
+import { PUBLIC_ROUTE_PATHS } from './config/publicRouteManifest'
 import { trackIntentLanding } from './seo/organicTracking'
 import './styles/app-route-states.css'
 import './styles/analyses-pages.css'
@@ -92,23 +93,7 @@ const AUTH_ROUTE_PATHS = new Set([
   '/reset-password',
 ])
 
-const PUBLIC_ROUTE_PATHS = new Set([
-  '/',
-  '/login',
-  '/signup',
-  '/pricing',
-  '/about',
-  '/help',
-  '/contact',
-  '/demo',
-  '/privacy',
-  '/terms',
-  '/ai-disclosure',
-  '/trust',
-  '/cookie-policy',
-  '/refund-policy',
-  ...INTENT_PAGE_ORDER,
-])
+const NON_SHELL_ROUTE_PATHS = new Set([...PUBLIC_ROUTE_PATHS, ...AUTH_ROUTE_PATHS])
 const READ_ONLY_WORKSPACE_FRONTEND_ROUTES = new Set(['/dashboard', '/job-descriptions', '/analyses', '/candidates', '/shortlists', '/reports'])
 
 function isReadOnlyWorkspaceFrontendRoute(pathname) {
@@ -195,14 +180,14 @@ function shouldRenderWithinUserShell(pathname, isAuthenticated, subscriptionStat
     return false
   }
 
-  if (PUBLIC_ROUTE_PATHS.has(pathname)) {
+  if (NON_SHELL_ROUTE_PATHS.has(pathname)) {
     return false
   }
 
   const isRootLandingPath = pathname === '/'
   const resolvedPathname = isRootLandingPath ? pathname : resolveUserSectionPath(pathname)
 
-  if (resolvedPathname.startsWith('/admin') || shouldDisableUserShell(resolvedPathname) || PUBLIC_ROUTE_PATHS.has(resolvedPathname)) {
+  if (resolvedPathname.startsWith('/admin') || shouldDisableUserShell(resolvedPathname) || NON_SHELL_ROUTE_PATHS.has(resolvedPathname)) {
     return false
   }
 
