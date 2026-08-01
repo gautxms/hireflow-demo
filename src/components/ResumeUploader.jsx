@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import DOMPurify from 'dompurify'
 import API_BASE from '../config/api'
+import { fetchWithAccountAccessRefresh } from '../utils/accountAccessRefresh'
 import useResumeAnalysisQuota from '../hooks/useResumeAnalysisQuota.js'
 import { buildRoleSafeErrorView, isStorageInfrastructureError, mapProviderError } from './aiProviderErrorMapping'
 import {
@@ -213,7 +214,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
       return
     }
 
-    fetch(`${API_BASE}/job-descriptions`, {
+    fetchWithAccountAccessRefresh(`${API_BASE}/job-descriptions`, {
       headers: {
         Authorization: `Bearer ${token}`,
       },
@@ -327,7 +328,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
       formData.append('chunkIndex', String(chunkIndex))
       formData.append('totalChunks', String(totalChunks))
 
-      const response = await fetch(`${API_BASE}/uploads/chunks/${uploadId}/chunk`, {
+      const response = await fetchWithAccountAccessRefresh(`${API_BASE}/uploads/chunks/${uploadId}/chunk`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
         body: formData,
@@ -361,7 +362,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
       formData.append('jobDescriptionId', optionalJobDescriptionId)
     }
 
-    const response = await fetch(`${API_BASE}/uploads`, {
+    const response = await fetchWithAccountAccessRefresh(`${API_BASE}/uploads`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}` },
       body: formData,
@@ -466,7 +467,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
           const totalChunks = Math.ceil(file.size / CHUNK_SIZE)
           const fingerprint = getFileFingerprint(file)
 
-          const initResponse = await fetch(`${API_BASE}/uploads/chunks/init`, {
+          const initResponse = await fetchWithAccountAccessRefresh(`${API_BASE}/uploads/chunks/init`, {
             method: 'POST',
             headers: {
               Authorization: `Bearer ${token}`,
@@ -604,7 +605,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
             setUploadProgress({ completed: uploadedChunkCount, total: totalChunksAllFiles })
           }
 
-          const completeResponse = await fetch(`${API_BASE}/uploads/chunks/${uploadId}/complete`, {
+          const completeResponse = await fetchWithAccountAccessRefresh(`${API_BASE}/uploads/chunks/${uploadId}/complete`, {
             method: 'POST',
             headers: { Authorization: `Bearer ${token}` },
           })
@@ -800,7 +801,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
 
       const statusResponses = await Promise.all(
         queuedJobs.map(async (job) => {
-          const response = await fetch(`${API_BASE}/uploads/${job.jobId}/parse-status`, {
+          const response = await fetchWithAccountAccessRefresh(`${API_BASE}/uploads/${job.jobId}/parse-status`, {
             method: 'GET',
             headers: { Authorization: `Bearer ${token}` },
             signal: abortController.signal,
@@ -946,7 +947,7 @@ export default function ResumeUploader({ onFileUploaded, onBack, isAuthenticated
         throw new DOMException('Polling aborted', 'AbortError')
       }
 
-      const response = await fetch(`${API_BASE}/analyses/${analysisId}`, {
+      const response = await fetchWithAccountAccessRefresh(`${API_BASE}/analyses/${analysisId}`, {
         method: 'GET',
         headers: { Authorization: `Bearer ${token}` },
         signal: abortController.signal,

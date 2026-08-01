@@ -1,6 +1,7 @@
 import { Trash2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import API_BASE from '../config/api'
+import { fetchWithAccountAccessRefresh } from '../utils/accountAccessRefresh'
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 
@@ -31,7 +32,7 @@ export default function ReportsPage({ isReadOnly = false }) {
       setLoading(true)
       setError('')
 
-      const response = await fetch(`${API_BASE}/reports`, {
+      const response = await fetchWithAccountAccessRefresh(`${API_BASE}/reports`, {
         headers: { Authorization: `Bearer ${token}` },
       })
 
@@ -66,7 +67,7 @@ export default function ReportsPage({ isReadOnly = false }) {
       setSaving(true)
       setError('')
 
-      const response = await fetch(`${API_BASE}/reports`, {
+      const response = await fetchWithAccountAccessRefresh(`${API_BASE}/reports`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -97,7 +98,7 @@ export default function ReportsPage({ isReadOnly = false }) {
   async function toggleSchedule(item) {
     if (isReadOnly) return
     try {
-      const response = await fetch(`${API_BASE}/reports/${item.id}`, {
+      const response = await fetchWithAccountAccessRefresh(`${API_BASE}/reports/${item.id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -125,7 +126,7 @@ export default function ReportsPage({ isReadOnly = false }) {
   async function deleteReport(id) {
     if (isReadOnly) return
     try {
-      const response = await fetch(`${API_BASE}/reports/${id}`, {
+      const response = await fetchWithAccountAccessRefresh(`${API_BASE}/reports/${id}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       })

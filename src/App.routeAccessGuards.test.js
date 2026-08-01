@@ -139,7 +139,7 @@ test('standalone routes bypass ordinary user auth sync side effects', () => {
   const syncStart = source.slice(source.indexOf('const syncAuthenticatedUser = useCallback'), source.indexOf("setAccessResolution({ status: 'resolving'") )
   const storageBlock = source.slice(source.indexOf('const onStorage ='), source.indexOf("if (event.key === USER_STORAGE_KEY)"))
   const authUpdatedBlock = source.slice(source.indexOf('const onAuthStateRefresh ='), source.indexOf('const onStorage ='))
-  const focusBlock = source.slice(source.indexOf('const handleWindowFocus ='), source.indexOf("window.addEventListener('focus'") )
+  const focusBlock = source.slice(source.indexOf('const refreshAccountAccessSilently ='), source.indexOf("window.addEventListener('focus'") )
 
   assert.match(syncStart, /isStandaloneOrdinaryUserAuthRoutePath\(pathname\)/)
   assert.match(storageBlock, /event\.newValue && !isStandaloneOrdinaryUserAuthRoutePath\(pathname\)/)
@@ -149,7 +149,7 @@ test('standalone routes bypass ordinary user auth sync side effects', () => {
 
 
 test('focus and visibility account refreshes are silent after the initial access gate', () => {
-  const focusBlock = source.slice(source.indexOf('const handleWindowFocus ='), source.indexOf("window.addEventListener('focus'"))
+  const focusBlock = source.slice(source.indexOf('const refreshAccountAccessSilently ='), source.indexOf("window.addEventListener('focus'"))
   const syncSignatureBlock = source.slice(source.indexOf('const syncAuthenticatedUser = useCallback'), source.indexOf('const activeToken = getStoredToken()'))
 
   assert.match(syncSignatureBlock, /showLoading = true/)

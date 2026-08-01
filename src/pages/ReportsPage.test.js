@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs'
 const source = readFileSync(new URL('./ReportsPage.jsx', import.meta.url), 'utf8')
 
 test('reports page loads and displays owner-scoped saved definitions', () => {
-  assert.match(source, /fetch\(`\$\{API_BASE\}\/reports`/)
+  assert.match(source, /fetchWithAccountAccessRefresh\(`\$\{API_BASE\}\/reports`/)
   assert.match(source, /setItems\(Array\.isArray\(payload\.items\) \? payload\.items : \[\]\)/)
   assert.match(source, /item\.columns\.join\(', '\)/)
   assert.match(source, /item\.scheduleEnabled \? 'Enabled' : 'Disabled'/)

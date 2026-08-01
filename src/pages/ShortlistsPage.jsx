@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import API_BASE from '../config/api'
+import { fetchWithAccountAccessRefresh } from '../utils/accountAccessRefresh'
 import ShortlistManager from '../components/ShortlistManager'
 import { removeShortlistCandidate } from '../components/shortlistState'
 import '../styles/shortlists.css'
@@ -38,7 +39,7 @@ export default function ShortlistsPage({ isReadOnly = false }) {
     const requestId = ++listRequestRef.current
     try {
       setLoadingList(true)
-      const response = await fetch(`${API_BASE}/shortlists?includeArchived=true`, {
+      const response = await fetchWithAccountAccessRefresh(`${API_BASE}/shortlists?includeArchived=true`, {
         headers: authHeaders(),
       })
       const payload = await response.json().catch(() => ({}))
@@ -85,7 +86,7 @@ export default function ShortlistsPage({ isReadOnly = false }) {
     const requestId = ++detailsRequestRef.current
     try {
       setLoadingDetails(true)
-      const response = await fetch(`${API_BASE}/shortlists/${shortlistId}?${sortMap[sortKey] || sortMap.rating_desc}`, {
+      const response = await fetchWithAccountAccessRefresh(`${API_BASE}/shortlists/${shortlistId}?${sortMap[sortKey] || sortMap.rating_desc}`, {
         headers: authHeaders(),
       })
       const payload = await response.json().catch(() => ({}))
@@ -102,7 +103,7 @@ export default function ShortlistsPage({ isReadOnly = false }) {
 
   const loadJobDescriptions = useCallback(async () => {
     try {
-      const response = await fetch(`${API_BASE}/job-descriptions?includeArchived=true`, {
+      const response = await fetchWithAccountAccessRefresh(`${API_BASE}/job-descriptions?includeArchived=true`, {
         headers: authHeaders(),
       })
       const payload = await response.json().catch(() => ({}))
@@ -138,7 +139,7 @@ export default function ShortlistsPage({ isReadOnly = false }) {
     try {
       setLoadingList(true)
       setError('')
-      const response = await fetch(`${API_BASE}/shortlists?includeArchived=true`, {
+      const response = await fetchWithAccountAccessRefresh(`${API_BASE}/shortlists?includeArchived=true`, {
         method: 'POST',
         headers: authHeaders(),
         body: JSON.stringify({ name, description, jobDescriptionId }),
@@ -169,7 +170,7 @@ export default function ShortlistsPage({ isReadOnly = false }) {
 
     try {
       setError('')
-      const response = await fetch(`${API_BASE}/shortlists/${selectedShortlistId}/candidates/batch-remove`, {
+      const response = await fetchWithAccountAccessRefresh(`${API_BASE}/shortlists/${selectedShortlistId}/candidates/batch-remove`, {
         method: 'POST',
         headers: authHeaders(),
         body: JSON.stringify({ resumeIds: [resumeId] }),

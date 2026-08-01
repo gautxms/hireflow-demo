@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import API_BASE from '../config/api'
 import JobsTable from '../components/jobs/JobsTable'
 import JobModal from '../components/jobs/JobModal'
+import { fetchWithAccountAccessRefresh } from '../utils/accountAccessRefresh'
 import '../styles/analyses.css'
 import '../styles/job-description.css'
 
@@ -33,7 +34,7 @@ export default function JobDescriptionPage({ onRequireAuth, isReadOnly = false }
     setError('')
 
     try {
-      const response = await fetch(`${API_BASE}/job-descriptions`, {
+      const response = await fetchWithAccountAccessRefresh(`${API_BASE}/job-descriptions`, {
         headers: { Authorization: `Bearer ${token}` },
       })
       const payload = await response.json().catch(() => ({}))
@@ -85,7 +86,7 @@ export default function JobDescriptionPage({ onRequireAuth, isReadOnly = false }
     try {
       const isEdit = modalMode === 'edit' && activeItem?.id
       const isMultipart = nextValues instanceof FormData
-      const response = await fetch(
+      const response = await fetchWithAccountAccessRefresh(
         isEdit ? `${API_BASE}/job-descriptions/${activeItem.id}` : `${API_BASE}/job-descriptions`,
         {
           method: isEdit ? 'PUT' : 'POST',
@@ -111,7 +112,7 @@ export default function JobDescriptionPage({ onRequireAuth, isReadOnly = false }
   }, [activeItem, fetchItems, isReadOnly, modalMode, onRequireAuth, token])
 
   const archiveJob = useCallback(async (item) => {
-    const response = await fetch(`${API_BASE}/job-descriptions/${item.id}`, {
+    const response = await fetchWithAccountAccessRefresh(`${API_BASE}/job-descriptions/${item.id}`, {
       method: 'DELETE',
       headers: {
         Authorization: `Bearer ${token}`,

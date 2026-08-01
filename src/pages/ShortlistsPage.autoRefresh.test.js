@@ -72,7 +72,7 @@ test('read-only shortlists mode preserves history and suppresses every mutation 
 test('shortlists page loads jobs and sends selected job when creating shortlist', () => {
   const createShortlistSource = getFunctionSource('createShortlist')
   assert.match(shortlistPageSource, /const \[jobDescriptions, setJobDescriptions\] = useState\(\[\]\)/)
-  assert.match(shortlistPageSource, /fetch\(`\$\{API_BASE\}\/job-descriptions\?includeArchived=true`/)
+  assert.match(shortlistPageSource, /fetchWithAccountAccessRefresh\(`\$\{API_BASE\}\/job-descriptions\?includeArchived=true`/)
   assert.match(createShortlistSource, /jobDescriptionId/)
   assert.match(createShortlistSource, /JSON\.stringify\(\{ name, description, jobDescriptionId \}\)/)
   assert.match(shortlistPageSource, /jobDescriptions=\{jobDescriptions\}/)
