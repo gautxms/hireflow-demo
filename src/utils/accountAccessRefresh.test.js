@@ -106,9 +106,17 @@ test('explicit invalidation coalesces behind a busy sync without replaying passi
 
   assert.match(appSource, /authSyncFollowUpRequestedRef = useRef\(false\)/)
   assert.match(syncBlock, /if \(!showLoading && authSyncControllerRef\.current\) \{\s*if \(queueIfBusy\) \{\s*authSyncFollowUpRequestedRef\.current = true\s*\}\s*return null\s*\}/)
-  assert.match(syncBlock, /if \(authSyncFollowUpRequestedRef\.current\) \{\s*authSyncFollowUpRequestedRef\.current = false\s*void syncAuthenticatedUser\(\{ showLoading: false \}\)\s*\}/)
   assert.match(appSource, /syncAuthenticatedUser\(\{ showLoading: false, queueIfBusy: true \}\)/)
   assert.match(appSource, /const handleWindowFocus = \(\) => \{\s*refreshAccountAccessSilently\(\)\s*\}/)
+})
+
+test('queued invalidation is dropped after navigation to a standalone route', () => {
+  const syncBlock = appSource.slice(
+    appSource.indexOf('const syncAuthenticatedUser = useCallback'),
+    appSource.indexOf('useEffect(() => {', appSource.indexOf('const syncAuthenticatedUser = useCallback')),
+  )
+
+  assert.match(syncBlock, /if \(authSyncFollowUpRequestedRef\.current\) \{\s*authSyncFollowUpRequestedRef\.current = false\s*if \(!isStandaloneOrdinaryUserAuthRoutePath\(window\.location\.pathname\)\) \{\s*void syncAuthenticatedUser\(\{ showLoading: false \}\)\s*\}\s*\}/)
 })
 
 test('job mutations request an immediate authoritative refresh after a subscription denial', () => {

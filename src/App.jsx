@@ -1475,7 +1475,9 @@ export default function App() {
 
         if (authSyncFollowUpRequestedRef.current) {
           authSyncFollowUpRequestedRef.current = false
-          void syncAuthenticatedUser({ showLoading: false })
+          if (!isStandaloneOrdinaryUserAuthRoutePath(window.location.pathname)) {
+            void syncAuthenticatedUser({ showLoading: false })
+          }
         }
       }
     }
