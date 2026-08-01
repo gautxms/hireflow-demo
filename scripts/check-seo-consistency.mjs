@@ -65,6 +65,9 @@ const staticPaths = STATIC_PUBLIC_ROUTES.map((route) => route.path)
 const sitemapGeneratorSource = await fs.readFile(sitemapGeneratorPath, 'utf8')
 const webManifest = JSON.parse(await fs.readFile(manifestPath, 'utf8'))
 const vercelConfig = JSON.parse(await fs.readFile(vercelConfigPath, 'utf8'))
+const robotsHeaderSources = (vercelConfig.headers || [])
+  .filter(({ headers }) => headers?.some(({ key, value }) => key.toLowerCase() === 'x-robots-tag' && value.toLowerCase() === 'noindex, follow'))
+  .map(({ source }) => source)
 const noindexRoutes = Object.keys(PUBLIC_PAGE_SEO).filter((route) => {
   const seo = resolvePageSeo({ pathname: route, siteUrl: SITE_URL })
   return seo.robots?.toLowerCase().includes('noindex')
@@ -106,6 +109,14 @@ assert(staticPaths.includes('/cookie-policy'), '/cookie-policy must be included 
 const cookieRewrite = vercelConfig.rewrites?.find(({ source }) => source === '/cookie-policy')
 assert(cookieRewrite?.destination === '/cookie-policy/index.html', '/cookie-policy must serve its generated document.')
 assert(vercelConfig.trailingSlash === false, 'Vercel trailingSlash must remain false.')
+assert(
+  robotsHeaderSources.some((source) => source.includes('login') && source.includes('signup')),
+  'Authentication routes must receive a deployed noindex, follow header.',
+)
+assert(
+  robotsHeaderSources.some((source) => source.includes('dashboard') && source.includes('admin')),
+  'Authenticated application routes must receive a deployed noindex, follow header.',
+)
 const canonicalRedirect = vercelConfig.redirects?.find(({ source }) => source === '/:path*')
 assert(canonicalRedirect?.destination === 'https://hireflow.dev/:path*', 'Canonical www redirect must remain configured.')
 

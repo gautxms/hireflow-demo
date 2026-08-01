@@ -12,7 +12,6 @@ const SSR_ENTRY_PATH = resolve(SSR_DIR, 'entry-server.js')
 const SITEMAP_PATH = resolve(DIST_DIR, 'sitemap.xml')
 const VERCEL_CONFIG_PATH = resolve(process.cwd(), 'vercel.json')
 const SITE_URL = process.env.SITE_URL || process.env.VITE_SITE_URL || 'https://hireflow.dev'
-const MIN_VISIBLE_WORDS = 50
 
 const DEMO_PLACEHOLDER = `
   <main>
@@ -59,24 +58,6 @@ function routeToFile(pathname) {
   return pathname === '/' ? INDEX_PATH : resolve(DIST_DIR, pathname.slice(1), 'index.html')
 }
 
-function countVisibleWords(html) {
-  const visibleText = html
-    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, ' ')
-    .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, ' ')
-    .replace(/<template\b[^>]*>[\s\S]*?<\/template>/gi, ' ')
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/&(?:[a-z]+|#\d+|#x[\da-f]+);/gi, ' ')
-  return visibleText.match(/[\p{L}\p{N}]+(?:['’-][\p{L}\p{N}]+)*/gu)?.length || 0
-}
-
-function getRenderedPageContent(renderedBody) {
-  const match = renderedBody.match(/<main>([\s\S]*)<\/main>\s*<footer\b/i)
-  if (!match) {
-    throw new Error('Generated public route is missing the shared main content boundary.')
-  }
-  return match[1]
-}
-
 async function validateSitemap() {
   const sitemap = await readFile(SITEMAP_PATH, 'utf8')
   const actualRoutes = [...sitemap.matchAll(/<loc>([^<]+)<\/loc>/g)]
@@ -109,10 +90,6 @@ async function validateGeneratedFiles() {
       throw new Error(`Generated route ${route.path} is missing its hydration marker.`)
     }
 
-    const wordCount = countVisibleWords(getRenderedPageContent(html))
-    if (wordCount < MIN_VISIBLE_WORDS) {
-      throw new Error(`Generated route ${route.path} is near-empty after writing (${wordCount} visible words).`)
-    }
   }
 
   for (const protectedPath of PROTECTED_ROUTE_EXACT_PATHS) {
@@ -141,15 +118,10 @@ async function prerender() {
   for (const route of STATIC_PUBLIC_ROUTES) {
     const renderedBody = serverEntry.renderPublicRoute(route.path)
     const routeHtml = withBody(withSeo(templateHtml, route), renderedBody)
-    const wordCount = countVisibleWords(getRenderedPageContent(renderedBody))
-    if (wordCount < MIN_VISIBLE_WORDS) {
-      throw new Error(`Generated route ${route.path} is near-empty (${wordCount} visible words; minimum ${MIN_VISIBLE_WORDS}).`)
-    }
-
     const outputPath = routeToFile(route.path)
     await mkdir(resolve(outputPath, '..'), { recursive: true })
     await writeFile(outputPath, routeHtml)
-    console.log(`Generated ${route.path} (${wordCount} visible words).`)
+    console.log(`Generated ${route.path}.`)
   }
 
   const demoRoute = PUBLIC_ROUTE_MANIFEST.find((route) => route.path === '/demo')

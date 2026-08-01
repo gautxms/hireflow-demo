@@ -5,6 +5,7 @@ import { PUBLIC_ROUTE_MANIFEST, PUBLIC_ROUTE_PATHS } from './publicRouteManifest
 import {
   PROTECTED_ROUTE_EXACT_PATHS,
   ROUTE_ACCESS,
+  isNonIndexableRoutePath,
   isProtectedRoutePath,
   validatePublicRouteManifest,
 } from './routeClassification.js'
@@ -23,6 +24,15 @@ test('known authenticated and admin routes are protected', () => {
   assert.equal(isProtectedRoutePath('/admin/users'), true)
   assert.equal(isProtectedRoutePath('/account/billing'), true)
   assert.equal(isProtectedRoutePath('/pricing'), false)
+})
+
+test('auth and private route families are non-indexable without affecting public routes', () => {
+  for (const pathname of ['/login', '/signup', '/forgot-password', '/reset-password/token', '/dashboard', '/billing/success', '/admin/users', '/account/settings']) {
+    assert.equal(isNonIndexableRoutePath(pathname), true, pathname)
+  }
+  for (const pathname of ['/', '/pricing', '/privacy', '/trust']) {
+    assert.equal(isNonIndexableRoutePath(pathname), false, pathname)
+  }
 })
 
 test('validation rejects a known authenticated route in static generation', () => {
