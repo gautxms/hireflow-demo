@@ -7,7 +7,7 @@
       "headers": [{ "key": "X-Robots-Tag", "value": "noindex, follow" }]
     },
     {
-      "source": "/(reset-password|results|analyses|candidates|admin)/(.*)",
+      "source": "/(reset-password|dashboard|results|analyses|candidates|admin)/(.*)",
       "headers": [{ "key": "X-Robots-Tag", "value": "noindex, follow" }]
     },
     {

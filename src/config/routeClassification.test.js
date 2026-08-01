@@ -27,7 +27,7 @@ test('known authenticated and admin routes are protected', () => {
 })
 
 test('auth and private route families are non-indexable without affecting public routes', () => {
-  for (const pathname of ['/login', '/signup', '/forgot-password', '/reset-password/token', '/dashboard', '/billing/success', '/admin/users', '/account/settings']) {
+  for (const pathname of ['/login', '/signup', '/forgot-password', '/reset-password/token', '/dashboard', '/dashboard/legacy', '/dashboard/anything', '/billing/success', '/admin/users', '/account/settings', '/analyses/example', '/results/example', '/candidates/example']) {
     assert.equal(isNonIndexableRoutePath(pathname), true, pathname)
   }
   for (const pathname of ['/', '/pricing', '/privacy', '/trust']) {
