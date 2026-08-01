@@ -80,7 +80,7 @@ import { RESULTS_EMPTY_STATE_COPY, getSharedResultsToken, isResultsRootPath, isS
 import { canAccessProductDashboard, guardAuthenticatedRoute, guardSubscriptionRoute } from './utils/routeGuards'
 import { FEATURE_KEYS, isFeatureEnabled } from './config/featureFlags'
 import { buildReadOnlyWorkspaceNotice, buildResolvedAccessContext, canViewHistoricalWorkspaceModule } from './appAccessRuntime'
-import { ACCOUNT_ACCESS_REFRESH_EVENT, ACCOUNT_ACCESS_REFRESH_INTERVAL_MS } from './utils/accountAccessRefresh'
+import { ACCOUNT_ACCESS_REFRESH_EVENT, ACCOUNT_ACCESS_REFRESH_INTERVAL_MS, shouldPollAccountAccess } from './utils/accountAccessRefresh'
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 const USER_STORAGE_KEY = 'hireflow_user_profile'
@@ -1573,8 +1573,10 @@ export default function App() {
 
     let accessRefreshIntervalId = null
     const accessRefreshPathname = resolveUserSectionPath(pathname)
-    const shouldSchedulePeriodicAccessRefresh = isPaidWorkspaceRoutePath(accessRefreshPathname)
+    const shouldSchedulePeriodicAccessRefresh = (
+      isPaidWorkspaceRoutePath(accessRefreshPathname)
       || isReadOnlyWorkspaceFrontendRoute(accessRefreshPathname)
+    ) && shouldPollAccountAccess(userProfile, subscriptionStatus)
 
     const refreshAccountAccessSilently = () => {
       if (!isStandaloneOrdinaryUserAuthRoutePath(pathname)) {
@@ -1626,7 +1628,7 @@ export default function App() {
       window.removeEventListener(ACCOUNT_ACCESS_REFRESH_EVENT, refreshAccountAccessSilently)
       authSyncControllerRef.current?.abort()
     }
-  }, [isAuthenticated, pathname, syncAuthenticatedUser])
+  }, [isAuthenticated, pathname, subscriptionStatus, syncAuthenticatedUser, userProfile])
 
   useEffect(() => {
     // Authenticated users are intentionally redirected away from auth forms to the home route.

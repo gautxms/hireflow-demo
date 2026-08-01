@@ -4,8 +4,10 @@ import { readFileSync } from 'node:fs'
 
 import {
   ACCOUNT_ACCESS_REFRESH_EVENT,
+  ACCOUNT_ACCESS_REFRESH_INTERVAL_MS,
   isSubscriptionAccessDenied,
   notifySubscriptionAccessDenied,
+  shouldPollAccountAccess,
 } from './accountAccessRefresh.js'
 
 const appSource = readFileSync(new URL('../App.jsx', import.meta.url), 'utf8')
@@ -30,9 +32,20 @@ test('subscription denial emits one refresh event without consuming or changing 
   assert.deepEqual(events, [ACCOUNT_ACCESS_REFRESH_EVENT])
 })
 
+test('periodic access polling is limited to active accounts near a billing boundary', () => {
+  const now = Date.parse('2026-08-01T12:00:00.000Z')
+
+  assert.equal(ACCOUNT_ACCESS_REFRESH_INTERVAL_MS, 2 * 60 * 1000)
+  assert.equal(shouldPollAccountAccess({ current_period_end: '2026-08-01T12:35:00.000Z' }, 'trialing', now), true)
+  assert.equal(shouldPollAccountAccess({ next_billing_date: '2026-08-01T10:30:00.000Z' }, 'active', now), true)
+  assert.equal(shouldPollAccountAccess({ subscription_renewal_date: '2026-09-01T12:00:00.000Z' }, 'active', now), false)
+  assert.equal(shouldPollAccountAccess({ current_period_end: '2026-08-01T12:35:00.000Z' }, 'past_due', now), false)
+  assert.equal(shouldPollAccountAccess({}, 'active', now), false)
+})
+
 test('authenticated access refresh runs periodically only while the page is visible and cleans up', () => {
   assert.match(appSource, /ACCOUNT_ACCESS_REFRESH_INTERVAL_MS/)
-  assert.match(appSource, /const shouldSchedulePeriodicAccessRefresh = isPaidWorkspaceRoutePath\(accessRefreshPathname\)[\s\S]*isReadOnlyWorkspaceFrontendRoute\(accessRefreshPathname\)/)
+  assert.match(appSource, /const shouldSchedulePeriodicAccessRefresh = \([\s\S]*isPaidWorkspaceRoutePath\(accessRefreshPathname\)[\s\S]*isReadOnlyWorkspaceFrontendRoute\(accessRefreshPathname\)[\s\S]*shouldPollAccountAccess\(userProfile, subscriptionStatus\)/)
   assert.match(appSource, /window\.setInterval\(refreshAccountAccessSilently, ACCOUNT_ACCESS_REFRESH_INTERVAL_MS\)/)
   assert.match(appSource, /if \(document\.visibilityState !== 'visible'\) \{\s*stopPeriodicAccessRefresh\(\)/)
   assert.match(appSource, /window\.clearInterval\(accessRefreshIntervalId\)/)
