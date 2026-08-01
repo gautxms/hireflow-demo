@@ -17,8 +17,8 @@ export const SEO_DEFAULTS = {
 
 export const PUBLIC_PAGE_SEO = {
   '/': {
-    title: 'HireFlow – AI Hiring Platform',
-    description: 'HireFlow helps teams hire faster using AI-powered resume screening, interviews, and candidate ranking.',
+    title: 'HireFlow | AI Resume Screening for Hiring Teams',
+    description: 'HireFlow uses AI resume screening to compare candidate strengths and gaps, explain role fit, and support recruiter-led shortlisting.',
   },
   '/about': {
     title: 'About HireFlow',

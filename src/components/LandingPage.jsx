@@ -38,14 +38,15 @@ export default function LandingPage({ onStartDemo, ctaLabel = 'Try Free Demo' })
       <section className="hero">
         <div className="orb-2"></div>
         <div className="hero-content">
+          <div className="landing-trust-strip__eyebrow">AI Resume Screening for Recruiters and Hiring Teams</div>
           <h1 className="hero-headline">
             <span className="hero-headline-line">Hire</span>
             <span className="hero-headline-line">Smarter.</span>
             <span className="hero-headline-line hero-headline-line--accent">Faster.</span>
           </h1>
           <p>
-            Stop losing hours to manual resume review. HireFlow turns unstructured resumes into structured candidate insights
-            so teams can compare applicants, review AI-generated reasoning, and build stronger shortlists with less manual effort.
+            HireFlow uses AI resume screening to turn unstructured resumes into structured candidate insights so teams can compare
+            applicants, review AI-generated reasoning, and build stronger shortlists with less manual effort.
           </p>
           <div className="hero-cta">
             <button className="btn-primary" onClick={onStartDemo}>
