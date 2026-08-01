@@ -5,6 +5,8 @@ import { readFileSync } from 'node:fs'
 import {
   ACCOUNT_ACCESS_REFRESH_EVENT,
   ACCOUNT_ACCESS_REFRESH_INTERVAL_MS,
+  ACCOUNT_ACCESS_REFRESH_WAKEUP_RECHECK_MS,
+  getAccountAccessPollingStartDelay,
   isSubscriptionAccessDenied,
   notifySubscriptionAccessDenied,
   shouldPollAccountAccess,
@@ -36,17 +38,22 @@ test('periodic access polling is limited to active accounts near a billing bound
   const now = Date.parse('2026-08-01T12:00:00.000Z')
 
   assert.equal(ACCOUNT_ACCESS_REFRESH_INTERVAL_MS, 2 * 60 * 1000)
+  assert.equal(ACCOUNT_ACCESS_REFRESH_WAKEUP_RECHECK_MS, 24 * 60 * 60 * 1000)
   assert.equal(shouldPollAccountAccess({ current_period_end: '2026-08-01T12:35:00.000Z' }, 'trialing', now), true)
   assert.equal(shouldPollAccountAccess({ next_billing_date: '2026-08-01T10:30:00.000Z' }, 'active', now), true)
   assert.equal(shouldPollAccountAccess({ subscription_renewal_date: '2026-09-01T12:00:00.000Z' }, 'active', now), false)
   assert.equal(shouldPollAccountAccess({ current_period_end: '2026-08-01T12:35:00.000Z' }, 'past_due', now), false)
   assert.equal(shouldPollAccountAccess({}, 'active', now), false)
+  assert.equal(getAccountAccessPollingStartDelay({ current_period_end: '2026-08-02T12:00:00.000Z' }, 'active', now), 22 * 60 * 60 * 1000)
+  assert.equal(getAccountAccessPollingStartDelay({ current_period_end: '2026-08-01T08:00:00.000Z' }, 'active', now), null)
 })
 
 test('authenticated access refresh runs periodically only while the page is visible and cleans up', () => {
   assert.match(appSource, /ACCOUNT_ACCESS_REFRESH_INTERVAL_MS/)
-  assert.match(appSource, /const shouldSchedulePeriodicAccessRefresh = \([\s\S]*isPaidWorkspaceRoutePath\(accessRefreshPathname\)[\s\S]*isReadOnlyWorkspaceFrontendRoute\(accessRefreshPathname\)[\s\S]*shouldPollAccountAccess\(userProfile, subscriptionStatus\)/)
-  assert.match(appSource, /window\.setInterval\(refreshAccountAccessSilently, ACCOUNT_ACCESS_REFRESH_INTERVAL_MS\)/)
+  assert.match(appSource, /const isPeriodicAccessRefreshRoute = \([\s\S]*isPaidWorkspaceRoutePath\(accessRefreshPathname\)[\s\S]*isReadOnlyWorkspaceFrontendRoute\(accessRefreshPathname\)/)
+  assert.match(appSource, /window\.setInterval\(runPeriodicAccessRefresh, ACCOUNT_ACCESS_REFRESH_INTERVAL_MS\)/)
+  assert.match(appSource, /window\.setTimeout\([\s\S]*scheduleAccessRefreshWakeUp,[\s\S]*Math\.min\(startDelay, ACCOUNT_ACCESS_REFRESH_WAKEUP_RECHECK_MS\)/)
+  assert.match(appSource, /window\.clearTimeout\(accessRefreshWakeUpTimeoutId\)/)
   assert.match(appSource, /if \(document\.visibilityState !== 'visible'\) \{\s*stopPeriodicAccessRefresh\(\)/)
   assert.match(appSource, /window\.clearInterval\(accessRefreshIntervalId\)/)
   assert.match(appSource, /window\.addEventListener\(ACCOUNT_ACCESS_REFRESH_EVENT, refreshAccountAccessSilently\)/)

@@ -1,6 +1,7 @@
 export const ACCOUNT_ACCESS_REFRESH_EVENT = 'hireflow-account-access-refresh'
 export const ACCOUNT_ACCESS_REFRESH_INTERVAL_MS = 2 * 60 * 1000
 export const ACCOUNT_ACCESS_REFRESH_BOUNDARY_WINDOW_MS = 2 * 60 * 60 * 1000
+export const ACCOUNT_ACCESS_REFRESH_WAKEUP_RECHECK_MS = 24 * 60 * 60 * 1000
 
 const REFRESHABLE_SUBSCRIPTION_STATUSES = new Set(['active', 'trial', 'trialing'])
 
@@ -13,13 +14,13 @@ function toTimestamp(value) {
   return Number.isFinite(timestamp) ? timestamp : null
 }
 
-export function shouldPollAccountAccess(userProfile, subscriptionStatus, now = Date.now()) {
+export function getAccountAccessPollingStartDelay(userProfile, subscriptionStatus, now = Date.now()) {
   const normalizedStatus = String(
     subscriptionStatus || userProfile?.subscription_status || '',
   ).trim().toLowerCase()
 
   if (!REFRESHABLE_SUBSCRIPTION_STATUSES.has(normalizedStatus)) {
-    return false
+    return null
   }
 
   const billingBoundaries = [
@@ -31,9 +32,22 @@ export function shouldPollAccountAccess(userProfile, subscriptionStatus, now = D
     userProfile?.subscriptionRenewalDate,
   ].map(toTimestamp).filter((timestamp) => timestamp !== null)
 
-  return billingBoundaries.some(
-    (timestamp) => Math.abs(timestamp - now) <= ACCOUNT_ACCESS_REFRESH_BOUNDARY_WINDOW_MS,
-  )
+  const startDelays = billingBoundaries.map((timestamp) => {
+    const windowStart = timestamp - ACCOUNT_ACCESS_REFRESH_BOUNDARY_WINDOW_MS
+    const windowEnd = timestamp + ACCOUNT_ACCESS_REFRESH_BOUNDARY_WINDOW_MS
+
+    if (now > windowEnd) {
+      return null
+    }
+
+    return Math.max(0, windowStart - now)
+  }).filter((delay) => delay !== null)
+
+  return startDelays.length > 0 ? Math.min(...startDelays) : null
+}
+
+export function shouldPollAccountAccess(userProfile, subscriptionStatus, now = Date.now()) {
+  return getAccountAccessPollingStartDelay(userProfile, subscriptionStatus, now) === 0
 }
 
 export function isSubscriptionAccessDenied(response, payload = {}) {

@@ -80,7 +80,7 @@ import { RESULTS_EMPTY_STATE_COPY, getSharedResultsToken, isResultsRootPath, isS
 import { canAccessProductDashboard, guardAuthenticatedRoute, guardSubscriptionRoute } from './utils/routeGuards'
 import { FEATURE_KEYS, isFeatureEnabled } from './config/featureFlags'
 import { buildReadOnlyWorkspaceNotice, buildResolvedAccessContext, canViewHistoricalWorkspaceModule } from './appAccessRuntime'
-import { ACCOUNT_ACCESS_REFRESH_EVENT, ACCOUNT_ACCESS_REFRESH_INTERVAL_MS, shouldPollAccountAccess } from './utils/accountAccessRefresh'
+import { ACCOUNT_ACCESS_REFRESH_EVENT, ACCOUNT_ACCESS_REFRESH_INTERVAL_MS, ACCOUNT_ACCESS_REFRESH_WAKEUP_RECHECK_MS, getAccountAccessPollingStartDelay, shouldPollAccountAccess } from './utils/accountAccessRefresh'
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 const USER_STORAGE_KEY = 'hireflow_user_profile'
@@ -1572,11 +1572,12 @@ export default function App() {
     }
 
     let accessRefreshIntervalId = null
+    let accessRefreshWakeUpTimeoutId = null
     const accessRefreshPathname = resolveUserSectionPath(pathname)
-    const shouldSchedulePeriodicAccessRefresh = (
+    const isPeriodicAccessRefreshRoute = (
       isPaidWorkspaceRoutePath(accessRefreshPathname)
       || isReadOnlyWorkspaceFrontendRoute(accessRefreshPathname)
-    ) && shouldPollAccountAccess(userProfile, subscriptionStatus)
+    )
 
     const refreshAccountAccessSilently = () => {
       if (!isStandaloneOrdinaryUserAuthRoutePath(pathname)) {
@@ -1591,15 +1592,61 @@ export default function App() {
       }
     }
 
+    const stopAccessRefreshWakeUp = () => {
+      if (accessRefreshWakeUpTimeoutId !== null) {
+        window.clearTimeout(accessRefreshWakeUpTimeoutId)
+        accessRefreshWakeUpTimeoutId = null
+      }
+    }
+
+    const runPeriodicAccessRefresh = () => {
+      if (!shouldPollAccountAccess(userProfile, subscriptionStatus)) {
+        stopPeriodicAccessRefresh()
+        scheduleAccessRefreshWakeUp()
+        return
+      }
+
+      refreshAccountAccessSilently()
+    }
+
     const startPeriodicAccessRefresh = () => {
       if (
         accessRefreshIntervalId === null
-        && shouldSchedulePeriodicAccessRefresh
+        && isPeriodicAccessRefreshRoute
+        && shouldPollAccountAccess(userProfile, subscriptionStatus)
         && document.visibilityState === 'visible'
         && !isStandaloneOrdinaryUserAuthRoutePath(pathname)
       ) {
-        accessRefreshIntervalId = window.setInterval(refreshAccountAccessSilently, ACCOUNT_ACCESS_REFRESH_INTERVAL_MS)
+        accessRefreshIntervalId = window.setInterval(runPeriodicAccessRefresh, ACCOUNT_ACCESS_REFRESH_INTERVAL_MS)
       }
+    }
+
+    const scheduleAccessRefreshWakeUp = () => {
+      stopAccessRefreshWakeUp()
+
+      if (
+        !isPeriodicAccessRefreshRoute
+        || document.visibilityState !== 'visible'
+        || isStandaloneOrdinaryUserAuthRoutePath(pathname)
+      ) {
+        return
+      }
+
+      const startDelay = getAccountAccessPollingStartDelay(userProfile, subscriptionStatus)
+
+      if (startDelay === null) {
+        return
+      }
+
+      if (startDelay === 0) {
+        startPeriodicAccessRefresh()
+        return
+      }
+
+      accessRefreshWakeUpTimeoutId = window.setTimeout(
+        scheduleAccessRefreshWakeUp,
+        Math.min(startDelay, ACCOUNT_ACCESS_REFRESH_WAKEUP_RECHECK_MS),
+      )
     }
 
     const handleWindowFocus = () => {
@@ -1609,20 +1656,22 @@ export default function App() {
     const handleVisibilityChange = () => {
       if (document.visibilityState !== 'visible') {
         stopPeriodicAccessRefresh()
+        stopAccessRefreshWakeUp()
         return
       }
 
       refreshAccountAccessSilently()
-      startPeriodicAccessRefresh()
+      scheduleAccessRefreshWakeUp()
     }
 
-    startPeriodicAccessRefresh()
+    scheduleAccessRefreshWakeUp()
     window.addEventListener('focus', handleWindowFocus)
     document.addEventListener('visibilitychange', handleVisibilityChange)
     window.addEventListener(ACCOUNT_ACCESS_REFRESH_EVENT, refreshAccountAccessSilently)
 
     return () => {
       stopPeriodicAccessRefresh()
+      stopAccessRefreshWakeUp()
       window.removeEventListener('focus', handleWindowFocus)
       document.removeEventListener('visibilitychange', handleVisibilityChange)
       window.removeEventListener(ACCOUNT_ACCESS_REFRESH_EVENT, refreshAccountAccessSilently)
