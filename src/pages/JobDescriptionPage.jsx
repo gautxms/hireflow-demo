@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import API_BASE from '../config/api'
 import JobsTable from '../components/jobs/JobsTable'
 import JobModal from '../components/jobs/JobModal'
+import { notifySubscriptionAccessDenied } from '../utils/accountAccessRefresh'
 import '../styles/analyses.css'
 import '../styles/job-description.css'
 
@@ -98,6 +99,7 @@ export default function JobDescriptionPage({ onRequireAuth, isReadOnly = false }
       )
 
       const payload = await response.json().catch(() => ({}))
+      notifySubscriptionAccessDenied(response, payload)
       if (!response.ok) throw new Error(payload.error || `Unable to ${isEdit ? 'update' : 'create'} job description`)
 
       await fetchItems()
@@ -119,6 +121,7 @@ export default function JobDescriptionPage({ onRequireAuth, isReadOnly = false }
     })
 
     const payload = await response.json().catch(() => ({}))
+    notifySubscriptionAccessDenied(response, payload)
     if (!response.ok) throw new Error(payload.error || 'Unable to archive job description')
   }, [token])
 

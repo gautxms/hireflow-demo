@@ -80,6 +80,7 @@ import { RESULTS_EMPTY_STATE_COPY, getSharedResultsToken, isResultsRootPath, isS
 import { canAccessProductDashboard, guardAuthenticatedRoute, guardSubscriptionRoute } from './utils/routeGuards'
 import { FEATURE_KEYS, isFeatureEnabled } from './config/featureFlags'
 import { buildReadOnlyWorkspaceNotice, buildResolvedAccessContext, canViewHistoricalWorkspaceModule } from './appAccessRuntime'
+import { ACCOUNT_ACCESS_REFRESH_EVENT, ACCOUNT_ACCESS_REFRESH_INTERVAL_MS } from './utils/accountAccessRefresh'
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 const USER_STORAGE_KEY = 'hireflow_user_profile'
@@ -1430,7 +1431,7 @@ export default function App() {
       }
 
       if (!response.ok) {
-        if (isLatestAuthSync() && getStoredToken() === activeToken) {
+        if (showLoading && isLatestAuthSync() && getStoredToken() === activeToken) {
           setAccessResolution({ status: 'error', error: 'We could not refresh your account. Please retry.' })
         }
         return null
@@ -1455,7 +1456,7 @@ export default function App() {
       if (error?.name === 'AbortError') {
         return null
       }
-      if (isLatestAuthSync() && getStoredToken() === activeToken) {
+      if (showLoading && isLatestAuthSync() && getStoredToken() === activeToken) {
         setAccessResolution({ status: 'error', error: 'We could not confirm your account. Please check your connection and retry.' })
       }
       return null
@@ -1565,24 +1566,59 @@ export default function App() {
       return undefined
     }
 
-    const handleWindowFocus = () => {
+    let accessRefreshIntervalId = null
+    const accessRefreshPathname = resolveUserSectionPath(pathname)
+    const shouldSchedulePeriodicAccessRefresh = isPaidWorkspaceRoutePath(accessRefreshPathname)
+      || isReadOnlyWorkspaceFrontendRoute(accessRefreshPathname)
+
+    const refreshAccountAccessSilently = () => {
       if (!isStandaloneOrdinaryUserAuthRoutePath(pathname)) {
         void syncAuthenticatedUser({ showLoading: false })
       }
     }
 
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible' && !isStandaloneOrdinaryUserAuthRoutePath(pathname)) {
-        void syncAuthenticatedUser({ showLoading: false })
+    const stopPeriodicAccessRefresh = () => {
+      if (accessRefreshIntervalId !== null) {
+        window.clearInterval(accessRefreshIntervalId)
+        accessRefreshIntervalId = null
       }
     }
 
+    const startPeriodicAccessRefresh = () => {
+      if (
+        accessRefreshIntervalId === null
+        && shouldSchedulePeriodicAccessRefresh
+        && document.visibilityState === 'visible'
+        && !isStandaloneOrdinaryUserAuthRoutePath(pathname)
+      ) {
+        accessRefreshIntervalId = window.setInterval(refreshAccountAccessSilently, ACCOUNT_ACCESS_REFRESH_INTERVAL_MS)
+      }
+    }
+
+    const handleWindowFocus = () => {
+      refreshAccountAccessSilently()
+    }
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState !== 'visible') {
+        stopPeriodicAccessRefresh()
+        return
+      }
+
+      refreshAccountAccessSilently()
+      startPeriodicAccessRefresh()
+    }
+
+    startPeriodicAccessRefresh()
     window.addEventListener('focus', handleWindowFocus)
     document.addEventListener('visibilitychange', handleVisibilityChange)
+    window.addEventListener(ACCOUNT_ACCESS_REFRESH_EVENT, refreshAccountAccessSilently)
 
     return () => {
+      stopPeriodicAccessRefresh()
       window.removeEventListener('focus', handleWindowFocus)
       document.removeEventListener('visibilitychange', handleVisibilityChange)
+      window.removeEventListener(ACCOUNT_ACCESS_REFRESH_EVENT, refreshAccountAccessSilently)
       authSyncControllerRef.current?.abort()
     }
   }, [isAuthenticated, pathname, syncAuthenticatedUser])
