@@ -46,6 +46,13 @@
 @keyframes landing-float { 0%,100% { transform: translateY(0);} 50% { transform: translateY(-20px);} }
 
 .hero-content { position: relative; z-index: 10; max-width: 800px; width: 100%; text-align: left; }
+.hero-eyebrow {
+  font-size: clamp(14px, 1.1vw, 15px);
+  font-weight: 600;
+  line-height: 1.4;
+  letter-spacing: 0.06em;
+  opacity: 0.88;
+}
 .hero-headline {
   font-family: var(--hf-font-display);
   font-size: clamp(58px, 9.2vw, 96px);
