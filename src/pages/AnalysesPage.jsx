@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Info, Trash2, Upload, X } from 'lucide-react'
 import API_BASE from '../config/api'
+import { fetchWithAccountAccessRefresh } from '../utils/accountAccessRefresh'
 import useResumeAnalysisQuota from '../hooks/useResumeAnalysisQuota.js'
 import { ANALYZE_WITHOUT_JOB_DESCRIPTION_LABEL, toOptionalJobDescriptionId } from '../components/resumeUploaderState'
 import { ANALYSES_PAGE_SIZE, clampAnalysesPage, paginateAnalyses } from './analysesPaginationState'
@@ -127,7 +128,7 @@ export default function AnalysesPage({ isReadOnly = false }) {
   const loadAnalyses = async ({ signal } = {}) => {
     const token = localStorage.getItem(TOKEN_STORAGE_KEY)
     if (!token) throw new Error('Authentication required.')
-    const response = await fetch(`${API_BASE}/analyses`, { headers: { Authorization: `Bearer ${token}` }, signal })
+    const response = await fetchWithAccountAccessRefresh(`${API_BASE}/analyses`, { headers: { Authorization: `Bearer ${token}` }, signal })
     const payload = await response.json().catch(() => ({}))
     if (!response.ok) throw new Error(payload.error || 'Unable to load analyses')
     return Array.isArray(payload.items) ? payload.items : []
@@ -179,7 +180,7 @@ export default function AnalysesPage({ isReadOnly = false }) {
     if (!isCreateModalOpen) return
     const token = localStorage.getItem(TOKEN_STORAGE_KEY)
     if (!token) return
-    fetch(`${API_BASE}/job-descriptions`, { headers: { Authorization: `Bearer ${token}` } })
+    fetchWithAccountAccessRefresh(`${API_BASE}/job-descriptions`, { headers: { Authorization: `Bearer ${token}` } })
       .then((response) => response.json().then((payload) => ({ ok: response.ok, payload })))
       .then(({ ok, payload }) => {
         if (!ok) return
@@ -295,7 +296,7 @@ export default function AnalysesPage({ isReadOnly = false }) {
   }
 
   const initChunkUpload = async ({ file, token, analysisId, nameValue, jobDescriptionId, quotaReservationId, fileIdentity }) => {
-    const initResponse = await fetch(`${API_BASE}/uploads/chunks/init`, {
+    const initResponse = await fetchWithAccountAccessRefresh(`${API_BASE}/uploads/chunks/init`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -333,7 +334,7 @@ export default function AnalysesPage({ isReadOnly = false }) {
       formData.append('chunk', chunk)
       formData.append('chunkIndex', String(chunkIndex))
       formData.append('totalChunks', String(totalChunks))
-      const chunkResponse = await fetch(`${API_BASE}/uploads/chunks/${uploadId}/chunk`, {
+      const chunkResponse = await fetchWithAccountAccessRefresh(`${API_BASE}/uploads/chunks/${uploadId}/chunk`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
         body: formData,
@@ -346,7 +347,7 @@ export default function AnalysesPage({ isReadOnly = false }) {
   }
 
   const completeChunkUpload = async ({ file, token, uploadId }) => {
-    const completeResponse = await fetch(`${API_BASE}/uploads/chunks/${uploadId}/complete`, {
+    const completeResponse = await fetchWithAccountAccessRefresh(`${API_BASE}/uploads/chunks/${uploadId}/complete`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}` },
     })
@@ -542,7 +543,7 @@ export default function AnalysesPage({ isReadOnly = false }) {
     setItems((current) => current.filter((entry) => String(entry.id) !== String(analysisId)))
 
     try {
-      const response = await fetch(`${API_BASE}/analyses/${analysisId}`, {
+      const response = await fetchWithAccountAccessRefresh(`${API_BASE}/analyses/${analysisId}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       })

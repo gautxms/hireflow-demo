@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { AlertTriangle, CheckCircle2, ChevronDown, Plus, X } from 'lucide-react'
 import API_BASE from '../config/api'
+import { fetchWithAccountAccessRefresh } from '../utils/accountAccessRefresh'
 import { buildShortlistSummary, getShortlistBulkErrorMessage } from './shortlistState'
 import '../styles/add-to-shortlist-modal.css'
 
@@ -150,7 +151,7 @@ export default function AddToShortlistModal({
     ;(async () => {
       setIsLoading(true); setError(''); setSummary(null)
       try {
-        const response = await fetch(`${API_BASE}/shortlists`, { headers: headers() })
+        const response = await fetchWithAccountAccessRefresh(`${API_BASE}/shortlists`, { headers: headers() })
         const payload = await response.json().catch(() => ({}))
         if (!response.ok) throw new Error(buildApiErrorMessage(payload, 'Unable to load shortlists'))
         const active = (Array.isArray(payload.shortlists) ? payload.shortlists : []).filter((item) => item.status !== 'archived')
@@ -178,7 +179,7 @@ export default function AddToShortlistModal({
     if (!name) return
     setIsSubmitting(true); setError('')
     try {
-      const response = await fetch(`${API_BASE}/shortlists`, { method: 'POST', headers: headers(), body: JSON.stringify({ name, jobDescriptionId: jobContext?.jobDescriptionId || null }) })
+      const response = await fetchWithAccountAccessRefresh(`${API_BASE}/shortlists`, { method: 'POST', headers: headers(), body: JSON.stringify({ name, jobDescriptionId: jobContext?.jobDescriptionId || null }) })
       const payload = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(buildApiErrorMessage(payload, 'Unable to create shortlist. Please retry.'))
       const created = payload.shortlist
@@ -236,7 +237,7 @@ export default function AddToShortlistModal({
         }
       })
 
-      const response = await fetch(`${API_BASE}/shortlists/${selectedShortlistId}/candidates/batch`, {
+      const response = await fetchWithAccountAccessRefresh(`${API_BASE}/shortlists/${selectedShortlistId}/candidates/batch`, {
         method: 'POST', headers: headers(), body: JSON.stringify({ resumeIds, candidateSnapshotByResumeId, sourceContextByResumeId }),
       })
       const payload = await response.json().catch(() => ({}))

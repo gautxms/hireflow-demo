@@ -80,3 +80,22 @@ export function notifySubscriptionAccessDenied(response, payload = {}, eventTarg
   eventTarget.dispatchEvent(new Event(ACCOUNT_ACCESS_REFRESH_EVENT))
   return true
 }
+
+export async function fetchWithAccountAccessRefresh(
+  input,
+  init,
+  { fetchImpl = globalThis.fetch, eventTarget = globalThis.window } = {},
+) {
+  const response = await fetchImpl(input, init)
+
+  if (response?.status === 403 && typeof response.clone === 'function') {
+    try {
+      const payload = await response.clone().json()
+      notifySubscriptionAccessDenied(response, payload, eventTarget)
+    } catch {
+      // Preserve the original response when a non-JSON 403 is returned.
+    }
+  }
+
+  return response
+}

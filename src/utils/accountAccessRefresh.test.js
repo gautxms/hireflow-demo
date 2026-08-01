@@ -7,6 +7,7 @@ import {
   ACCOUNT_ACCESS_REFRESH_INTERVAL_MS,
   ACCOUNT_ACCESS_REFRESH_POST_BOUNDARY_WINDOW_MS,
   ACCOUNT_ACCESS_REFRESH_WAKEUP_RECHECK_MS,
+  fetchWithAccountAccessRefresh,
   getAccountAccessPollingStartDelay,
   isSubscriptionAccessDenied,
   notifySubscriptionAccessDenied,
@@ -15,6 +16,15 @@ import {
 
 const appSource = readFileSync(new URL('../App.jsx', import.meta.url), 'utf8')
 const jobsSource = readFileSync(new URL('../pages/JobDescriptionPage.jsx', import.meta.url), 'utf8')
+const paidWorkflowSources = [
+  '../pages/ReportsPage.jsx',
+  '../pages/ShortlistsPage.jsx',
+  '../components/AddToShortlistModal.jsx',
+  '../components/CandidateResults.jsx',
+  '../pages/AnalysesPage.jsx',
+  '../components/ResumeUploader.jsx',
+  './resumeQuotaPreflight.js',
+].map((path) => readFileSync(new URL(path, import.meta.url), 'utf8'))
 
 test('subscription access denial is narrowly identified from the paid-mutation response contract', () => {
   assert.equal(isSubscriptionAccessDenied({ status: 403 }, { error: 'Subscription inactive' }), true)
@@ -33,6 +43,24 @@ test('subscription denial emits one refresh event without consuming or changing 
   assert.equal(response.status, 403)
   assert.equal(notifySubscriptionAccessDenied(response, { error: 'Forbidden' }, eventTarget), false)
   assert.deepEqual(events, [ACCOUNT_ACCESS_REFRESH_EVENT])
+})
+
+test('shared paid-workflow fetch preserves the response and emits access invalidation once', async () => {
+  const events = []
+  const eventTarget = { dispatchEvent: (event) => events.push(event.type) }
+  const deniedResponse = new Response(JSON.stringify({ error: 'Subscription inactive' }), {
+    status: 403,
+    headers: { 'Content-Type': 'application/json' },
+  })
+
+  const returnedResponse = await fetchWithAccountAccessRefresh('/api/reports', { method: 'POST' }, {
+    fetchImpl: async () => deniedResponse,
+    eventTarget,
+  })
+
+  assert.equal(returnedResponse, deniedResponse)
+  assert.deepEqual(events, [ACCOUNT_ACCESS_REFRESH_EVENT])
+  assert.deepEqual(await returnedResponse.json(), { error: 'Subscription inactive' })
 })
 
 test('periodic access polling is limited to paid-access accounts near an access boundary', () => {
@@ -119,8 +147,10 @@ test('queued invalidation is dropped after navigation to a standalone route', ()
   assert.match(syncBlock, /if \(authSyncFollowUpRequestedRef\.current\) \{\s*authSyncFollowUpRequestedRef\.current = false\s*if \(!isStandaloneOrdinaryUserAuthRoutePath\(window\.location\.pathname\)\) \{\s*void syncAuthenticatedUser\(\{ showLoading: false \}\)\s*\}\s*\}/)
 })
 
-test('job mutations request an immediate authoritative refresh after a subscription denial', () => {
-  assert.match(jobsSource, /notifySubscriptionAccessDenied/)
-  assert.equal(jobsSource.split('notifySubscriptionAccessDenied(response, payload)').length - 1, 2)
+test('paid workflow requests use the shared access-refresh response layer', () => {
+  for (const source of [jobsSource, ...paidWorkflowSources]) {
+    assert.match(source, /fetchWithAccountAccessRefresh/)
+    assert.doesNotMatch(source, /\bfetch\(/)
+  }
   assert.equal(ACCOUNT_ACCESS_REFRESH_EVENT, 'hireflow-account-access-refresh')
 })

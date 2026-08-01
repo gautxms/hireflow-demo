@@ -1,3 +1,5 @@
+import { fetchWithAccountAccessRefresh } from './accountAccessRefresh.js'
+
 const pendingQuotaKeys = new Map()
 const QUOTA_KEY_STORAGE_PREFIX = 'hireflow_quota_preflight_v1:'
 const PENDING_QUOTA_KEY_TTL_MS = 120 * 60 * 1000
@@ -103,7 +105,7 @@ export async function preflightResumeQuota({ apiBase, token, fileCount, batchKey
   // reload can happen after quota was reserved but before (or while) upload
   // sessions are initialized, and the stable key is what lets that batch
   // recover its already-counted reservation instead of requesting more quota.
-  const response = await fetch(`${apiBase}/uploads/chunks/preflight`, {
+  const response = await fetchWithAccountAccessRefresh(`${apiBase}/uploads/chunks/preflight`, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${token}`,
@@ -133,7 +135,7 @@ export async function releaseResumeQuotaBatch({ apiBase, token, reservationId })
   const normalizedReservationId = String(reservationId || '').trim()
   if (!normalizedReservationId) return
 
-  const response = await fetch(`${apiBase}/uploads/chunks/reservations/${normalizedReservationId}/release`, {
+  const response = await fetchWithAccountAccessRefresh(`${apiBase}/uploads/chunks/reservations/${normalizedReservationId}/release`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}` },
   })

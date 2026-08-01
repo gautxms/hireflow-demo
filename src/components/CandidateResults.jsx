@@ -26,6 +26,7 @@ import {
 import { applyOptimisticTagUpdate } from './candidateTagState'
 import { buildShortlistSummary, getShortlistBulkErrorMessage } from './shortlistState'
 import API_BASE from '../config/api'
+import { fetchWithAccountAccessRefresh } from '../utils/accountAccessRefresh'
 import { FEATURE_KEYS, isFeatureEnabled } from '../config/featureFlags'
 import {
   computeAllVisibleSelected,
@@ -739,7 +740,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
       setShortlistLoading(true)
       setShortlistError('')
 
-      const response = await fetch(`${API_BASE}/shortlists`, {
+      const response = await fetchWithAccountAccessRefresh(`${API_BASE}/shortlists`, {
         method: 'GET',
         headers: authHeaders(),
       })
@@ -781,7 +782,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
       setShortlistLoading(true)
       setShortlistError('')
 
-      const response = await fetch(`${API_BASE}/shortlists/${shortlistId}?${sortMap[sortKey] || sortMap.rating_desc}`, {
+      const response = await fetchWithAccountAccessRefresh(`${API_BASE}/shortlists/${shortlistId}?${sortMap[sortKey] || sortMap.rating_desc}`, {
         method: 'GET',
         headers: authHeaders(),
       })
@@ -807,7 +808,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
       setShortlistLoading(true)
       setShortlistError('')
 
-      const response = await fetch(`${API_BASE}/shortlists`, {
+      const response = await fetchWithAccountAccessRefresh(`${API_BASE}/shortlists`, {
         method: 'POST',
         headers: authHeaders(),
         body: JSON.stringify({
@@ -855,7 +856,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
       }
 
       const resumeId = candidate?.resumeId || candidate?.resume_id || candidate?.id
-      const response = await fetch(`${API_BASE}/shortlists/${destinationShortlistId}/candidates`, {
+      const response = await fetchWithAccountAccessRefresh(`${API_BASE}/shortlists/${destinationShortlistId}/candidates`, {
         method: 'POST',
         headers: authHeaders(),
         body: JSON.stringify({
@@ -937,7 +938,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
 
       setShortlistLoading(true)
       setShortlistError('')
-      const response = await fetch(`${API_BASE}/shortlists/${selectedShortlistId}/candidates/batch-remove`, {
+      const response = await fetchWithAccountAccessRefresh(`${API_BASE}/shortlists/${selectedShortlistId}/candidates/batch-remove`, {
         method: 'POST',
         headers: authHeaders(),
         body: JSON.stringify({ resumeIds: [resumeId] }),
@@ -965,7 +966,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
     }
 
     try {
-      const response = await fetch(`${API_BASE}/candidates/${encodeURIComponent(resumeId)}/resume`, {
+      const response = await fetchWithAccountAccessRefresh(`${API_BASE}/candidates/${encodeURIComponent(resumeId)}/resume`, {
         method: 'GET',
         headers: authHeaders(),
       })
@@ -1052,7 +1053,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
     let isCancelled = false
     const timeoutId = setTimeout(async () => {
       try {
-        const response = await fetch(`${API_BASE}/candidates/tags/lookup`, {
+        const response = await fetchWithAccountAccessRefresh(`${API_BASE}/candidates/tags/lookup`, {
           method: 'POST',
           headers: authHeaders(),
           body: JSON.stringify({ resumeIds }),
@@ -1180,7 +1181,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
 
     try {
       setResultsError('')
-      const response = await fetch(`${API_BASE}/results/export/csv`, {
+      const response = await fetchWithAccountAccessRefresh(`${API_BASE}/results/export/csv`, {
         method: 'POST',
         headers: authHeaders(),
         body: JSON.stringify({
@@ -1289,7 +1290,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
     try {
       setResultsError('')
       setTagNotice('')
-      const response = await fetch(`${API_BASE}/candidates/tags/bulk`, {
+      const response = await fetchWithAccountAccessRefresh(`${API_BASE}/candidates/tags/bulk`, {
         method: 'POST',
         headers: authHeaders(),
         body: JSON.stringify({
@@ -1341,7 +1342,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
     if (isReadOnly) return
     try {
       setResultsError('')
-      const response = await fetch(`${API_BASE}/results/share`, {
+      const response = await fetchWithAccountAccessRefresh(`${API_BASE}/results/share`, {
         method: 'POST',
         headers: authHeaders(),
         body: JSON.stringify({
