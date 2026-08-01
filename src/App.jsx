@@ -1405,6 +1405,11 @@ export default function App() {
     if (showLoading) {
       setAccessResolution({ status: 'resolving', error: '' })
     }
+
+    if (!showLoading && authSyncControllerRef.current) {
+      return null
+    }
+
     authSyncControllerRef.current?.abort()
     const controller = new AbortController()
     authSyncControllerRef.current = controller

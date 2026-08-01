@@ -49,6 +49,19 @@ test('silent account refresh failures preserve the current shell instead of forc
   assert.match(syncBlock, /if \(showLoading && isLatestAuthSync\(\) && getStoredToken\(\) === activeToken\)/)
 })
 
+test('silent refresh cannot interrupt an in-flight initial access gate', () => {
+  const syncBlock = appSource.slice(
+    appSource.indexOf('const syncAuthenticatedUser = useCallback'),
+    appSource.indexOf('useEffect(() => {', appSource.indexOf('const syncAuthenticatedUser = useCallback')),
+  )
+  const silentGuardIndex = syncBlock.indexOf('if (!showLoading && authSyncControllerRef.current)')
+  const abortIndex = syncBlock.indexOf('authSyncControllerRef.current?.abort()')
+
+  assert.notEqual(silentGuardIndex, -1)
+  assert.ok(silentGuardIndex < abortIndex)
+  assert.match(syncBlock, /if \(!showLoading && authSyncControllerRef\.current\) \{\s*return null\s*\}/)
+})
+
 test('job mutations request an immediate authoritative refresh after a subscription denial', () => {
   assert.match(jobsSource, /notifySubscriptionAccessDenied/)
   assert.equal(jobsSource.split('notifySubscriptionAccessDenied(response, payload)').length - 1, 2)
