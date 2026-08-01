@@ -49,6 +49,11 @@ test('periodic access polling is limited to active accounts near a billing bound
 })
 
 test('authenticated access refresh runs periodically only while the page is visible and cleans up', () => {
+  const refreshEffect = appSource.slice(
+    appSource.indexOf('let accessRefreshIntervalId = null'),
+    appSource.indexOf("// Authenticated users are intentionally redirected away from auth forms"),
+  )
+
   assert.match(appSource, /ACCOUNT_ACCESS_REFRESH_INTERVAL_MS/)
   assert.match(appSource, /const isPeriodicAccessRefreshRoute = \([\s\S]*isPaidWorkspaceRoutePath\(accessRefreshPathname\)[\s\S]*isReadOnlyWorkspaceFrontendRoute\(accessRefreshPathname\)/)
   assert.match(appSource, /window\.setInterval\(runPeriodicAccessRefresh, ACCOUNT_ACCESS_REFRESH_INTERVAL_MS\)/)
@@ -58,6 +63,7 @@ test('authenticated access refresh runs periodically only while the page is visi
   assert.match(appSource, /window\.clearInterval\(accessRefreshIntervalId\)/)
   assert.match(appSource, /window\.addEventListener\(ACCOUNT_ACCESS_REFRESH_EVENT, refreshAccountAccessSilently\)/)
   assert.match(appSource, /window\.removeEventListener\(ACCOUNT_ACCESS_REFRESH_EVENT, refreshAccountAccessSilently\)/)
+  assert.doesNotMatch(refreshEffect, /authSyncControllerRef\.current\?\.abort\(\)/)
 })
 
 test('silent account refresh failures preserve the current shell instead of forcing a blocking error', () => {

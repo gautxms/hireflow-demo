@@ -1675,7 +1675,6 @@ export default function App() {
       window.removeEventListener('focus', handleWindowFocus)
       document.removeEventListener('visibilitychange', handleVisibilityChange)
       window.removeEventListener(ACCOUNT_ACCESS_REFRESH_EVENT, refreshAccountAccessSilently)
-      authSyncControllerRef.current?.abort()
     }
   }, [isAuthenticated, pathname, subscriptionStatus, syncAuthenticatedUser, userProfile])
 
