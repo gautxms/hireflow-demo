@@ -85,6 +85,7 @@ import { ACCOUNT_ACCESS_REFRESH_EVENT, ACCOUNT_ACCESS_REFRESH_INTERVAL_MS, ACCOU
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 const USER_STORAGE_KEY = 'hireflow_user_profile'
 const CREATE_ANALYSIS_INTENT_STORAGE_KEY = 'hireflow_create_analysis_intent'
+const AUTH_SYNC_TIMEOUT_MS = 15 * 1000
 const PROTECTED_PAGES = new Set(['uploader', 'results', 'dashboard', 'settings'])
 const AUTH_ROUTE_PATHS = new Set([
   '/login',
@@ -1419,6 +1420,11 @@ export default function App() {
     authSyncControllerRef.current = controller
     const requestId = authSyncSequenceRef.current + 1
     authSyncSequenceRef.current = requestId
+    let didTimeout = false
+    const timeoutId = window.setTimeout(() => {
+      didTimeout = true
+      controller.abort()
+    }, AUTH_SYNC_TIMEOUT_MS)
 
     const isLatestAuthSync = () => authSyncSequenceRef.current === requestId && !controller.signal.aborted
 
@@ -1463,6 +1469,15 @@ export default function App() {
       return nextUserProfile
     } catch (error) {
       if (error?.name === 'AbortError') {
+        if (
+          didTimeout
+          && showLoading
+          && authSyncSequenceRef.current === requestId
+          && authSyncControllerRef.current === controller
+          && getStoredToken() === activeToken
+        ) {
+          setAccessResolution({ status: 'error', error: 'We could not confirm your account. Please check your connection and retry.' })
+        }
         return null
       }
       if (showLoading && isLatestAuthSync() && getStoredToken() === activeToken) {
@@ -1470,6 +1485,7 @@ export default function App() {
       }
       return null
     } finally {
+      window.clearTimeout(timeoutId)
       if (authSyncControllerRef.current === controller) {
         authSyncControllerRef.current = null
 

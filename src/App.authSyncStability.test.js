@@ -22,8 +22,15 @@ test('App auth synchronization prevents older or obsolete-token responses from c
 })
 
 test('App auth synchronization ignores expected aborts and aborts during cleanup', () => {
-  assert.match(source, /if \(error\?\.name === 'AbortError'\) \{\s*return null\s*\}/)
+  assert.match(source, /if \(error\?\.name === 'AbortError'\) \{[\s\S]*?return null\s*\}/)
   assert.match(source, /authSyncControllerRef\.current\?\.abort\(\)/)
+})
+
+test('App bounds auth synchronization lifetime and reports initial-gate timeouts', () => {
+  assert.match(source, /const AUTH_SYNC_TIMEOUT_MS = 15 \* 1000/)
+  assert.match(source, /const timeoutId = window\.setTimeout\(\(\) => \{\s*didTimeout = true\s*controller\.abort\(\)\s*\}, AUTH_SYNC_TIMEOUT_MS\)/)
+  assert.match(source, /didTimeout\s*&& showLoading\s*&& authSyncSequenceRef\.current === requestId\s*&& authSyncControllerRef\.current === controller/)
+  assert.match(source, /window\.clearTimeout\(timeoutId\)/)
 })
 
 test('App logout remains the only ordinary path that clears resume analysis results', () => {
