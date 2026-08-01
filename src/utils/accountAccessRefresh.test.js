@@ -5,6 +5,7 @@ import { readFileSync } from 'node:fs'
 import {
   ACCOUNT_ACCESS_REFRESH_EVENT,
   ACCOUNT_ACCESS_REFRESH_INTERVAL_MS,
+  ACCOUNT_ACCESS_REFRESH_POST_BOUNDARY_WINDOW_MS,
   ACCOUNT_ACCESS_REFRESH_WAKEUP_RECHECK_MS,
   getAccountAccessPollingStartDelay,
   isSubscriptionAccessDenied,
@@ -38,6 +39,7 @@ test('periodic access polling is limited to paid-access accounts near an access 
   const now = Date.parse('2026-08-01T12:00:00.000Z')
 
   assert.equal(ACCOUNT_ACCESS_REFRESH_INTERVAL_MS, 2 * 60 * 1000)
+  assert.equal(ACCOUNT_ACCESS_REFRESH_POST_BOUNDARY_WINDOW_MS, 3 * 60 * 60 * 1000)
   assert.equal(ACCOUNT_ACCESS_REFRESH_WAKEUP_RECHECK_MS, 24 * 60 * 60 * 1000)
   assert.equal(shouldPollAccountAccess({ current_period_end: '2026-08-01T12:35:00.000Z' }, 'trialing', now), true)
   assert.equal(shouldPollAccountAccess({ next_billing_date: '2026-08-01T10:30:00.000Z' }, 'active', now), true)
@@ -51,6 +53,8 @@ test('periodic access polling is limited to paid-access accounts near an access 
   assert.equal(shouldPollAccountAccess({}, 'active', now), false)
   assert.equal(getAccountAccessPollingStartDelay({ current_period_end: '2026-08-02T12:00:00.000Z' }, 'active', now), 22 * 60 * 60 * 1000)
   assert.equal(getAccountAccessPollingStartDelay({ cancellation_effective_at: '2026-08-02T12:00:00.000Z' }, 'canceled', now), 22 * 60 * 60 * 1000)
+  assert.equal(shouldPollAccountAccess({ current_period_end: '2026-08-01T09:30:00.000Z' }, 'active', now), true)
+  assert.equal(shouldPollAccountAccess({ current_period_end: '2026-08-01T08:30:00.000Z' }, 'active', now), false)
   assert.equal(getAccountAccessPollingStartDelay({ current_period_end: '2026-08-01T08:00:00.000Z' }, 'active', now), null)
 })
 

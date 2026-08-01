@@ -1,6 +1,7 @@
 export const ACCOUNT_ACCESS_REFRESH_EVENT = 'hireflow-account-access-refresh'
 export const ACCOUNT_ACCESS_REFRESH_INTERVAL_MS = 2 * 60 * 1000
 export const ACCOUNT_ACCESS_REFRESH_BOUNDARY_WINDOW_MS = 2 * 60 * 60 * 1000
+export const ACCOUNT_ACCESS_REFRESH_POST_BOUNDARY_WINDOW_MS = 3 * 60 * 60 * 1000
 export const ACCOUNT_ACCESS_REFRESH_WAKEUP_RECHECK_MS = 24 * 60 * 60 * 1000
 
 const REFRESHABLE_SUBSCRIPTION_STATUSES = new Set([
@@ -46,7 +47,7 @@ export function getAccountAccessPollingStartDelay(userProfile, subscriptionStatu
 
   const startDelays = billingBoundaries.map((timestamp) => {
     const windowStart = timestamp - ACCOUNT_ACCESS_REFRESH_BOUNDARY_WINDOW_MS
-    const windowEnd = timestamp + ACCOUNT_ACCESS_REFRESH_BOUNDARY_WINDOW_MS
+    const windowEnd = timestamp + ACCOUNT_ACCESS_REFRESH_POST_BOUNDARY_WINDOW_MS
 
     if (now > windowEnd) {
       return null
