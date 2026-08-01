@@ -1373,6 +1373,7 @@ export default function App() {
   const [accessResolution, setAccessResolution] = useState(() => ({ status: getStoredToken() ? 'resolving' : 'resolved', error: '' }))
   const authSyncSequenceRef = useRef(0)
   const authSyncControllerRef = useRef(null)
+  const authSyncFollowUpRequestedRef = useRef(false)
 
   const clearAuthenticatedSession = useCallback((message = '') => {
     localStorage.removeItem(TOKEN_STORAGE_KEY)
@@ -1407,6 +1408,7 @@ export default function App() {
     }
 
     if (!showLoading && authSyncControllerRef.current) {
+      authSyncFollowUpRequestedRef.current = true
       return null
     }
 
@@ -1468,6 +1470,11 @@ export default function App() {
     } finally {
       if (authSyncControllerRef.current === controller) {
         authSyncControllerRef.current = null
+
+        if (authSyncFollowUpRequestedRef.current) {
+          authSyncFollowUpRequestedRef.current = false
+          void syncAuthenticatedUser({ showLoading: false })
+        }
       }
     }
   }, [clearAuthenticatedSession, pathname])

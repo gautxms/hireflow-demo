@@ -9,6 +9,10 @@ const REFRESHABLE_SUBSCRIPTION_STATUSES = new Set([
   'trialing',
   'canceled',
   'cancelled',
+  'cancel_scheduled',
+  'cancellation_scheduled',
+  'pending_cancellation',
+  'scheduled_cancellation',
 ])
 
 function toTimestamp(value) {

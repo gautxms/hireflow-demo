@@ -43,6 +43,9 @@ test('periodic access polling is limited to paid-access accounts near an access 
   assert.equal(shouldPollAccountAccess({ next_billing_date: '2026-08-01T10:30:00.000Z' }, 'active', now), true)
   assert.equal(shouldPollAccountAccess({ cancellation_effective_at: '2026-08-01T12:35:00.000Z' }, 'canceled', now), true)
   assert.equal(shouldPollAccountAccess({ cancellationEffectiveAt: '2026-08-01T13:00:00.000Z' }, 'cancelled', now), true)
+  for (const status of ['cancel_scheduled', 'cancellation_scheduled', 'pending_cancellation', 'scheduled_cancellation']) {
+    assert.equal(shouldPollAccountAccess({ cancellation_effective_at: '2026-08-01T13:00:00.000Z' }, status, now), true)
+  }
   assert.equal(shouldPollAccountAccess({ subscription_renewal_date: '2026-09-01T12:00:00.000Z' }, 'active', now), false)
   assert.equal(shouldPollAccountAccess({ current_period_end: '2026-08-01T12:35:00.000Z' }, 'past_due', now), false)
   assert.equal(shouldPollAccountAccess({}, 'active', now), false)
@@ -88,7 +91,18 @@ test('silent refresh cannot interrupt an in-flight initial access gate', () => {
 
   assert.notEqual(silentGuardIndex, -1)
   assert.ok(silentGuardIndex < abortIndex)
-  assert.match(syncBlock, /if \(!showLoading && authSyncControllerRef\.current\) \{\s*return null\s*\}/)
+  assert.match(syncBlock, /if \(!showLoading && authSyncControllerRef\.current\) \{\s*authSyncFollowUpRequestedRef\.current = true\s*return null\s*\}/)
+})
+
+test('silent refresh requests coalesce behind an in-flight authoritative sync', () => {
+  const syncBlock = appSource.slice(
+    appSource.indexOf('const syncAuthenticatedUser = useCallback'),
+    appSource.indexOf('useEffect(() => {', appSource.indexOf('const syncAuthenticatedUser = useCallback')),
+  )
+
+  assert.match(appSource, /authSyncFollowUpRequestedRef = useRef\(false\)/)
+  assert.match(syncBlock, /if \(!showLoading && authSyncControllerRef\.current\) \{\s*authSyncFollowUpRequestedRef\.current = true\s*return null\s*\}/)
+  assert.match(syncBlock, /if \(authSyncFollowUpRequestedRef\.current\) \{\s*authSyncFollowUpRequestedRef\.current = false\s*void syncAuthenticatedUser\(\{ showLoading: false \}\)\s*\}/)
 })
 
 test('job mutations request an immediate authoritative refresh after a subscription denial', () => {
