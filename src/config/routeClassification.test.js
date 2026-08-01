@@ -5,6 +5,7 @@ import { PUBLIC_ROUTE_MANIFEST, PUBLIC_ROUTE_PATHS } from './publicRouteManifest
 import {
   PROTECTED_ROUTE_EXACT_PATHS,
   ROUTE_ACCESS,
+  isNonIndexableRoutePath,
   isProtectedRoutePath,
   validatePublicRouteManifest,
 } from './routeClassification.js'
@@ -25,18 +26,45 @@ test('known authenticated and admin routes are protected', () => {
   assert.equal(isProtectedRoutePath('/pricing'), false)
 })
 
-test('validation rejects a known authenticated route in static generation', () => {
-  assert.throws(
-    () => validatePublicRouteManifest([publicRoute('/dashboard')]),
-    /Protected route cannot be statically generated or indexed/,
-  )
+test('auth and private route families are non-indexable without affecting public routes', () => {
+  for (const pathname of ['/login', '/signup', '/forgot-password', '/reset-password/token', '/dashboard', '/dashboard/legacy', '/dashboard/anything', '/billing/success', '/admin/users', '/account/settings', '/analyses/example', '/results/example', '/candidates/example']) {
+    assert.equal(isNonIndexableRoutePath(pathname), true, pathname)
+  }
+  for (const pathname of ['/', '/pricing', '/privacy', '/trust']) {
+    assert.equal(isNonIndexableRoutePath(pathname), false, pathname)
+  }
 })
 
-test('validation rejects an admin descendant in static generation', () => {
-  assert.throws(
-    () => validatePublicRouteManifest([publicRoute('/admin/users')]),
-    /Protected route cannot be statically generated or indexed/,
-  )
+test('validation rejects protected routes from the public manifest', () => {
+  for (const pathname of ['/dashboard', '/admin/users']) {
+    assert.throws(
+      () => validatePublicRouteManifest([publicRoute(pathname)]),
+      /Non-indexable route cannot appear in the public route manifest/,
+      pathname,
+    )
+  }
+})
+
+test('validation rejects auth routes from the public manifest regardless of index flags', () => {
+  for (const pathname of ['/login', '/signup', '/forgot-password', '/reset-password/token']) {
+    assert.throws(
+      () => validatePublicRouteManifest([publicRoute(pathname)]),
+      /Non-indexable route cannot appear in the public route manifest/,
+      pathname,
+    )
+    assert.throws(
+      () => validatePublicRouteManifest([publicRoute(pathname, { indexable: false, staticGeneration: false })]),
+      /Non-indexable route cannot appear in the public route manifest/,
+      pathname,
+    )
+  }
+})
+
+test('validation accepts legitimate public and non-indexable demo classifications', () => {
+  assert.equal(validatePublicRouteManifest([
+    publicRoute('/pricing'),
+    publicRoute('/demo', { indexable: false, staticGeneration: false }),
+  ]), true)
 })
 
 test('validation rejects contradictory protected metadata', () => {

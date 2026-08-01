@@ -31,6 +31,20 @@ export const PROTECTED_ROUTE_FAMILY_PREFIXES = Object.freeze([
   '/dashboard',
 ])
 
+export const NON_INDEXABLE_ROUTE_EXACT_PATHS = Object.freeze([
+  '/login',
+  '/signup',
+  '/verify-email-info',
+  '/forgot-password',
+  '/reset-password',
+  '/verify',
+  '/verify-email/success',
+])
+
+export const NON_INDEXABLE_ROUTE_FAMILY_PREFIXES = Object.freeze([
+  '/reset-password',
+])
+
 function normalizePathname(pathname) {
   const rawPath = String(pathname || '/').split(/[?#]/, 1)[0] || '/'
   if (rawPath === '/') return '/'
@@ -41,6 +55,13 @@ export function isProtectedRoutePath(pathname) {
   const normalized = normalizePathname(pathname)
   return PROTECTED_ROUTE_EXACT_PATHS.includes(normalized)
     || PROTECTED_ROUTE_FAMILY_PREFIXES.some((prefix) => normalized.startsWith(`${prefix}/`))
+}
+
+export function isNonIndexableRoutePath(pathname) {
+  const normalized = normalizePathname(pathname)
+  return isProtectedRoutePath(normalized)
+    || NON_INDEXABLE_ROUTE_EXACT_PATHS.includes(normalized)
+    || NON_INDEXABLE_ROUTE_FAMILY_PREFIXES.some((prefix) => normalized.startsWith(`${prefix}/`))
 }
 
 export function validatePublicRouteManifest(manifest) {
@@ -63,8 +84,8 @@ export function validatePublicRouteManifest(manifest) {
     if (route.access !== ROUTE_ACCESS.PUBLIC) {
       throw new Error(`Contradictory route classification for ${path}: expected public access.`)
     }
-    if ((route.staticGeneration || route.indexable) && isProtectedRoutePath(path)) {
-      throw new Error(`Protected route cannot be statically generated or indexed: ${path}`)
+    if (isNonIndexableRoutePath(path)) {
+      throw new Error(`Non-indexable route cannot appear in the public route manifest: ${path}`)
     }
   }
 

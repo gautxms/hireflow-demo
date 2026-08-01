@@ -1,6 +1,24 @@
 {
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
+  "headers": [
+    {
+      "source": "/(login|signup|verify-email-info|forgot-password|reset-password|verify|verify-email/success)",
+      "headers": [{ "key": "X-Robots-Tag", "value": "noindex, follow" }]
+    },
+    {
+      "source": "/(reset-password|dashboard|results|analyses|candidates|admin)/(.*)",
+      "headers": [{ "key": "X-Robots-Tag", "value": "noindex, follow" }]
+    },
+    {
+      "source": "/(dashboard|uploader|create-analysis|reports|shortlists|jobs|results|billing|checkout|account|settings|job-descriptions|analyses|candidates|admin)",
+      "headers": [{ "key": "X-Robots-Tag", "value": "noindex, follow" }]
+    },
+    {
+      "source": "/(account|billing)/(.*)",
+      "headers": [{ "key": "X-Robots-Tag", "value": "noindex, follow" }]
+    }
+  ],
   "rewrites": [
     {
       "source": "/api/(.*)",

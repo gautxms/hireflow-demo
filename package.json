@@ -13,7 +13,7 @@
   },
   "scripts": {
     "dev": "vite",
-    "build": "npm run test:route-classification && node scripts/generate-sitemap.mjs && vite build && vite build --ssr src/entry-server.jsx --outDir dist-ssr && node scripts/prerender-public-routes.mjs && npm run check:seo-consistency && npm run qa:brand-logo-consistency",
+    "build": "npm run test:route-classification && node scripts/generate-sitemap.mjs && vite build && vite build --ssr src/entry-server.jsx --outDir dist-ssr && node scripts/prerender-public-routes.mjs && npm run validate:prerender && npm run check:seo-consistency && npm run qa:brand-logo-consistency",
     "lint": "eslint . && npm run lint:primitives",
     "lint:duplicate-imports": "eslint \"backend/src/**/*.js\" --no-config-lookup --parser-options '{\"ecmaVersion\":\"latest\",\"sourceType\":\"module\"}' --rule \"no-duplicate-imports:error\"",
     "qa:admin-smoke": "node scripts/admin-smoke-checks.mjs",
@@ -35,7 +35,8 @@
     "qa:dashboard-a11y-smoke": "node scripts/dashboard-a11y-smoke-checks.mjs",
     "qa:shortlist-design-gate": "node scripts/check-shortlist-design-constitution.mjs",
     "check:seo-consistency": "node scripts/check-seo-consistency.mjs",
-    "test:route-classification": "node --test src/config/routeClassification.test.js src/main.staticPublicHydration.test.js"
+    "validate:prerender": "node scripts/validate-prerender-output.mjs",
+    "test:route-classification": "node --test src/config/routeClassification.test.js src/main.staticPublicHydration.test.js scripts/validate-prerender-output.test.mjs scripts/vercel-route-patterns.test.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.67.1",

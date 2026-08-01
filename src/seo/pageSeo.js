@@ -1,3 +1,5 @@
+import { isNonIndexableRoutePath } from '../config/routeClassification.js'
+
 const DEFAULT_SITE_URL = 'https://hireflow.dev'
 const DEFAULT_OG_IMAGE = '/og-default.png'
 const ORGANIZATION_LOGO = '/hireflow-logo.png'
@@ -126,10 +128,12 @@ export function resolvePageSeo({ pathname = '/', currentPage = null, siteUrl = D
   const normalizedPath = normalizePath(pathname)
   const fallbackPath = normalizedPath === '/' && currentPage && PUBLIC_PAGE_SEO[`/${currentPage}`] ? `/${currentPage}` : normalizedPath
   const routeSeo = PUBLIC_PAGE_SEO[fallbackPath] || PUBLIC_PAGE_SEO[normalizedPath] || {}
+  const routeRobots = isNonIndexableRoutePath(normalizedPath) ? 'noindex, follow' : undefined
 
   const merged = {
     ...SEO_DEFAULTS,
     ...routeSeo,
+    ...(routeRobots ? { robots: routeRobots } : {}),
   }
 
   const canonicalPath = routeSeo.path || fallbackPath || normalizedPath || '/'

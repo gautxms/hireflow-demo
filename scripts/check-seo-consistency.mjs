@@ -3,6 +3,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { INDEXABLE_PUBLIC_ROUTES, PUBLIC_ROUTE_MANIFEST, STATIC_PUBLIC_ROUTES } from '../src/config/publicRouteManifest.js'
 import { PUBLIC_PAGE_SEO, resolvePageSeo } from '../src/seo/pageSeo.js'
+import { getNoindexHeaderSources, vercelSourceMatchesPath } from './vercel-route-patterns.mjs'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -65,6 +66,7 @@ const staticPaths = STATIC_PUBLIC_ROUTES.map((route) => route.path)
 const sitemapGeneratorSource = await fs.readFile(sitemapGeneratorPath, 'utf8')
 const webManifest = JSON.parse(await fs.readFile(manifestPath, 'utf8'))
 const vercelConfig = JSON.parse(await fs.readFile(vercelConfigPath, 'utf8'))
+const robotsHeaderSources = getNoindexHeaderSources(vercelConfig)
 const noindexRoutes = Object.keys(PUBLIC_PAGE_SEO).filter((route) => {
   const seo = resolvePageSeo({ pathname: route, siteUrl: SITE_URL })
   return seo.robots?.toLowerCase().includes('noindex')
@@ -106,6 +108,18 @@ assert(staticPaths.includes('/cookie-policy'), '/cookie-policy must be included 
 const cookieRewrite = vercelConfig.rewrites?.find(({ source }) => source === '/cookie-policy')
 assert(cookieRewrite?.destination === '/cookie-policy/index.html', '/cookie-policy must serve its generated document.')
 assert(vercelConfig.trailingSlash === false, 'Vercel trailingSlash must remain false.')
+const privateHeaderTestPaths = [
+  '/login', '/signup', '/dashboard', '/dashboard/legacy', '/admin', '/admin/users',
+  '/account', '/account/settings', '/billing', '/billing/success', '/results',
+  '/results/example', '/analyses', '/analyses/example', '/candidates', '/candidates/example',
+]
+const publicHeaderTestPaths = ['/', '/pricing', '/about', '/privacy', '/trust', '/ai-resume-screening']
+for (const pathname of privateHeaderTestPaths) {
+  assert(robotsHeaderSources.some((source) => vercelSourceMatchesPath(source, pathname)), `${pathname} must receive a deployed noindex, follow header.`)
+}
+for (const pathname of publicHeaderTestPaths) {
+  assert(!robotsHeaderSources.some((source) => vercelSourceMatchesPath(source, pathname)), `${pathname} must not receive a private-route noindex header.`)
+}
 const canonicalRedirect = vercelConfig.redirects?.find(({ source }) => source === '/:path*')
 assert(canonicalRedirect?.destination === 'https://hireflow.dev/:path*', 'Canonical www redirect must remain configured.')
 
