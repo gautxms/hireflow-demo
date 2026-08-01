@@ -34,17 +34,20 @@ test('subscription denial emits one refresh event without consuming or changing 
   assert.deepEqual(events, [ACCOUNT_ACCESS_REFRESH_EVENT])
 })
 
-test('periodic access polling is limited to active accounts near a billing boundary', () => {
+test('periodic access polling is limited to paid-access accounts near an access boundary', () => {
   const now = Date.parse('2026-08-01T12:00:00.000Z')
 
   assert.equal(ACCOUNT_ACCESS_REFRESH_INTERVAL_MS, 2 * 60 * 1000)
   assert.equal(ACCOUNT_ACCESS_REFRESH_WAKEUP_RECHECK_MS, 24 * 60 * 60 * 1000)
   assert.equal(shouldPollAccountAccess({ current_period_end: '2026-08-01T12:35:00.000Z' }, 'trialing', now), true)
   assert.equal(shouldPollAccountAccess({ next_billing_date: '2026-08-01T10:30:00.000Z' }, 'active', now), true)
+  assert.equal(shouldPollAccountAccess({ cancellation_effective_at: '2026-08-01T12:35:00.000Z' }, 'canceled', now), true)
+  assert.equal(shouldPollAccountAccess({ cancellationEffectiveAt: '2026-08-01T13:00:00.000Z' }, 'cancelled', now), true)
   assert.equal(shouldPollAccountAccess({ subscription_renewal_date: '2026-09-01T12:00:00.000Z' }, 'active', now), false)
   assert.equal(shouldPollAccountAccess({ current_period_end: '2026-08-01T12:35:00.000Z' }, 'past_due', now), false)
   assert.equal(shouldPollAccountAccess({}, 'active', now), false)
   assert.equal(getAccountAccessPollingStartDelay({ current_period_end: '2026-08-02T12:00:00.000Z' }, 'active', now), 22 * 60 * 60 * 1000)
+  assert.equal(getAccountAccessPollingStartDelay({ cancellation_effective_at: '2026-08-02T12:00:00.000Z' }, 'canceled', now), 22 * 60 * 60 * 1000)
   assert.equal(getAccountAccessPollingStartDelay({ current_period_end: '2026-08-01T08:00:00.000Z' }, 'active', now), null)
 })
 

@@ -3,7 +3,13 @@ export const ACCOUNT_ACCESS_REFRESH_INTERVAL_MS = 2 * 60 * 1000
 export const ACCOUNT_ACCESS_REFRESH_BOUNDARY_WINDOW_MS = 2 * 60 * 60 * 1000
 export const ACCOUNT_ACCESS_REFRESH_WAKEUP_RECHECK_MS = 24 * 60 * 60 * 1000
 
-const REFRESHABLE_SUBSCRIPTION_STATUSES = new Set(['active', 'trial', 'trialing'])
+const REFRESHABLE_SUBSCRIPTION_STATUSES = new Set([
+  'active',
+  'trial',
+  'trialing',
+  'canceled',
+  'cancelled',
+])
 
 function toTimestamp(value) {
   if (!value) {
@@ -30,6 +36,8 @@ export function getAccountAccessPollingStartDelay(userProfile, subscriptionStatu
     userProfile?.nextBillingDate,
     userProfile?.subscription_renewal_date,
     userProfile?.subscriptionRenewalDate,
+    userProfile?.cancellation_effective_at,
+    userProfile?.cancellationEffectiveAt,
   ].map(toTimestamp).filter((timestamp) => timestamp !== null)
 
   const startDelays = billingBoundaries.map((timestamp) => {
