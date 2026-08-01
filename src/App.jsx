@@ -1390,7 +1390,7 @@ export default function App() {
     navigate('/login')
   }, [])
 
-  const syncAuthenticatedUser = useCallback(async ({ redirectOnUnauthorized = true, showLoading = true } = {}) => {
+  const syncAuthenticatedUser = useCallback(async ({ redirectOnUnauthorized = true, showLoading = true, queueIfBusy = false } = {}) => {
     const activeToken = getStoredToken()
 
     if (!activeToken) {
@@ -1408,7 +1408,9 @@ export default function App() {
     }
 
     if (!showLoading && authSyncControllerRef.current) {
-      authSyncFollowUpRequestedRef.current = true
+      if (queueIfBusy) {
+        authSyncFollowUpRequestedRef.current = true
+      }
       return null
     }
 
@@ -1592,6 +1594,12 @@ export default function App() {
       }
     }
 
+    const refreshAccountAccessAfterInvalidation = () => {
+      if (!isStandaloneOrdinaryUserAuthRoutePath(pathname)) {
+        void syncAuthenticatedUser({ showLoading: false, queueIfBusy: true })
+      }
+    }
+
     const stopPeriodicAccessRefresh = () => {
       if (accessRefreshIntervalId !== null) {
         window.clearInterval(accessRefreshIntervalId)
@@ -1674,14 +1682,14 @@ export default function App() {
     scheduleAccessRefreshWakeUp()
     window.addEventListener('focus', handleWindowFocus)
     document.addEventListener('visibilitychange', handleVisibilityChange)
-    window.addEventListener(ACCOUNT_ACCESS_REFRESH_EVENT, refreshAccountAccessSilently)
+    window.addEventListener(ACCOUNT_ACCESS_REFRESH_EVENT, refreshAccountAccessAfterInvalidation)
 
     return () => {
       stopPeriodicAccessRefresh()
       stopAccessRefreshWakeUp()
       window.removeEventListener('focus', handleWindowFocus)
       document.removeEventListener('visibilitychange', handleVisibilityChange)
-      window.removeEventListener(ACCOUNT_ACCESS_REFRESH_EVENT, refreshAccountAccessSilently)
+      window.removeEventListener(ACCOUNT_ACCESS_REFRESH_EVENT, refreshAccountAccessAfterInvalidation)
     }
   }, [isAuthenticated, pathname, subscriptionStatus, syncAuthenticatedUser, userProfile])
 

@@ -71,8 +71,8 @@ test('authenticated access refresh runs periodically only while the page is visi
   assert.match(appSource, /window\.clearTimeout\(accessRefreshWakeUpTimeoutId\)/)
   assert.match(appSource, /if \(document\.visibilityState !== 'visible'\) \{\s*stopPeriodicAccessRefresh\(\)/)
   assert.match(appSource, /window\.clearInterval\(accessRefreshIntervalId\)/)
-  assert.match(appSource, /window\.addEventListener\(ACCOUNT_ACCESS_REFRESH_EVENT, refreshAccountAccessSilently\)/)
-  assert.match(appSource, /window\.removeEventListener\(ACCOUNT_ACCESS_REFRESH_EVENT, refreshAccountAccessSilently\)/)
+  assert.match(appSource, /window\.addEventListener\(ACCOUNT_ACCESS_REFRESH_EVENT, refreshAccountAccessAfterInvalidation\)/)
+  assert.match(appSource, /window\.removeEventListener\(ACCOUNT_ACCESS_REFRESH_EVENT, refreshAccountAccessAfterInvalidation\)/)
   assert.doesNotMatch(refreshEffect, /authSyncControllerRef\.current\?\.abort\(\)/)
 })
 
@@ -95,18 +95,20 @@ test('silent refresh cannot interrupt an in-flight initial access gate', () => {
 
   assert.notEqual(silentGuardIndex, -1)
   assert.ok(silentGuardIndex < abortIndex)
-  assert.match(syncBlock, /if \(!showLoading && authSyncControllerRef\.current\) \{\s*authSyncFollowUpRequestedRef\.current = true\s*return null\s*\}/)
+  assert.match(syncBlock, /if \(!showLoading && authSyncControllerRef\.current\) \{\s*if \(queueIfBusy\) \{\s*authSyncFollowUpRequestedRef\.current = true\s*\}\s*return null\s*\}/)
 })
 
-test('silent refresh requests coalesce behind an in-flight authoritative sync', () => {
+test('explicit invalidation coalesces behind a busy sync without replaying passive refreshes', () => {
   const syncBlock = appSource.slice(
     appSource.indexOf('const syncAuthenticatedUser = useCallback'),
     appSource.indexOf('useEffect(() => {', appSource.indexOf('const syncAuthenticatedUser = useCallback')),
   )
 
   assert.match(appSource, /authSyncFollowUpRequestedRef = useRef\(false\)/)
-  assert.match(syncBlock, /if \(!showLoading && authSyncControllerRef\.current\) \{\s*authSyncFollowUpRequestedRef\.current = true\s*return null\s*\}/)
+  assert.match(syncBlock, /if \(!showLoading && authSyncControllerRef\.current\) \{\s*if \(queueIfBusy\) \{\s*authSyncFollowUpRequestedRef\.current = true\s*\}\s*return null\s*\}/)
   assert.match(syncBlock, /if \(authSyncFollowUpRequestedRef\.current\) \{\s*authSyncFollowUpRequestedRef\.current = false\s*void syncAuthenticatedUser\(\{ showLoading: false \}\)\s*\}/)
+  assert.match(appSource, /syncAuthenticatedUser\(\{ showLoading: false, queueIfBusy: true \}\)/)
+  assert.match(appSource, /const handleWindowFocus = \(\) => \{\s*refreshAccountAccessSilently\(\)\s*\}/)
 })
 
 test('job mutations request an immediate authoritative refresh after a subscription denial', () => {
