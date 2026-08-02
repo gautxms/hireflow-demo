@@ -8,7 +8,6 @@ import TrustPage from '../components/TrustPage'
 import CookiePolicyPage from '../components/CookiePolicyPage'
 import Pricing from '../pages/Pricing'
 import Terms from '../pages/Terms'
-import RefundPolicy from '../pages/RefundPolicy'
 import IntentLandingPage from '../pages/seo/IntentLandingPage'
 import CookieConsentProvider from '../components/privacy/CookieConsentProvider'
 import { getPublicRoute } from '../config/publicRouteManifest'
@@ -50,8 +49,6 @@ function renderRoute(route) {
       return <TrustPage />
     case 'cookiePolicy':
       return <CookiePolicyPage />
-    case 'refundPolicy':
-      return <RefundPolicy />
     case 'intent':
       return <IntentLandingPage pathname={route.path} />
     default:

@@ -76,7 +76,6 @@ Confirm names against the active deployment configuration. Do not paste secret v
 | `/help` loads without client or server error. | [ ] Pass [ ] Fail [ ] N/A | [ ] Local [ ] Preview [ ] Production |  |  |
 | `/privacy` loads without client or server error. | [ ] Pass [ ] Fail [ ] N/A | [ ] Local [ ] Preview [ ] Production |  |  |
 | `/terms` loads without client or server error. | [ ] Pass [ ] Fail [ ] N/A | [ ] Local [ ] Preview [ ] Production |  |  |
-| `/refund-policy` loads without client or server error. | [ ] Pass [ ] Fail [ ] N/A | [ ] Local [ ] Preview [ ] Production |  |  |
 | `/ai-disclosure` loads without client or server error. | [ ] Pass [ ] Fail [ ] N/A | [ ] Local [ ] Preview [ ] Production |  |  |
 | Direct browser refresh works on each public route above. | [ ] Pass [ ] Fail [ ] N/A | [ ] Local [ ] Preview [ ] Production |  |  |
 | Mobile viewport check passes on key public pages. | [ ] Pass [ ] Fail [ ] N/A | [ ] Local [ ] Preview [ ] Production |  |  |

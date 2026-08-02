@@ -1,10 +1,7 @@
 import { Router } from 'express'
 import { pool } from '../../db/client.js'
-import { resolvePaddleConfig } from '../../config/paddle.js'
 
 const router = Router()
-const REFUND_WINDOW_DAYS = 30
-const VALID_REASONS = new Set(['cancellation', 'dispute', 'other'])
 
 function toIso(value) {
   if (!value) return null
@@ -27,30 +24,6 @@ async function ensureRefundAuditTable() {
       created_at TIMESTAMP DEFAULT NOW()
     );
   `)
-}
-
-async function paddleRequest(path, options = {}, paddle = resolvePaddleConfig()) {
-  if (!paddle.apiKey) {
-    return { skipped: true, reason: `Paddle ${paddle.environment} API key missing` }
-  }
-
-  const response = await fetch(`${paddle.apiBaseUrl}${path}`, {
-    ...options,
-    headers: {
-      Authorization: `Bearer ${paddle.apiKey}`,
-      'Content-Type': 'application/json',
-      'Paddle-Version': paddle.apiVersion,
-      ...(options.headers || {}),
-    },
-  })
-
-  const payload = await response.json().catch(() => ({}))
-
-  if (!response.ok) {
-    throw new Error(`Paddle API error (${response.status}): ${JSON.stringify(payload)}`)
-  }
-
-  return payload
 }
 
 router.get('/', async (req, res) => {
@@ -221,113 +194,11 @@ router.get('/:subscriptionId', async (req, res) => {
   }
 })
 
-async function handleRefundRequest(req, res) {
-  const { subscriptionId } = req.params
-  const { reason, amountCents, transactionId, adminId } = req.body || {}
-
-  if (!reason || !VALID_REASONS.has(reason)) {
-    return res.status(400).json({ error: 'Valid reason is required' })
-  }
-
-  if (!adminId) {
-    return res.status(400).json({ error: 'adminId is required for audit logging' })
-  }
-
-  try {
-    await ensureRefundAuditTable()
-
-    const invoiceResult = await pool.query(
-      `SELECT bi.id, bi.paddle_transaction_id, bi.amount_cents, bi.currency, bi.billed_at, bi.user_id,
-              u.paddle_subscription_id, u.paddle_environment
-       FROM billing_invoices bi
-       LEFT JOIN users u ON u.id = bi.user_id
-       WHERE (bi.user_id::text = $1 OR u.paddle_subscription_id = $1)
-         AND ($2::text IS NULL OR bi.paddle_transaction_id = $2)
-       ORDER BY bi.billed_at DESC
-       LIMIT 1`,
-      [subscriptionId, transactionId || null],
-    )
-
-    const invoice = invoiceResult.rows[0]
-
-    if (!invoice) {
-      return res.status(404).json({ error: 'No matching invoice found for refund' })
-    }
-
-    const now = Date.now()
-    const billedAt = new Date(invoice.billed_at).getTime()
-    const ageDays = Math.floor((now - billedAt) / (1000 * 60 * 60 * 24))
-
-    if (ageDays > REFUND_WINDOW_DAYS) {
-      return res.status(422).json({
-        error: `Refund denied: outside ${REFUND_WINDOW_DAYS}-day policy window`,
-        billedAt: toIso(invoice.billed_at),
-      })
-    }
-
-    const refundAmountCents = Number(amountCents || invoice.amount_cents)
-
-    if (!Number.isFinite(refundAmountCents) || refundAmountCents <= 0) {
-      return res.status(400).json({ error: 'amountCents must be a positive number' })
-    }
-
-    if (refundAmountCents > Number(invoice.amount_cents || 0)) {
-      return res.status(400).json({ error: 'Refund amount cannot exceed original transaction amount' })
-    }
-
-    const paddle = resolvePaddleConfig(process.env, invoice.paddle_environment || 'production')
-    const paddleResponse = await paddleRequest('/adjustments', {
-      method: 'POST',
-      body: JSON.stringify({
-        action: 'refund',
-        transaction_id: invoice.paddle_transaction_id,
-        items: [{ type: 'full', amount: refundAmountCents }],
-        reason,
-      }),
-    }, paddle)
-
-    const adjustmentId = paddleResponse?.data?.id || null
-
-    await pool.query(
-      `INSERT INTO admin_refund_audit (
-         subscription_id, user_id, transaction_id, paddle_adjustment_id,
-         admin_id, reason, amount_cents, status, metadata
-       )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, 'succeeded', $8::jsonb)`,
-      [
-        invoice.paddle_subscription_id,
-        String(invoice.user_id),
-        invoice.paddle_transaction_id,
-        adjustmentId,
-        adminId,
-        reason,
-        refundAmountCents,
-        JSON.stringify({ paddleResponse }),
-      ],
-    )
-
-    await pool.query(
-      `UPDATE billing_invoices
-       SET status = CASE WHEN $2::bigint >= amount_cents THEN 'refunded' ELSE status END
-       WHERE id = $1`,
-      [invoice.id, refundAmountCents],
-    )
-
-    return res.status(200).json({
-      ok: true,
-      message: paddleResponse.skipped
-        ? 'Refund logged, but Paddle API key is missing so no external call was made.'
-        : 'Refund issued successfully.',
-      transactionId: invoice.paddle_transaction_id,
-      amountCents: refundAmountCents,
-      refundAgeDays: ageDays,
-      paddleAdjustmentId: adjustmentId,
-      paddle: paddleResponse,
-    })
-  } catch (error) {
-    console.error('[Admin subscriptions] refund failed:', error)
-    return res.status(500).json({ error: 'Unable to issue refund' })
-  }
+function handleRefundRequest(_req, res) {
+  return res.status(410).json({
+    error: 'Refunds are not available through HireFlow.',
+    code: 'ADMIN_REFUNDS_UNAVAILABLE',
+  })
 }
 
 router.patch('/:subscriptionId/refund', handleRefundRequest)

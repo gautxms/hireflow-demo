@@ -9,7 +9,7 @@ This guide focuses on deployment readiness. It avoids demo-era claims that the a
 Public marketing and legal routes are statically prerendered at build time while authenticated product routes continue to run as a client-side SPA.
 
 - Build command: `npm run build` (`vite build` + `scripts/prerender-public-routes.mjs`)
-- Prerendered public routes include `/`, `/pricing`, `/about`, `/contact`, `/help`, `/terms`, `/privacy`, and `/refund-policy`.
+- Prerendered public routes include `/`, `/pricing`, `/about`, `/contact`, `/help`, `/terms`, and `/privacy`.
 - Authenticated and app routes (`/login`, `/signup`, `/billing`, `/account`, `/admin/*`, etc.) rewrite to `/index.html` in `vercel.json`.
 
 ## Local deployment smoke commands

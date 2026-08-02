@@ -1,5 +1,4 @@
-import { useMemo, useState } from 'react'
-import RefundModal from '../components/RefundModal'
+import { useMemo } from 'react'
 import useAdminSubscriptions from '../hooks/useAdminSubscriptions'
 import StateAlert from '../components/StateAlert'
 import AdminDataTable from '../components/table/AdminDataTable'
@@ -23,8 +22,6 @@ const FILTER_PRESETS = [
 ]
 
 export default function AdminSubscriptionsPage() {
-  const [isRefundOpen, setIsRefundOpen] = useState(false)
-  const [refundTarget, setRefundTarget] = useState(null)
   const {
     filters,
     setFilters,
@@ -41,7 +38,6 @@ export default function AdminSubscriptionsPage() {
     subscriptions,
     totalSubscriptions,
     selectedId,
-    selectedDetails,
     refreshSubscriptions,
     loadDetails,
   } = useAdminSubscriptions()
@@ -53,8 +49,6 @@ export default function AdminSubscriptionsPage() {
     activePreset,
     setActivePreset,
   } = useSharedTableState({ storageKey: 'admin-subscriptions-table' })
-
-  const adminId = useMemo(() => localStorage.getItem('admin_id') || 'founder_admin', [])
 
   const visibleColumnKeys = useMemo(() => COLUMN_PRESETS.find((preset) => preset.id === activePreset)?.columns || COLUMN_PRESETS[0].columns, [activePreset])
   const allColumns = useMemo(() => ([
@@ -125,37 +119,8 @@ export default function AdminSubscriptionsPage() {
             <p><strong>Renewal:</strong> {dateLabel(subscription.renewalDate)}</p>
             <p><strong>Next billing:</strong> {dateLabel(subscription.nextBillingDate)}</p>
             <p><strong>Amount:</strong> {formatCurrency(subscription.amountCents)}</p>
-            <button
-              type="button"
-              className="ui-btn"
-              onClick={() => {
-                setRefundTarget(subscription)
-                setIsRefundOpen(true)
-                if (selectedId !== subscription.id) {
-                  void loadDetails(subscription.id)
-                }
-              }}
-            >
-              Open refund flow
-            </button>
           </div>
         )}
-      />
-
-      <RefundModal
-        isOpen={isRefundOpen}
-        subscription={refundTarget}
-        details={selectedId === refundTarget?.id ? selectedDetails : null}
-        adminId={adminId}
-        onClose={() => setIsRefundOpen(false)}
-        onSuccess={(payload) => {
-          const message = payload?.message || 'Refund issued successfully.'
-          window.alert(`${message} Customer notification email sent by payment provider.`)
-          void refreshSubscriptions()
-          if (refundTarget) {
-            void loadDetails(refundTarget.id)
-          }
-        }}
       />
     </div>
   )

@@ -63,10 +63,6 @@ export const PUBLIC_PAGE_SEO = {
     title: 'HireFlow Cookie Policy',
     description: 'Learn how HireFlow uses necessary cookies, optional analytics, and privacy-safe cookie preferences.',
   },
-  '/refund-policy': {
-    title: 'HireFlow Refund Policy',
-    description: 'Read HireFlow refund terms for subscriptions, trials, and billing support response timelines.',
-  },
   '/ai-resume-screening': {
     title: 'AI Resume Screening Software for Faster Hiring | HireFlow',
     description: 'Speed up top-of-funnel hiring with AI resume screening that helps recruiters prioritize qualified candidates quickly and consistently.',

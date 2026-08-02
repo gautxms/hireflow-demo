@@ -19,7 +19,6 @@ export default function AdminHeader({ sessionRemaining, onToggleSidebar, onLogou
         <div className="admin-header__shortcuts" aria-label="Keyboard shortcut hints">
           <span>j/k: nav</span>
           <span>e: edit</span>
-          <span>r: refund</span>
         </div>
 
         <div className="admin-header__profile">{profileName}</div>

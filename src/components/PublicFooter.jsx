@@ -56,7 +56,6 @@ export default function PublicFooter() {
             <li><a className="public-footer__link" href="/terms">Terms</a></li>
             <li><a className="public-footer__link" href="/ai-disclosure">AI Disclosure</a></li>
             <li><a className="public-footer__link" href="/cookie-policy">Cookie Policy</a></li>
-            <li><a className="public-footer__link" href="/refund-policy">Refund Policy</a></li>
           </ul>
         </nav>
       </div>
