@@ -1,7 +1,5 @@
-import crypto from 'crypto'
 import { Router } from 'express'
 import { pool } from '../../db/client.js'
-import { resolvePaddleConfig } from '../../config/paddle.js'
 
 const router = Router()
 
@@ -26,30 +24,6 @@ async function ensureRefundAuditTable() {
       created_at TIMESTAMP DEFAULT NOW()
     );
   `)
-}
-
-async function paddleRequest(path, options = {}, paddle = resolvePaddleConfig()) {
-  if (!paddle.apiKey) {
-    return { skipped: true, reason: `Paddle ${paddle.environment} API key missing` }
-  }
-
-  const response = await fetch(`${paddle.apiBaseUrl}${path}`, {
-    ...options,
-    headers: {
-      Authorization: `Bearer ${paddle.apiKey}`,
-      'Content-Type': 'application/json',
-      'Paddle-Version': paddle.apiVersion,
-      ...(options.headers || {}),
-    },
-  })
-
-  const payload = await response.json().catch(() => ({}))
-
-  if (!response.ok) {
-    throw new Error(`Paddle API error (${response.status}): ${JSON.stringify(payload)}`)
-  }
-
-  return payload
 }
 
 router.get('/', async (_req, res) => {
@@ -168,53 +142,11 @@ router.get('/', async (_req, res) => {
   }
 })
 
-router.post('/:transactionId/retry', async (req, res) => {
-  const { transactionId } = req.params
-
-  if (!transactionId) {
-    return res.status(400).json({ error: 'transactionId is required' })
-  }
-
-  try {
-    const attemptResult = await pool.query(
-      `SELECT paddle_environment
-       FROM payment_attempts
-       WHERE transaction_id = $1
-       LIMIT 1`,
-      [transactionId],
-    )
-    const paddle = resolvePaddleConfig(process.env, attemptResult.rows[0]?.paddle_environment || 'production')
-    const idempotencyKey = crypto.createHash('sha256').update(`${transactionId}:${Date.now()}`).digest('hex')
-
-    const paddleResponse = await paddleRequest(`/transactions/${transactionId}/charge`, {
-      method: 'POST',
-      headers: { 'Idempotency-Key': idempotencyKey },
-      body: JSON.stringify({}),
-    }, paddle)
-
-    if (!paddleResponse.skipped) {
-      await pool.query(
-        `UPDATE payment_attempts
-         SET status = 'succeeded',
-             next_retry_at = NULL,
-             updated_at = NOW(),
-             metadata = COALESCE(metadata, '{}'::jsonb) || $2::jsonb
-         WHERE transaction_id = $1`,
-        [transactionId, JSON.stringify({ resolved_by: 'admin_retry', retried_at: new Date().toISOString() })],
-      )
-    }
-
-    return res.json({
-      ok: true,
-      message: paddleResponse.skipped
-        ? 'Retry request not sent because Paddle API key is missing. Payment state was left unchanged.'
-        : 'Retry request sent to Paddle and payment attempt marked succeeded.',
-      paddle: paddleResponse,
-    })
-  } catch (error) {
-    console.error('[Admin payments] retry failed:', error)
-    return res.status(500).json({ error: 'Retry failed' })
-  }
+router.post('/:transactionId/retry', (_req, res) => {
+  return res.status(410).json({
+    error: 'Payment collection and retries are managed by Paddle.',
+    code: 'PADDLE_MANAGED_PAYMENT_RECOVERY',
+  })
 })
 
 export default router

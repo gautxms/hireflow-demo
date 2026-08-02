@@ -283,28 +283,11 @@ router.get('/database', async (_req, res) => {
   }
 })
 
-router.post('/jobs/:id/retry', async (req, res) => {
-  try {
-    const result = await pool.query(
-      `UPDATE payment_attempts
-       SET status = 'failed',
-           next_retry_at = NOW(),
-           updated_at = NOW(),
-           metadata = COALESCE(metadata, '{}'::jsonb) || '{"retryRequestedBy":"admin"}'::jsonb
-       WHERE id = $1
-       RETURNING id, status, next_retry_at`,
-      [req.params.id],
-    )
-
-    if (!result.rows[0]) {
-      return res.status(404).json({ error: 'Job not found' })
-    }
-
-    return res.json({ ok: true, job: result.rows[0] })
-  } catch (error) {
-    console.error('[Admin health] failed to retry job', error)
-    return res.status(500).json({ error: 'Failed to retry job' })
-  }
+router.post('/jobs/:id/retry', (_req, res) => {
+  return res.status(410).json({
+    error: 'Payment collection and retries are managed by Paddle.',
+    code: 'PADDLE_MANAGED_PAYMENT_RECOVERY',
+  })
 })
 
 

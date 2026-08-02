@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { pool } from '../../db/client.js'
 import adminPaymentsRouter from './payments.js'
 import adminSubscriptionsRouter from './subscriptions.js'
+import adminHealthRouter from './health.js'
 
 function createRes() {
   return {
@@ -27,70 +28,40 @@ async function invokeRoute(router, path, req) {
   return res
 }
 
-function configureSandbox(t) {
-  const originalFetch = globalThis.fetch
-  const originalBaseUrl = process.env.PADDLE_SANDBOX_API_BASE_URL
-  const originalApiKey = process.env.PADDLE_SANDBOX_API_KEY
-  t.after(() => {
-    globalThis.fetch = originalFetch
-    if (originalBaseUrl === undefined) delete process.env.PADDLE_SANDBOX_API_BASE_URL
-    else process.env.PADDLE_SANDBOX_API_BASE_URL = originalBaseUrl
-    if (originalApiKey === undefined) delete process.env.PADDLE_SANDBOX_API_KEY
-    else process.env.PADDLE_SANDBOX_API_KEY = originalApiKey
-  })
-
-  process.env.PADDLE_SANDBOX_API_BASE_URL = 'https://sandbox-api.paddle.test'
-  process.env.PADDLE_SANDBOX_API_KEY = 'sandbox-admin-key'
-  const fetchCalls = []
-  globalThis.fetch = async (url, options) => {
-    fetchCalls.push({ url, options })
-    return {
-      ok: true,
-      status: 200,
-      json: async () => ({ data: { id: 'sandbox-result' } }),
-    }
-  }
-  return fetchCalls
+function blockPaymentMutations(t) {
+  t.mock.method(pool, 'query', async () => assert.fail('disabled payment retry must not query the database'))
+  t.mock.method(globalThis, 'fetch', async () => assert.fail('disabled payment retry must not call Paddle'))
 }
 
-test('admin payment retry uses the payment attempt Paddle environment', async (t) => {
-  const fetchCalls = configureSandbox(t)
-  t.mock.method(pool, 'query', async (sql) => {
-    if (String(sql).includes('SELECT paddle_environment')) {
-      return { rows: [{ paddle_environment: 'sandbox' }], rowCount: 1 }
-    }
-    return { rows: [], rowCount: 1 }
-  })
+test('admin payment retry is rejected without database or Paddle access', async (t) => {
+  blockPaymentMutations(t)
 
   const res = await invokeRoute(adminPaymentsRouter, '/:transactionId/retry', {
     params: { transactionId: 'txn_sandbox_admin' },
   })
 
-  assert.equal(res.statusCode, 200)
-  assert.equal(fetchCalls[0].url, 'https://sandbox-api.paddle.test/transactions/txn_sandbox_admin/charge')
-  assert.equal(fetchCalls[0].options.headers.Authorization, 'Bearer sandbox-admin-key')
+  assert.equal(res.statusCode, 410)
+  assert.equal(res.payload.code, 'PADDLE_MANAGED_PAYMENT_RECOVERY')
 })
 
-test('admin subscription retry uses the owning user Paddle environment', async (t) => {
-  const fetchCalls = configureSandbox(t)
-  t.mock.method(pool, 'query', async (sql) => {
-    if (String(sql).includes('SELECT bi.paddle_transaction_id')) {
-      return {
-        rows: [{
-          paddle_transaction_id: 'txn_sandbox_subscription',
-          paddle_environment: 'sandbox',
-        }],
-        rowCount: 1,
-      }
-    }
-    return { rows: [], rowCount: 1 }
-  })
+test('admin subscription retry is rejected without database or Paddle access', async (t) => {
+  blockPaymentMutations(t)
 
   const res = await invokeRoute(adminSubscriptionsRouter, '/:subscriptionId/retry-payment', {
     params: { subscriptionId: 'sub_sandbox_admin' },
   })
 
-  assert.equal(res.statusCode, 200)
-  assert.equal(fetchCalls[0].url, 'https://sandbox-api.paddle.test/transactions/txn_sandbox_subscription/charge')
-  assert.equal(fetchCalls[0].options.headers.Authorization, 'Bearer sandbox-admin-key')
+  assert.equal(res.statusCode, 410)
+  assert.equal(res.payload.code, 'PADDLE_MANAGED_PAYMENT_RECOVERY')
+})
+
+test('admin health payment retry is rejected without database or Paddle access', async (t) => {
+  blockPaymentMutations(t)
+
+  const res = await invokeRoute(adminHealthRouter, '/jobs/:id/retry', {
+    params: { id: 'attempt_sandbox_admin' },
+  })
+
+  assert.equal(res.statusCode, 410)
+  assert.equal(res.payload.code, 'PADDLE_MANAGED_PAYMENT_RECOVERY')
 })

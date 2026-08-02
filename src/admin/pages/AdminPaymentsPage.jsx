@@ -29,7 +29,6 @@ const FILTER_PRESETS = [{ id: 'failed_today', label: 'Failed uploads today' }]
 export default function AdminPaymentsPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [retryingId, setRetryingId] = useState('')
   const [data, setData] = useState({ transactions: [], failedPayments: [], revenueSummary: null, auditTrail: [] })
   const [search, setSearch] = useState('')
   const [status, setStatus] = useState('all')
@@ -55,17 +54,6 @@ export default function AdminPaymentsPage() {
   useEffect(() => {
     void loadData()
   }, [])
-
-  const retryFailedPayment = async (transactionId) => {
-    try {
-      setRetryingId(transactionId)
-      const response = await fetch(`${API_BASE}/admin/payments/${transactionId}/retry`, { method: 'POST', credentials: 'include' })
-      if (!response.ok) throw new Error('Retry failed')
-      await loadData()
-    } finally {
-      setRetryingId('')
-    }
-  }
 
   const filteredTransactions = useMemo(() => {
     const normalized = search.toLowerCase()
@@ -108,7 +96,7 @@ export default function AdminPaymentsPage() {
         </div>
       ) : null}
 
-      <PaymentsList failedPayments={data.failedPayments} retryingId={retryingId} onRetry={retryFailedPayment} />
+      <PaymentsList failedPayments={data.failedPayments} />
 
       <AdminDataTable
         title="Transactions"

@@ -2,7 +2,6 @@ import 'dotenv/config'
 import app from './server.js'
 import { runMigrations } from './db/migrate.js'
 import { initializeDatabase, ensurePasswordResetTables, ensurePaymentTrackingTables, pool } from './db/client.js'
-import { retryFailedPayments } from './services/paymentRetry.js'
 import { runRecoveryBillingAdjustments } from './services/recoveryBillingAdjustment.js'
 import { startPaddleWebhookRetryWorker } from './services/paddleWebhookRetryWorker.js'
 import { startAnalyticsCron } from './services/analytics.js'
@@ -17,27 +16,23 @@ import { alignAdminAiUserReferenceColumns, verifyAdminAiUserReferenceCompatibili
 import { verifyYearsExperienceDecimalSchema, verifyShortlistBatchAddSchema } from './db/schemaPrerequisites.js'
 
 const port = process.env.PORT || 4000
-const PAYMENT_RETRY_CRON_MS = 15 * 60 * 1000
+const RECOVERY_BILLING_ADJUSTMENT_CRON_MS = 15 * 60 * 1000
 
-function startPaymentRetryCron() {
-  const runPaymentRetry = async () => {
+function startRecoveryBillingAdjustmentCron() {
+  const runRecoveryAdjustment = async () => {
     try {
-      const retriedCount = await retryFailedPayments()
       const adjustmentCount = await runRecoveryBillingAdjustments()
 
-      if (retriedCount > 0) {
-        console.log(`[Payment Retry] Processed ${retriedCount} due payment attempt(s)`)
-      }
       if (adjustmentCount > 0) console.log(`[Recovery Billing] Processed ${adjustmentCount} adjustment candidate(s)`)
     } catch (error) {
-      console.error('[Payment Retry] Cron execution failed:', error)
+      console.error('[Recovery Billing] Cron execution failed:', error)
     }
   }
 
-  setInterval(runPaymentRetry, PAYMENT_RETRY_CRON_MS)
-  void runPaymentRetry()
+  setInterval(runRecoveryAdjustment, RECOVERY_BILLING_ADJUSTMENT_CRON_MS)
+  void runRecoveryAdjustment()
 
-  console.log('[Payment Retry] Cron job scheduled (every 15 minutes)')
+  console.log('[Recovery Billing] Cron job scheduled (every 15 minutes)')
 }
 
 async function start() {
@@ -104,7 +99,7 @@ async function start() {
 
     registerParseResumeJobProcessor()
 
-    startPaymentRetryCron()
+    startRecoveryBillingAdjustmentCron()
     startPaddleWebhookRetryWorker()
     startAnalyticsCron()
     startChunkUploadCleanupCron()
