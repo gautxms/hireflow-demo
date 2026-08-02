@@ -694,6 +694,20 @@ async function upsertSubscriptionProjection({ subscriptionId, userId, status, ev
          COALESCE(subscriptions.latest_event_payload #>> '{data,current_billing_period,ends_at}', subscriptions.latest_event_payload #>> '{data,billing_period,ends_at}') IS NULL
          OR COALESCE(EXCLUDED.latest_event_payload #>> '{data,current_billing_period,ends_at}', EXCLUDED.latest_event_payload #>> '{data,billing_period,ends_at}')::timestamptz
             >= COALESCE(subscriptions.latest_event_payload #>> '{data,current_billing_period,ends_at}', subscriptions.latest_event_payload #>> '{data,billing_period,ends_at}')::timestamptz
+         OR (
+           COALESCE(EXCLUDED.latest_event_payload #>> '{occurred_at}', EXCLUDED.latest_event_payload #>> '{notification,occurred_at}') IS NOT NULL
+           AND COALESCE(
+             subscriptions.latest_event_payload #>> '{occurred_at}',
+             subscriptions.latest_event_payload #>> '{notification,occurred_at}',
+             subscriptions.latest_event_payload #>> '{provider_observed_at}'
+           ) IS NOT NULL
+           AND COALESCE(EXCLUDED.latest_event_payload #>> '{occurred_at}', EXCLUDED.latest_event_payload #>> '{notification,occurred_at}')::timestamptz
+              > COALESCE(
+                subscriptions.latest_event_payload #>> '{occurred_at}',
+                subscriptions.latest_event_payload #>> '{notification,occurred_at}',
+                subscriptions.latest_event_payload #>> '{provider_observed_at}'
+              )::timestamptz
+         )
        )
      ) OR (
        COALESCE(EXCLUDED.latest_event_payload #>> '{data,current_billing_period,ends_at}', EXCLUDED.latest_event_payload #>> '{data,billing_period,ends_at}') IS NULL
@@ -1149,7 +1163,16 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment, storedEv
                    LOWER(COALESCE(subscription_status, '')) IN ('canceled', 'cancelled')
                    AND (cancellation_effective_at IS NULL OR cancellation_effective_at <= NOW())
                  )
-                 AND ($6::timestamp IS NULL OR current_period_end IS NULL OR $6::timestamp >= current_period_end)
+                 AND (
+                   $6::timestamp IS NULL
+                   OR current_period_end IS NULL
+                   OR $6::timestamp >= current_period_end
+                   OR (
+                     last_paddle_event_at IS NOT NULL
+                     AND $11::timestamptz IS NOT NULL
+                     AND $11::timestamptz > last_paddle_event_at
+                   )
+                 )
                )
                OR (
                  $2 IS NOT NULL
