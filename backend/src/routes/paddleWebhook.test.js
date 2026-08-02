@@ -1372,7 +1372,107 @@ test('POST /api/paddle/webhook derives annual from subscription.updated active i
   assert.equal(response.status, 200)
   assert.equal(userUpdateCalls(calls)[0].params[4], 'annual')
   assert.match(userUpdateCalls(calls)[0].sql, /subscription_renewal_date = COALESCE\(\$6, subscription_renewal_date\)/)
-  assert.match(userUpdateCalls(calls)[0].sql, /\$6::timestamp >= current_period_end/)
+  assert.match(userUpdateCalls(calls)[0].sql, /last_paddle_event_at IS NOT NULL[\s\S]*\$11::timestamptz > last_paddle_event_at/)
+})
+
+test('POST /api/paddle/webhook accepts a newer verified renewal date that moves backward', async (t) => {
+  const payload = buildSubscriptionUpdatedPayload({
+    event_id: 'evt_subscription_updated_renewal_moved_backward',
+    occurred_at: '2026-08-01T10:00:05.000Z',
+    data: {
+      ...buildSubscriptionUpdatedPayload().data,
+      current_billing_period: {
+        starts_at: '2026-07-01T00:00:00.000Z',
+        ends_at: '2026-08-01T00:00:00.000Z',
+      },
+      next_billed_at: '2026-08-01T00:00:00.000Z',
+    },
+  })
+  const rawBody = JSON.stringify(payload)
+  const calls = []
+
+  t.mock.method(pool, 'query', async (sql, params) => {
+    calls.push({ sql: String(sql), params })
+    if (String(sql).includes('FROM paddle_webhook_events')) return { rowCount: 0, rows: [] }
+    if (String(sql).includes('FROM users')) {
+      return {
+        rowCount: 1,
+        rows: [{
+          id: 42,
+          paddle_customer_id: 'ctm_test_123',
+          paddle_subscription_id: 'sub_test_123',
+          subscription_status: 'active',
+          subscription_plan: 'monthly',
+          current_period_end: '2026-09-01T00:00:00.000Z',
+          subscription_renewal_date: '2026-09-01T00:00:00.000Z',
+          next_billing_date: '2026-09-01T00:00:00.000Z',
+          last_paddle_event_at: '2026-08-01T10:00:00.000Z',
+        }],
+      }
+    }
+    return { rowCount: 1, rows: [] }
+  })
+
+  const { response } = await postWebhook({ body: rawBody, signature: signBody(rawBody) })
+  const updateCall = userUpdateCalls(calls)[0]
+
+  assert.equal(response.status, 200)
+  assert.equal(updateCall.params[5], '2026-08-01T00:00:00.000Z')
+  assert.equal(updateCall.params[6], '2026-08-01T00:00:00.000Z')
+  assert.equal(updateCall.params[10], '2026-08-01T10:00:05.000Z')
+  assert.match(updateCall.sql, /\$11::timestamptz >= last_paddle_event_at/)
+  assert.match(updateCall.sql, /\$6::timestamp >= current_period_end[\s\S]*last_paddle_event_at IS NOT NULL[\s\S]*\$11::timestamptz IS NOT NULL[\s\S]*\$11::timestamptz > last_paddle_event_at/)
+  const projectionUpsert = calls.find(({ sql }) => /INSERT INTO subscriptions/.test(sql))
+  assert.ok(projectionUpsert)
+  assert.match(projectionUpsert.sql, /EXCLUDED\.latest_event_payload #>> '\{occurred_at\}'[\s\S]*subscriptions\.latest_event_payload #>> '\{occurred_at\}'[\s\S]*::timestamptz[\s\S]*>/)
+  assert.match(projectionUpsert.sql, /subscriptions\.latest_event_payload #>> '\{provider_observed_at\}'/)
+})
+
+test('POST /api/paddle/webhook keeps backward renewal dates fenced until a provider watermark exists', async (t) => {
+  const payload = buildSubscriptionUpdatedPayload({
+    event_id: 'evt_subscription_updated_backward_without_watermark',
+    occurred_at: '2026-08-01T10:00:05.000Z',
+    data: {
+      ...buildSubscriptionUpdatedPayload().data,
+      current_billing_period: {
+        starts_at: '2026-07-01T00:00:00.000Z',
+        ends_at: '2026-08-01T00:00:00.000Z',
+      },
+      next_billed_at: '2026-08-01T00:00:00.000Z',
+    },
+  })
+  const rawBody = JSON.stringify(payload)
+  const calls = []
+
+  t.mock.method(pool, 'query', async (sql, params) => {
+    calls.push({ sql: String(sql), params })
+    if (String(sql).includes('FROM paddle_webhook_events')) return { rowCount: 0, rows: [] }
+    if (String(sql).includes('FROM users')) {
+      return {
+        rowCount: 1,
+        rows: [{
+          id: 42,
+          paddle_customer_id: 'ctm_test_123',
+          paddle_subscription_id: 'sub_test_123',
+          subscription_status: 'active',
+          subscription_plan: 'monthly',
+          current_period_end: '2026-09-01T00:00:00.000Z',
+          last_paddle_event_at: null,
+        }],
+      }
+    }
+    if (/UPDATE users/.test(String(sql))) return { rowCount: 0, rows: [] }
+    return { rowCount: 1, rows: [] }
+  })
+
+  const { response } = await postWebhook({ body: rawBody, signature: signBody(rawBody) })
+  const updateCall = userUpdateCalls(calls)[0]
+
+  assert.equal(response.status, 200)
+  assert.match(updateCall.sql, /\$6::timestamp >= current_period_end/)
+  assert.match(updateCall.sql, /last_paddle_event_at IS NOT NULL/)
+  assert.match(updateCall.sql, /\$11::timestamptz > last_paddle_event_at/)
+  assert.equal(calls.some(({ sql }) => /INSERT INTO subscriptions/.test(sql)), false)
 })
 
 test('POST /api/paddle/webhook does not let an undated event replace a dated subscription projection', async (t) => {

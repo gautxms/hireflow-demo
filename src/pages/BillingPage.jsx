@@ -219,6 +219,10 @@ export default function BillingPage() {
   const hasBillingHistory = shouldRenderBillingHistory(history)
   const hasScheduledCancellation = subscriptionState.isCancellationScheduled
   const isFinalCancellation = subscriptionState.isCanceled && !hasScheduledCancellation
+  const canShowStandardBillingActions = !subscriptionState.hasCancellationSignal
+    && !hasScheduledCancellation
+    && !isFinalCancellation
+    && !subscriptionState.isPastDue
 
   const switchingLabel = useMemo(() => {
     if (!subscription) return ''
@@ -465,7 +469,7 @@ export default function BillingPage() {
                   ) : subscriptionState.isPastDue ? (
                     <a className="hf-btn hf-btn--primary" href="/account/payment-method">Update payment &amp; pay now</a>
                   ) : null}
-                  {!hasScheduledCancellation && !isFinalCancellation && !subscriptionState.isPastDue && planAction?.isSelfServe ? (
+                  {canShowStandardBillingActions && planAction?.isSelfServe ? (
                     <button type="button" className="hf-btn hf-btn--primary" onClick={() => openPlanModal(planAction.targetPlan)}>
                       {planAction.label}
                     </button>
@@ -475,7 +479,7 @@ export default function BillingPage() {
                       {cancelActionLabel}
                     </button>
                   ) : null}
-                  {!hasScheduledCancellation && !isFinalCancellation && !subscriptionState.isPastDue ? (
+                  {canShowStandardBillingActions ? (
                     <a className="hf-btn hf-btn--secondary" href="/account/payment-method">Change payment method</a>
                   ) : null}
                   {isFinalCancellation ? (
