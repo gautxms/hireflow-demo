@@ -333,45 +333,11 @@ async function handleRefundRequest(req, res) {
 router.patch('/:subscriptionId/refund', handleRefundRequest)
 router.post('/:subscriptionId/refund', handleRefundRequest)
 
-router.post('/:subscriptionId/retry-payment', async (req, res) => {
-  const { subscriptionId } = req.params
-
-  try {
-    const invoiceResult = await pool.query(
-      `SELECT bi.paddle_transaction_id, u.paddle_environment
-       FROM billing_invoices bi
-       LEFT JOIN users u ON u.id = bi.user_id
-       WHERE bi.status IN ('failed', 'past_due', 'open')
-         AND (bi.user_id::text = $1 OR u.paddle_subscription_id = $1)
-       ORDER BY bi.billed_at DESC
-       LIMIT 1`,
-      [subscriptionId],
-    )
-
-    const invoice = invoiceResult.rows[0]
-
-    if (!invoice?.paddle_transaction_id) {
-      return res.status(404).json({ error: 'No failed payment found for this subscription' })
-    }
-
-    const paddle = resolvePaddleConfig(process.env, invoice.paddle_environment || 'production')
-    const retryResponse = await paddleRequest(`/transactions/${invoice.paddle_transaction_id}/charge`, {
-      method: 'POST',
-      body: JSON.stringify({}),
-    }, paddle)
-
-    return res.json({
-      ok: true,
-      transactionId: invoice.paddle_transaction_id,
-      message: retryResponse?.skipped
-        ? 'Retry recorded locally. Paddle key missing, so external charge was not attempted.'
-        : 'Retry payment request sent to Paddle.',
-      paddle: retryResponse,
-    })
-  } catch (error) {
-    console.error('[Admin subscriptions] retry-payment failed:', error)
-    return res.status(500).json({ error: 'Failed to retry payment' })
-  }
+router.post('/:subscriptionId/retry-payment', (_req, res) => {
+  return res.status(410).json({
+    error: 'Payment collection and retries are managed by Paddle.',
+    code: 'PADDLE_MANAGED_PAYMENT_RECOVERY',
+  })
 })
 
 export default router
