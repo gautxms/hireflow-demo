@@ -20,7 +20,6 @@ import PrivacyPage from './components/PrivacyPage'
 import CookiePolicyPage from './components/CookiePolicyPage'
 import AiDisclosurePage from './components/AiDisclosurePage'
 import TrustPage from './components/TrustPage'
-import RefundPolicy from './pages/RefundPolicy'
 const BillingSuccess = lazy(() => import('./pages/BillingSuccess'))
 const BillingCancel = lazy(() => import('./pages/BillingCancel'))
 const BillingPage = lazy(() => import('./pages/BillingPage'))
@@ -529,10 +528,6 @@ function MainSite({ isAuthenticated, accessResolutionStatus, accessResolutionErr
 
     if (resolvedPathname === '/cookie-policy') {
       return <CookiePolicyPage />
-    }
-
-    if (resolvedPathname === '/refund-policy') {
-      return <RefundPolicy />
     }
 
     if (resolvedPathname === '/billing/success') {

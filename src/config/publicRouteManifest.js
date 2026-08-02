@@ -12,7 +12,6 @@ export const PUBLIC_ROUTE_MANIFEST = Object.freeze([
   { path: '/ai-disclosure', componentKey: 'aiDisclosure', access: ROUTE_ACCESS.PUBLIC, indexable: true, staticGeneration: true },
   { path: '/trust', componentKey: 'trust', access: ROUTE_ACCESS.PUBLIC, indexable: true, staticGeneration: true },
   { path: '/cookie-policy', componentKey: 'cookiePolicy', access: ROUTE_ACCESS.PUBLIC, indexable: true, staticGeneration: true },
-  { path: '/refund-policy', componentKey: 'refundPolicy', access: ROUTE_ACCESS.PUBLIC, indexable: true, staticGeneration: true },
   { path: '/ai-resume-screening', componentKey: 'intent', access: ROUTE_ACCESS.PUBLIC, indexable: true, staticGeneration: true },
   { path: '/bulk-resume-analysis', componentKey: 'intent', access: ROUTE_ACCESS.PUBLIC, indexable: true, staticGeneration: true },
   { path: '/resume-scoring-ai', componentKey: 'intent', access: ROUTE_ACCESS.PUBLIC, indexable: true, staticGeneration: true },

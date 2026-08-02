@@ -124,12 +124,12 @@ const HELP_ARTICLES = {
     },
     {
       id: 12,
-      title: 'Cancellations and refund policy',
-      desc: 'What happens when you cancel or request help',
+      title: 'Cancellations and billing support',
+      desc: 'What happens when you cancel or report a billing issue',
       content: [
         'Canceling a subscription keeps access active through the current billing period.',
-        'Use the in-app refund policy page for official terms and support expectations.',
-        'If you have a billing dispute, contact support with invoice details and workspace ID.',
+        'Payments are non-refundable except where applicable law requires otherwise.',
+        'If you believe you were charged in error, contact support with the invoice details and workspace ID.',
       ],
     },
   ],
@@ -307,7 +307,7 @@ export default function HelpPage({ onBack }) {
             </article>
             <article className="public-card">
               <h3 className="public-card-title">Billing and subscription support</h3>
-              <p className="public-card-copy">Visit Billing &amp; Plans for invoices, plan changes, cancellation flow, and refund policy links.</p>
+              <p className="public-card-copy">Visit Billing &amp; Plans for invoices, plan changes, cancellation flow, and billing support guidance.</p>
             </article>
           </div>
         </div>

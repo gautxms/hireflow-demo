@@ -57,7 +57,6 @@ export default function TrustPage() {
         <li><a className="content-document__link" href="/terms">Terms of Service</a></li>
         <li><a className="content-document__link" href="/ai-disclosure">AI Disclosure</a></li>
         <li><a className="content-document__link" href="/cookie-policy">Cookie Policy</a></li>
-        <li><a className="content-document__link" href="/refund-policy">Refund Policy</a></li>
         <li><a className="content-document__link" href="/contact">Contact</a></li>
       </ul>
     </ContentDocument>

@@ -21,7 +21,7 @@ function SortButton({ label, field, currentSort, onSortChange }) {
   )
 }
 
-export default function SubscriptionsTable({ subscriptions, loading, sort, onSortChange, onView, onRefund }) {
+export default function SubscriptionsTable({ subscriptions, loading, sort, onSortChange, onView }) {
   return (
     <div className="admin-table-surface overflow-hidden">
       <table className="admin-table text-left text-sm">
@@ -47,9 +47,6 @@ export default function SubscriptionsTable({ subscriptions, loading, sort, onSor
                 <div className="flex justify-end gap-2">
                   <button type="button" className="ui-btn ui-btn--ghost" onClick={() => onView(subscription)}>
                     Details
-                  </button>
-                  <button type="button" className="ui-btn ui-btn--primary" onClick={() => onRefund(subscription)}>
-                    Refund
                   </button>
                 </div>
               </td>

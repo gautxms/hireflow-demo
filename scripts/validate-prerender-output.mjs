@@ -3,7 +3,7 @@ import { resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { STATIC_PUBLIC_ROUTES } from '../src/config/publicRouteManifest.js'
 
-// /refund-policy is the shortest legitimate route at 73 route-specific words, so 72 is the highest safe threshold.
+// Keep this threshold high enough to catch placeholder regressions without rejecting concise public pages.
 export const MIN_VISIBLE_WORDS = 72
 export const FORBIDDEN_PLACEHOLDERS = Object.freeze([
   'structured candidate signals for recruiter review',

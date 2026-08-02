@@ -34,7 +34,7 @@ HireFlow is preparing for launch and may change as we improve reliability, onboa
 
 ## Payments and subscriptions
 
-If you choose a paid plan, billing, renewal, cancellation, trials, taxes, and payment handling are governed by the plan terms shown at checkout and by any payment provider terms that apply. You are responsible for keeping billing information accurate. Cancelling a subscription prevents future renewals but does not automatically create a refund unless a refund is required by law or stated in our refund policy.
+If you choose a paid plan, billing, renewal, cancellation, trials, taxes, and payment handling are governed by the plan terms shown at checkout and by any payment provider terms that apply. You are responsible for keeping billing information accurate. Cancelling a subscription prevents future renewals. Payments are non-refundable except where applicable law requires otherwise.
 
 ## Suspension and termination
 
