@@ -20,6 +20,8 @@ PADDLE_DURABLE_WEBHOOK_INBOX_ENABLED=true
 PADDLE_WEBHOOK_RETRY_WORKER_ENABLED=true
 ```
 
+Linked Paddle subscriptions are also reconciled automatically without Billing-page navigation. The in-process runner executes every 15 minutes, selects at most 20 eligible accounts, processes them sequentially, and uses a PostgreSQL advisory lock to prevent overlap across backend instances. Successful accounts cool down for six hours; failed provider reads are eligible again after 15 minutes.
+
 The normal monthly and annual prices may include the one-time introductory trial. The `NO_TRIAL` prices must use the same recurring amounts without a trial period; HireFlow uses them for any account with previous subscription history.
 
 Do not put Paddle API keys or webhook secrets in Vercel, frontend variables, source control, logs, screenshots, or support messages. Checkout returns only the client-side token to the browser.

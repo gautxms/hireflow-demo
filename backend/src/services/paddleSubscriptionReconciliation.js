@@ -82,6 +82,7 @@ export function inspectPaddleSubscriptionForReconciliation({
   paddlePayload,
   paddle,
   pendingProviderPlan = null,
+  allowProviderConfirmedRecovery = false,
 }) {
   const subscription = dataFromPayload(paddlePayload)
   const providerStatus = normalizeStatus(subscription?.status)
@@ -165,6 +166,7 @@ export function inspectPaddleSubscriptionForReconciliation({
   if (
     RECOVERY_STATUSES.has(normalizeStatus(user.subscription_status))
     && providerStatus === 'active'
+    && !allowProviderConfirmedRecovery
   ) {
     return {
       ok: false,
@@ -223,6 +225,7 @@ export async function reconcilePaddleSubscriptionState({
   paddlePayload,
   paddle,
   pendingProviderPlan = null,
+  allowProviderConfirmedRecovery = false,
   db = pool,
   source = 'subscription_get',
 }) {
@@ -231,6 +234,7 @@ export async function reconcilePaddleSubscriptionState({
     paddlePayload,
     paddle,
     pendingProviderPlan,
+    allowProviderConfirmedRecovery,
   })
 
   if (!inspection.ok) {

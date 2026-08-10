@@ -192,6 +192,21 @@ test('inspection preserves exact-transaction recovery confirmation for Past Due 
   assert.equal(result.reason, 'recovery_confirmation_required')
 })
 
+test('automatic reconciliation may accept a newer provider-confirmed Active recovery', () => {
+  for (const localStatus of ['past_due', 'payment_failed']) {
+    const result = inspectPaddleSubscriptionForReconciliation({
+      user: user({ subscription_status: localStatus }),
+      paddle: paddle(),
+      paddlePayload: subscription(),
+      allowProviderConfirmedRecovery: true,
+    })
+
+    assert.equal(result.ok, true, localStatus)
+    assert.equal(result.providerVerified, true, localStatus)
+    assert.equal(result.snapshot.storedStatus, 'active', localStatus)
+  }
+})
+
 test('inspection does not reactivate a fully canceled lifecycle from a conflicting Active snapshot', () => {
   const result = inspectPaddleSubscriptionForReconciliation({
     user: user({
@@ -313,6 +328,62 @@ test('reconciliation repairs scheduled cancellation and keeps next billing null'
   assert.equal(result.user.next_billing_date, null)
   assert.equal(result.user.cancellation_effective_at, '2026-08-23T00:00:00.000Z')
   assert.ok(!mock.calls.some(({ sql }) => /UPDATE payment_attempts/.test(sql)))
+})
+
+test('reconciliation clears a removed cancellation schedule and repairs billing dates', async () => {
+  const mock = dbMock()
+  const result = await reconcilePaddleSubscriptionState({
+    user: user({
+      current_period_end: '2026-08-20T00:00:00.000Z',
+      subscription_renewal_date: '2026-08-20T00:00:00.000Z',
+      next_billing_date: null,
+      cancellation_effective_at: '2026-08-20T00:00:00.000Z',
+    }),
+    paddle: paddle(),
+    paddlePayload: subscription({
+      current_billing_period: {
+        starts_at: '2026-07-23T00:00:00.000Z',
+        ends_at: '2026-08-23T00:00:00.000Z',
+      },
+      next_billed_at: '2026-08-23T00:00:00.000Z',
+      scheduled_change: null,
+    }),
+    db: mock.db,
+    source: 'automatic_scheduler',
+  })
+
+  assert.equal(result.reconciled, true)
+  assert.equal(result.user.subscription_status, 'active')
+  assert.equal(result.user.current_period_end, '2026-08-23T00:00:00.000Z')
+  assert.equal(result.user.next_billing_date, '2026-08-23T00:00:00.000Z')
+  assert.equal(result.user.cancellation_effective_at, null)
+})
+
+test('automatic reconciliation repairs Past Due and trialing drift without changing trial history', async () => {
+  for (const entry of [
+    { localStatus: 'past_due', providerStatus: 'active' },
+    { localStatus: 'trialing', providerStatus: 'active' },
+  ]) {
+    const mock = dbMock()
+    const currentUser = user({
+      subscription_status: entry.localStatus,
+      trial_consumed_at: '2026-07-01T00:00:00.000Z',
+    })
+    const result = await reconcilePaddleSubscriptionState({
+      user: currentUser,
+      paddle: paddle(),
+      paddlePayload: subscription({ status: entry.providerStatus }),
+      allowProviderConfirmedRecovery: true,
+      db: mock.db,
+      source: 'automatic_scheduler',
+    })
+
+    assert.equal(result.reconciled, true, entry.localStatus)
+    assert.equal(result.user.subscription_status, 'active', entry.localStatus)
+    assert.equal(result.user.paddle_subscription_id, currentUser.paddle_subscription_id)
+    assert.equal(result.user.trial_consumed_at, currentUser.trial_consumed_at)
+    assert.ok(!mock.calls.some(({ sql }) => /trial_consumed_at\s*=/.test(sql)))
+  }
 })
 
 test('reconciliation persists a newer provider watermark for an already-current active snapshot', async () => {
