@@ -474,6 +474,83 @@ test('POST /api/paddle/webhook processes valid signatures and audits only after 
   assert.equal(queries.some((sql) => /INSERT INTO paddle_webhook_events/.test(sql)), true)
 })
 
+test('POST /api/paddle/webhook rejects a provider identity already owned by another account', async (t) => {
+  const event = buildSubscriptionUpdatedPayload({ event_id: 'evt_provider_ownership_conflict' })
+  const rawBody = JSON.stringify(event)
+  const queries = []
+
+  t.mock.method(pool, 'query', async (sql) => {
+    const query = String(sql)
+    queries.push(query)
+    if (query.includes('FROM paddle_webhook_events')) return { rowCount: 0, rows: [] }
+    if (query.includes('UNION ALL') && query.includes('subscription_projection')) {
+      return { rowCount: 1, rows: [{ id: 99, source: 'user' }] }
+    }
+    if (query.includes('FROM users')) {
+      return {
+        rowCount: 1,
+        rows: [{
+          id: 42,
+          paddle_customer_id: null,
+          paddle_subscription_id: null,
+          subscription_status: 'inactive',
+          paddle_environment: 'sandbox',
+        }],
+      }
+    }
+    return { rowCount: 1, rows: [] }
+  })
+
+  const { response } = await postWebhook({ body: rawBody, signature: signBody(rawBody) })
+
+  assert.equal(response.status, 500)
+  assert.equal(queries.some((query) => /UPDATE users/.test(query)), false)
+  assert.equal(queries.some((query) => /INSERT INTO subscriptions/.test(query)), false)
+  assert.equal(
+    queries.some((query) => /UPDATE paddle_webhook_events[\s\S]+status = 'retryable_failed'/.test(query)),
+    true,
+  )
+})
+
+test('POST /api/paddle/webhook rejects projection ownership conflicts before mutation without an explicit user ID', async (t) => {
+  const event = buildSubscriptionUpdatedPayload({ event_id: 'evt_provider_projection_conflict_without_user_id' })
+  delete event.data.custom_data.userId
+  const rawBody = JSON.stringify(event)
+  const queries = []
+
+  t.mock.method(pool, 'query', async (sql) => {
+    const query = String(sql)
+    queries.push(query)
+    if (query.includes('FROM paddle_webhook_events')) return { rowCount: 0, rows: [] }
+    if (query.includes('UNION ALL') && query.includes('subscription_projection')) {
+      return { rowCount: 1, rows: [{ id: 99, source: 'subscription_projection' }] }
+    }
+    if (query.includes('FROM users')) {
+      return {
+        rowCount: 1,
+        rows: [{
+          id: 42,
+          paddle_customer_id: 'ctm_test_123',
+          paddle_subscription_id: null,
+          subscription_status: 'inactive',
+          paddle_environment: 'sandbox',
+        }],
+      }
+    }
+    return { rowCount: 1, rows: [] }
+  })
+
+  const { response } = await postWebhook({ body: rawBody, signature: signBody(rawBody) })
+
+  assert.equal(response.status, 500)
+  assert.equal(queries.some((query) => /UPDATE users/.test(query)), false)
+  assert.equal(queries.some((query) => /INSERT INTO subscriptions/.test(query)), false)
+  assert.equal(
+    queries.some((query) => /UPDATE paddle_webhook_events[\s\S]+status = 'retryable_failed'/.test(query)),
+    true,
+  )
+})
+
 test('POST /api/paddle/webhook durably claims the event before billing mutations and completes it afterward', async (t) => {
   const rawBody = JSON.stringify(buildSubscriptionUpdatedPayload({
     event_id: 'evt_durable_claim_order',

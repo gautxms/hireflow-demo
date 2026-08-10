@@ -373,20 +373,24 @@ export async function reconcilePaddleSubscriptionState({
       )
     }
 
-    await client.query(
+    const projectionResult = await client.query(
       `INSERT INTO subscriptions (
          paddle_subscription_id, user_id, status, latest_event_type,
          latest_event_payload, paddle_environment
        )
        VALUES ($1, $2, $3, 'subscription.reconciled', $4::jsonb, $5)
-       ON CONFLICT (paddle_subscription_id)
+       ON CONFLICT (paddle_environment, paddle_subscription_id)
        DO UPDATE SET
-         user_id = EXCLUDED.user_id,
+         user_id = COALESCE(subscriptions.user_id, EXCLUDED.user_id),
          status = EXCLUDED.status,
          latest_event_type = EXCLUDED.latest_event_type,
          latest_event_payload = EXCLUDED.latest_event_payload,
          paddle_environment = EXCLUDED.paddle_environment,
-         updated_at = NOW()`,
+         updated_at = NOW()
+       WHERE (subscriptions.user_id IS NULL OR subscriptions.user_id = EXCLUDED.user_id)
+         AND COALESCE(NULLIF(LOWER(subscriptions.paddle_environment), ''), 'production')
+             = COALESCE(NULLIF(LOWER(EXCLUDED.paddle_environment), ''), 'production')
+       RETURNING id`,
       [
         snapshot.providerSubscriptionId,
         user.id,
@@ -399,6 +403,11 @@ export async function reconcilePaddleSubscriptionState({
         paddle.environment,
       ],
     )
+    if (projectionResult.rowCount !== 1) {
+      const error = new Error('Paddle subscription projection ownership conflict')
+      error.code = 'PADDLE_OWNERSHIP_CONFLICT'
+      throw error
+    }
 
     await client.query('COMMIT')
     console.info('[Paddle subscription reconciliation] Applied verified provider state', {

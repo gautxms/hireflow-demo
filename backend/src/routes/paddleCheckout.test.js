@@ -6,9 +6,11 @@ import {
   prepareCheckoutSubscriptionState,
   persistVerifiedCheckoutSubscription,
   selectReturningCheckoutTransaction,
+  transactionMatchesCheckoutReservation,
   validatePaddleCheckoutPlan,
 } from './paddleCheckout.js'
 import { reconcilePaddleSubscriptionState } from '../services/paddleSubscriptionReconciliation.js'
+import { markCheckoutReservationCompleted } from '../services/paddleCheckoutReservations.js'
 
 function paddle(overrides = {}) {
   return {
@@ -39,6 +41,36 @@ test('validatePaddleCheckoutPlan preserves monthly and annual price selection', 
     validatePaddleCheckoutPlan({ plan: 'annual', paddle: paddle() }),
     { ok: true, priceId: 'pri_annual', storedPlan: 'annual', trialEligible: true, checkoutMode: 'trial' },
   )
+})
+
+test('completed checkout reservation updates require an exact UUID, account, environment, and transaction', async () => {
+  const calls = []
+  const db = { async query(sql, params) { calls.push({ sql: String(sql), params }); return { rowCount: 1, rows: [{ id: 'reservation-id' }] } } }
+  const result = await markCheckoutReservationCompleted({
+    db,
+    reservationToken: '42d85541-3b0e-4b1a-8dca-2525950fbaf0',
+    userId: 42,
+    environment: 'sandbox',
+    transactionId: 'txn_completed123',
+    customerId: 'ctm_123',
+  })
+
+  assert.equal(result.rowCount, 1)
+  assert.equal(calls.length, 1)
+  assert.match(calls[0].sql, /status = 'completed'/)
+  assert.match(calls[0].sql, /user_id = \$2/)
+  assert.match(calls[0].sql, /paddle_environment = \$3/)
+  assert.match(calls[0].sql, /paddle_transaction_id IS NULL OR paddle_transaction_id = \$4/)
+
+  const rejected = await markCheckoutReservationCompleted({
+    db,
+    reservationToken: 'not-a-uuid',
+    userId: 42,
+    environment: 'sandbox',
+    transactionId: 'txn_completed123',
+  })
+  assert.equal(rejected.rowCount, 0)
+  assert.equal(calls.length, 1)
 })
 
 test('validatePaddleCheckoutPlan hides test-monthly when disabled or missing price', () => {
@@ -202,6 +234,46 @@ test('selectReturningCheckoutTransaction only selects a completed paid returning
   ]
 
   assert.equal(selectReturningCheckoutTransaction(transactions, user, paddleConfig)?.id, 'txn_returning')
+})
+
+test('checkout transaction reuse requires exact account, environment, plan, price, mode, trial, and reservation identity', () => {
+  const reservation = {
+    reservation_token: '42d85541-3b0e-4b1a-8dca-2525950fbaf0',
+    paddle_environment: 'sandbox',
+    requested_plan: 'annual',
+    stored_plan: 'annual',
+    price_id: 'pri_annual_paid',
+    checkout_mode: 'paid_returning',
+    trial_eligible: false,
+  }
+  const user = { id: 42, paddle_customer_id: 'ctm_123' }
+  const transaction = {
+    id: 'txn_123',
+    status: 'ready',
+    customer_id: 'ctm_123',
+    items: [{ price_id: 'pri_annual_paid', quantity: 1 }],
+    custom_data: {
+      userId: 42,
+      paddleEnvironment: 'sandbox',
+      requestedPlan: 'annual',
+      plan: 'annual',
+      checkoutMode: 'paid_returning',
+      trialEligible: false,
+      checkoutReservationId: reservation.reservation_token,
+    },
+  }
+
+  assert.equal(transactionMatchesCheckoutReservation(transaction, reservation, user), true)
+  assert.equal(transactionMatchesCheckoutReservation({ ...transaction, customer_id: 'ctm_other' }, reservation, user), false)
+  assert.equal(transactionMatchesCheckoutReservation({ ...transaction, items: [{ price_id: 'pri_monthly_paid' }] }, reservation, user), false)
+  assert.equal(transactionMatchesCheckoutReservation({
+    ...transaction,
+    custom_data: { ...transaction.custom_data, checkoutReservationId: '6b2ca06a-da77-44fc-af0e-c9de45ab14fd' },
+  }, reservation, user), false)
+  assert.equal(transactionMatchesCheckoutReservation({
+    ...transaction,
+    custom_data: { ...transaction.custom_data, paddleEnvironment: 'production' },
+  }, reservation, user), false)
 })
 
 test('persistVerifiedCheckoutSubscription replaces a cancelled Annual lifecycle with the verified new Monthly subscription', async () => {
