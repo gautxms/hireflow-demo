@@ -121,7 +121,16 @@ test('environment-specific webhook secret cannot be substituted by the other env
 })
 
 test('durable inbox schema readiness verifies required table, columns, and indexes', async () => {
-  assert.equal((await verifyPaddleWebhookInboxSchema(readyDb())).ready, true)
+  let schemaQuery = ''
+  const schema = await verifyPaddleWebhookInboxSchema({
+    async query(sql) {
+      schemaQuery = sql
+      return { rows: [readySchemaRow()] }
+    },
+  })
+  assert.equal(schema.ready, true)
+  assert.match(schemaQuery, /ARRAY_AGG\(column_name::text ORDER BY column_name::text\)/)
+  assert.match(schemaQuery, /ARRAY_AGG\(indexname::text ORDER BY indexname::text\)/)
 
   const missingTable = await verifyPaddleWebhookInboxSchema(readyDb({
     table_exists: false,
