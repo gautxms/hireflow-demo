@@ -14,6 +14,10 @@ import { ensureNotificationTables } from './services/notificationService.js'
 import { validateAiProviderModelConfiguration } from './services/aiProviderConfigService.js'
 import { alignAdminAiUserReferenceColumns, verifyAdminAiUserReferenceCompatibility } from './services/adminAiSchemaCompatibility.js'
 import { verifyYearsExperienceDecimalSchema, verifyShortlistBatchAddSchema } from './db/schemaPrerequisites.js'
+import {
+  assertPaddleBillingPrerequisites,
+  setPaddleWebhookWorkerState,
+} from './services/paddleBillingReadiness.js'
 
 const port = process.env.PORT || 4000
 const RECOVERY_BILLING_ADJUSTMENT_CRON_MS = 15 * 60 * 1000
@@ -85,6 +89,14 @@ async function start() {
       )
     }
     console.log('[Startup] Migration prerequisite confirmed: shortlist_candidates batch-add metadata columns')
+    const paddleBillingReadiness = await assertPaddleBillingPrerequisites({ db: pool })
+    if (paddleBillingReadiness.enabled) {
+      console.log('[Startup] Paddle durable webhook configuration and schema confirmed', {
+        environments: paddleBillingReadiness.environments,
+      })
+    } else {
+      console.log('[Startup] Paddle billing is not configured; durable webhook worker is not required')
+    }
     await initializeJobQueue()
 
     logEmailConfigStatus()
@@ -99,8 +111,11 @@ async function start() {
 
     registerParseResumeJobProcessor()
 
+    await startPaddleWebhookRetryWorker(process.env, {
+      db: pool,
+      onStateChange: setPaddleWebhookWorkerState,
+    })
     startRecoveryBillingAdjustmentCron()
-    startPaddleWebhookRetryWorker()
     startAnalyticsCron()
     startChunkUploadCleanupCron()
 

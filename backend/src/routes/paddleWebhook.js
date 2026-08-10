@@ -30,11 +30,11 @@ import {
 } from '../services/recoveryBillingAdjustment.js'
 import { markCheckoutReservationCompleted } from '../services/paddleCheckoutReservations.js'
 import { applyPaddleSubscriptionLifecycle } from '../services/paddleSubscriptionLifecycle.js'
+import { isDurableWebhookInboxEnabled } from '../services/paddleBillingReadiness.js'
 
 const router = express.Router()
 const WEBHOOK_PROCESSING_LEASE_SECONDS = 120
 const WEBHOOK_HEARTBEAT_INTERVAL_MS = 40_000
-const DURABLE_WEBHOOK_INBOX_FLAG = 'PADDLE_DURABLE_WEBHOOK_INBOX_ENABLED'
 export const PADDLE_WEBHOOK_SCHEDULER_MAX_ATTEMPTS = 6
 const RETRY_DELAYS_MS = [60_000, 5 * 60_000, 15 * 60_000, 60 * 60_000]
 
@@ -43,9 +43,7 @@ export function getPaddleWebhookRetryDelayMs(attemptNumber) {
   return RETRY_DELAYS_MS[index]
 }
 
-export function isDurableWebhookInboxEnabled(environment = process.env) {
-  return String(environment?.[DURABLE_WEBHOOK_INBOX_FLAG] || '').trim().toLowerCase() === 'true'
-}
+export { isDurableWebhookInboxEnabled }
 
 async function paddleApiRequest(path, options = {}, paddle) {
   const response = await fetch(`${paddle.apiBaseUrl}${path}`, {

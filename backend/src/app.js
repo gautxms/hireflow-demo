@@ -41,6 +41,7 @@ import { generalApiLimiterAuth, generalApiLimiterUnauth } from './middleware/rat
 import { AI_MODEL_CONFIG, isValidModelFormat } from './config/aiModels.js'
 import { pool } from './db/client.js'
 import { verifyYearsExperienceDecimalSchema, verifyShortlistBatchAddSchema } from './db/schemaPrerequisites.js'
+import { checkPaddleBillingReadiness } from './services/paddleBillingReadiness.js'
 
 const app = express()
 
@@ -104,6 +105,7 @@ app.use(cookieParser())
 app.get('/health', async (_req, res) => {
   const aiModelWarnings = []
   const schemaWarnings = []
+  let billingReadiness = null
   const defaultModel = String(AI_MODEL_CONFIG.defaultModel || '').trim()
 
   if (!defaultModel || !isValidModelFormat(defaultModel)) {
@@ -160,7 +162,14 @@ app.get('/health', async (_req, res) => {
     })
   }
 
-  res.json({ status: 'ok', warnings: [...aiModelWarnings, ...schemaWarnings] })
+  billingReadiness = await checkPaddleBillingReadiness({ db: pool })
+  const statusCode = billingReadiness.ready ? 200 : 503
+  res.status(statusCode).json({
+    status: billingReadiness.ready ? 'ok' : 'not_ready',
+    alive: true,
+    billing: billingReadiness,
+    warnings: [...aiModelWarnings, ...schemaWarnings],
+  })
 })
 
 app.use('/api', generalApiLimiterUnauth)

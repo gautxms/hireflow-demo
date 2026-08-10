@@ -1,15 +1,17 @@
 # Paddle durable webhook retry worker
 
 The Railway backend runs a bounded in-process recovery pass every minute. It is
-disabled by default and is independent of the live durable webhook feature.
+mandatory whenever Paddle billing is configured and complements live durable
+webhook ingestion.
 
 ## Configuration
 
-- `PADDLE_WEBHOOK_RETRY_WORKER_ENABLED=true` enables scheduled recovery.
+- `PADDLE_WEBHOOK_RETRY_WORKER_ENABLED=true` is required for Paddle-enabled
+  runtimes.
 - `PADDLE_WEBHOOK_RETRY_BATCH_SIZE` optionally sets the sequential batch size;
   the default is 20 and values are capped at 100.
-- Keep `PADDLE_DURABLE_WEBHOOK_INBOX_ENABLED=true`. That flag continues to
-  control live ingestion and must not be used as the retry-worker kill switch.
+- Keep `PADDLE_DURABLE_WEBHOOK_INBOX_ENABLED=true`. Startup fails if either
+  mandatory capability is disabled while Paddle billing is configured.
 
 No Vercel cron or public HTTP endpoint is used. Railway starts one timer in each
 backend replica. Concurrent replicas are safe because candidate discovery does
@@ -44,15 +46,16 @@ completion fence as live delivery.
 
 ## Rollout and rollback
 
-1. Deploy migration 051 and the application with the worker flag absent/false.
-2. Confirm live webhook processing remains healthy.
-3. Set `PADDLE_WEBHOOK_RETRY_WORKER_ENABLED=true` on the Railway backend and
-   restart it. Optionally set a conservative batch size.
-4. Observe sanitized `[Paddle webhook retry]` run summaries.
+1. Apply migrations 050 through 052 through the existing migration runner.
+2. Set both mandatory durable webhook flags to `true` on the Railway backend.
+3. Restart and confirm the initial worker inbox probe succeeds before the
+   listener opens.
+4. Confirm `/health` reports `billing.ready: true` and observe sanitized
+   `[Paddle webhook retry]` run summaries.
 
-To roll back, set only `PADDLE_WEBHOOK_RETRY_WORKER_ENABLED=false` and restart.
-Do not disable the durable inbox and do not revert PR #1208. Due rows remain
-stored and live Paddle deliveries continue normally. Migration 051 is additive
-and can remain deployed; when the worker is re-enabled, due rows resume from
-their persisted scheduling and attempt metadata. PR 3C provider reconciliation
-for events absent from the inbox is intentionally not part of this worker.
+Do not roll back by disabling the worker while Paddle remains configured; the
+backend will refuse to report billing-ready status. Restore the last known-good
+durable-capable release and keep due rows intact. Migrations 050 through 052 are
+additive and remain deployed. Provider reconciliation for events absent from
+the inbox remains outside this worker and belongs to the later reconciliation
+PR.

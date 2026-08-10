@@ -104,26 +104,55 @@ export async function runPaddleWebhookRetryWorker(dependencies = {}) {
   return summary
 }
 
-export function startPaddleWebhookRetryWorker(env = process.env) {
+export async function startPaddleWebhookRetryWorker(env = process.env, dependencies = {}) {
   if (!isPaddleWebhookRetryWorkerEnabled(env)) {
     console.info('[Paddle webhook retry] worker disabled')
     return null
   }
+  const db = dependencies.db || pool
+  const processEvent = dependencies.processEvent || processStoredPaddleWebhookEvent
+  const schedule = dependencies.setInterval || setInterval
+  const onStateChange = dependencies.onStateChange || (() => {})
   let running = false
   const run = async () => {
     if (running) return
     running = true
     try {
-      await runPaddleWebhookRetryWorker({ env })
+      const summary = await runPaddleWebhookRetryWorker({ env, db, processEvent })
+      onStateChange({ ready: true, status: 'running', errorCode: null })
+      return summary
     } catch (error) {
+      onStateChange({
+        ready: false,
+        status: 'failed',
+        errorCode: error?.code || error?.name || 'UNKNOWN_ERROR',
+      })
       console.error('[Paddle webhook retry] run failed', { errorCode: error?.code || error?.name || 'UNKNOWN_ERROR' })
     } finally {
       running = false
     }
   }
-  const timer = setInterval(run, PADDLE_WEBHOOK_RETRY_INTERVAL_MS)
+
+  // Prove the worker can reach its durable source before the backend accepts
+  // billing traffic. Do not process a potentially slow provider-backed batch
+  // on the startup critical path; the scheduled worker owns that work.
+  try {
+    await db.query('SELECT event_id FROM paddle_webhook_events LIMIT 1')
+    onStateChange({ ready: true, status: 'running', errorCode: null })
+  } catch (error) {
+    onStateChange({
+      ready: false,
+      status: 'failed',
+      errorCode: error?.code || error?.name || 'UNKNOWN_ERROR',
+    })
+    console.error('[Paddle webhook retry] startup probe failed', {
+      errorCode: error?.code || error?.name || 'UNKNOWN_ERROR',
+    })
+    throw error
+  }
+
+  const timer = schedule(() => void run(), PADDLE_WEBHOOK_RETRY_INTERVAL_MS)
   timer.unref?.()
-  void run()
   console.info('[Paddle webhook retry] worker scheduled', { intervalMs: PADDLE_WEBHOOK_RETRY_INTERVAL_MS })
   return timer
 }
