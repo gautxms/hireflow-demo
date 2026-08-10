@@ -19,6 +19,19 @@ process.env.PADDLE_SANDBOX_MONTHLY_LEGACY_PRICE_IDS = 'pri_legacy_monthly'
 process.env.PADDLE_SANDBOX_ANNUAL_LEGACY_PRICE_IDS = 'pri_legacy_annual'
 process.env.PADDLE_DURABLE_WEBHOOK_INBOX_ENABLED = 'true'
 
+test.beforeEach((t) => {
+  t.mock.method(pool, 'connect', async () => ({
+    async query(sql, params) {
+      const statement = String(sql).trim().toUpperCase()
+      if (statement === 'BEGIN' || statement === 'COMMIT' || statement === 'ROLLBACK') {
+        return { rowCount: 0, rows: [] }
+      }
+      return pool.query(sql, params)
+    },
+    release() {},
+  }))
+})
+
 test('durable inbox flag parser exposes missing or false configuration to the startup readiness gate', async (t) => {
   const originalValue = process.env.PADDLE_DURABLE_WEBHOOK_INBOX_ENABLED
   const { isDurableWebhookInboxEnabled } = await import('./paddleWebhook.js')
@@ -169,7 +182,22 @@ async function buildApp() {
   return app
 }
 
-async function postWebhook({ body, signature, path = '' }) {
+async function processStoredEvent(body, environment = process.env.PADDLE_ENVIRONMENT) {
+  const storedPayload = JSON.parse(body)
+  const payloadHash = crypto.createHash('sha256').update(body || '', 'utf8').digest('hex')
+  const eventId = storedPayload.event_id || storedPayload.eventId || storedPayload.notification_id || `hash:${payloadHash}`
+  const { processStoredPaddleWebhookEvent } = await import('./paddleWebhook.js')
+  return processStoredPaddleWebhookEvent({
+    event_id: String(eventId),
+    event_type: storedPayload.event_type || storedPayload.eventType || storedPayload.alert_name || null,
+    payload_hash: payloadHash,
+    payload: storedPayload,
+    paddle_environment: environment,
+    verified_at: new Date().toISOString(),
+  })
+}
+
+async function postWebhook({ body, signature, path = '', processPersistedEvent = true }) {
   const app = await buildApp()
   const server = app.listen(0)
   const port = server.address().port
@@ -187,7 +215,16 @@ async function postWebhook({ body, signature, path = '' }) {
     })
 
     const payload = await response.json()
-    return { response, payload }
+    let processing = null
+    if (processPersistedEvent && response.status === 200 && !payload?.duplicate) {
+      const environment = path === '/production'
+        ? 'production'
+        : path === '/sandbox'
+          ? 'sandbox'
+          : process.env.PADDLE_ENVIRONMENT
+      processing = await processStoredEvent(body, environment)
+    }
+    return { response, payload, processing }
   } finally {
     server.close()
   }
@@ -468,10 +505,148 @@ test('POST /api/paddle/webhook processes valid signatures and audits only after 
   assert.equal(response.status, 200)
   assert.deepEqual(payload, { received: true })
   assert.equal(queryMock.mock.callCount() > 0, true)
-  assert.match(queries[0], /INSERT INTO paddle_webhook_audit/)
+  assert.equal(queries.some((sql) => /INSERT INTO paddle_webhook_audit/.test(sql)), true)
   assert.equal(queries.some((sql) => /INSERT INTO subscriptions/.test(sql)), true)
   assert.equal(queries.some((sql) => /UPDATE users/.test(sql)), true)
   assert.equal(queries.some((sql) => /INSERT INTO paddle_webhook_events/.test(sql)), true)
+})
+
+test('POST /api/paddle/webhook acknowledges committed persistence under five seconds while slow processing stays in the worker', async (t) => {
+  const event = buildSubscriptionUpdatedPayload({ event_id: 'evt_fast_ack_slow_worker' })
+  const rawBody = JSON.stringify(event)
+  const payloadHash = crypto.createHash('sha256').update(rawBody, 'utf8').digest('hex')
+  let inbox = null
+  let businessStarted = false
+
+  t.mock.method(pool, 'query', async (sql, params) => {
+    const query = String(sql)
+    if (query.includes('FROM paddle_webhook_events')) {
+      return inbox ? { rowCount: 1, rows: [{ ...inbox }] } : { rowCount: 0, rows: [] }
+    }
+    if (/INSERT INTO paddle_webhook_events/.test(query)) {
+      inbox = {
+        event_id: event.event_id,
+        event_type: event.event_type,
+        payload_hash: payloadHash,
+        payload: event,
+        paddle_environment: 'sandbox',
+        status: 'processing',
+        attempt_count: 0,
+        scheduler_attempt_count: 0,
+        last_attempt_at: null,
+        verified_at: new Date().toISOString(),
+      }
+      return { rowCount: 1, rows: [{ event_id: event.event_id }] }
+    }
+    if (/UPDATE paddle_webhook_events[\s\S]+attempt_count = GREATEST/.test(query)) {
+      inbox = {
+        ...inbox,
+        status: 'processing',
+        attempt_count: inbox.attempt_count + 1,
+        scheduler_attempt_count: inbox.scheduler_attempt_count + 1,
+        processing_token: params[4],
+        last_attempt_at: new Date().toISOString(),
+      }
+      return {
+        rowCount: 1,
+        rows: [{
+          event_id: inbox.event_id,
+          attempt_count: inbox.attempt_count,
+          scheduler_attempt_count: inbox.scheduler_attempt_count,
+        }],
+      }
+    }
+    if (query.includes('FROM users')) {
+      businessStarted = true
+      await delay(5_100)
+      return {
+        rowCount: 1,
+        rows: [{
+          id: 42,
+          paddle_customer_id: 'ctm_test_123',
+          paddle_subscription_id: 'sub_test_123',
+          subscription_status: 'active',
+          paddle_environment: 'sandbox',
+        }],
+      }
+    }
+    if (/UPDATE paddle_webhook_events[\s\S]+SET status = 'completed'/.test(query)) {
+      inbox = { ...inbox, status: 'completed' }
+      return { rowCount: 1, rows: [] }
+    }
+    return { rowCount: 1, rows: [{ applied: 1 }] }
+  })
+
+  const startedAt = Date.now()
+  const receipt = await postWebhook({
+    body: rawBody,
+    signature: signBody(rawBody),
+    processPersistedEvent: false,
+  })
+  const acknowledgementMs = Date.now() - startedAt
+
+  assert.equal(receipt.response.status, 200)
+  assert.ok(acknowledgementMs < 5_000, `acknowledgement took ${acknowledgementMs}ms`)
+  assert.equal(inbox.status, 'processing')
+  assert.equal(inbox.attempt_count, 0)
+  assert.equal(businessStarted, false)
+
+  const workerResult = await processStoredEvent(rawBody, 'sandbox')
+  assert.equal(workerResult.outcome, 'completed')
+  assert.equal(businessStarted, true)
+  assert.equal(inbox.status, 'completed')
+})
+
+test('POST /api/paddle/webhook returns retryable failure when durable persistence does not commit', async (t) => {
+  const event = buildSubscriptionUpdatedPayload({ event_id: 'evt_persistence_failure' })
+  const rawBody = JSON.stringify(event)
+  let businessQueries = 0
+
+  t.mock.method(pool, 'query', async (sql) => {
+    const query = String(sql)
+    if (query.includes('FROM paddle_webhook_events')) return { rowCount: 0, rows: [] }
+    if (/INSERT INTO paddle_webhook_events/.test(query)) {
+      throw Object.assign(new Error('database unavailable'), { code: 'ECONNRESET' })
+    }
+    if (/FROM users|UPDATE users|INSERT INTO subscriptions/.test(query)) businessQueries += 1
+    return { rowCount: 0, rows: [] }
+  })
+
+  const result = await postWebhook({
+    body: rawBody,
+    signature: signBody(rawBody),
+    processPersistedEvent: false,
+  })
+
+  assert.equal(result.response.status, 500)
+  assert.equal(result.payload.error, 'Webhook persistence failed')
+  assert.equal(businessQueries, 0)
+})
+
+test('POST /api/paddle/webhook rejects missing event type and explicit environment mismatch before persistence', async (t) => {
+  const queryMock = t.mock.method(pool, 'query', async () => {
+    throw new Error('rejected events must not be persisted')
+  })
+
+  const missingType = { event_id: 'evt_missing_type', data: {} }
+  const missingTypeBody = JSON.stringify(missingType)
+  const missingTypeResult = await postWebhook({
+    body: missingTypeBody,
+    signature: signBody(missingTypeBody),
+    processPersistedEvent: false,
+  })
+  assert.equal(missingTypeResult.response.status, 400)
+
+  const mismatched = buildSubscriptionUpdatedPayload({ event_id: 'evt_wrong_environment' })
+  mismatched.data.custom_data.paddleEnvironment = 'production'
+  const mismatchedBody = JSON.stringify(mismatched)
+  const mismatchResult = await postWebhook({
+    body: mismatchedBody,
+    signature: signBody(mismatchedBody),
+    processPersistedEvent: false,
+  })
+  assert.equal(mismatchResult.response.status, 400)
+  assert.equal(queryMock.mock.callCount(), 0)
 })
 
 test('POST /api/paddle/webhook rejects a provider identity already owned by another account', async (t) => {
@@ -501,9 +676,10 @@ test('POST /api/paddle/webhook rejects a provider identity already owned by anot
     return { rowCount: 1, rows: [] }
   })
 
-  const { response } = await postWebhook({ body: rawBody, signature: signBody(rawBody) })
+  const { response, processing } = await postWebhook({ body: rawBody, signature: signBody(rawBody) })
 
-  assert.equal(response.status, 500)
+  assert.equal(response.status, 200)
+  assert.equal(processing.outcome, 'failed')
   assert.equal(queries.some((query) => /UPDATE users/.test(query)), false)
   assert.equal(queries.some((query) => /INSERT INTO subscriptions/.test(query)), false)
   assert.equal(
@@ -540,9 +716,10 @@ test('POST /api/paddle/webhook rejects projection ownership conflicts before mut
     return { rowCount: 1, rows: [] }
   })
 
-  const { response } = await postWebhook({ body: rawBody, signature: signBody(rawBody) })
+  const { response, processing } = await postWebhook({ body: rawBody, signature: signBody(rawBody) })
 
-  assert.equal(response.status, 500)
+  assert.equal(response.status, 200)
+  assert.equal(processing.outcome, 'failed')
   assert.equal(queries.some((query) => /UPDATE users/.test(query)), false)
   assert.equal(queries.some((query) => /INSERT INTO subscriptions/.test(query)), false)
   assert.equal(
@@ -643,9 +820,14 @@ test('flag-disabled compatibility and durable-enabled processing cannot both mut
         event_id: payload.event_id,
         payload_hash: payloadHash,
         status: 'processing',
-        attempt_count: 1,
+        attempt_count: 0,
+        last_attempt_at: null,
       }
       return { rowCount: 1, rows: [{ event_id: payload.event_id }] }
+    }
+    if (/UPDATE paddle_webhook_events[\s\S]+attempt_count = GREATEST/.test(query)) {
+      inbox = { ...inbox, attempt_count: inbox.attempt_count + 1, last_attempt_at: new Date().toISOString() }
+      return { rowCount: 1, rows: [{ event_id: payload.event_id, attempt_count: inbox.attempt_count }] }
     }
     if (/UPDATE paddle_webhook_events[\s\S]+SET status = 'completed'/.test(query)) {
       inbox = { ...inbox, status: 'completed' }
@@ -718,7 +900,7 @@ for (const status of ['processing', 'retryable_failed']) {
   })
 }
 
-test('disabled durable rollout still acknowledges completed duplicates without replaying work', async (t) => {
+test('disabled durable rollout rejects even completed duplicates because billing readiness is mandatory', async (t) => {
   const originalValue = process.env.PADDLE_DURABLE_WEBHOOK_INBOX_ENABLED
   process.env.PADDLE_DURABLE_WEBHOOK_INBOX_ENABLED = 'false'
   t.after(() => {
@@ -754,8 +936,8 @@ test('disabled durable rollout still acknowledges completed duplicates without r
     signature: signBody(rawBody),
   })
 
-  assert.equal(response.status, 200)
-  assert.equal(responsePayload.duplicate, true)
+  assert.equal(response.status, 503)
+  assert.equal(responsePayload.retryable, true)
   assert.equal(calls.some((sql) => /FROM users|UPDATE users|INSERT INTO subscriptions/.test(sql)), false)
 })
 
@@ -794,7 +976,7 @@ test('POST /api/paddle/webhook acknowledges a completed inbox event without repl
   assert.equal(calls.some((sql) => /FROM users|UPDATE users|INSERT INTO subscriptions/.test(sql)), false)
 })
 
-test('POST /api/paddle/webhook asks Paddle to retry while another delivery holds the processing lease', async (t) => {
+test('POST /api/paddle/webhook stably acknowledges a duplicate while the durable worker owns processing', async (t) => {
   const payload = buildSubscriptionUpdatedPayload({
     event_id: 'evt_processing_inbox_duplicate',
   })
@@ -828,13 +1010,13 @@ test('POST /api/paddle/webhook asks Paddle to retry while another delivery holds
     signature: signBody(rawBody),
   })
 
-  assert.equal(response.status, 503)
-  assert.equal(response.headers.get('retry-after'), '120')
-  assert.equal(responsePayload.retryable, true)
+  assert.equal(response.status, 200)
+  assert.equal(response.headers.has('retry-after'), false)
+  assert.equal(responsePayload.duplicate, true)
   assert.equal(calls.some((sql) => /FROM users|UPDATE users|INSERT INTO subscriptions/.test(sql)), false)
   assert.equal(
     calls.some((sql) => /last_attempt_at <= NOW\(\) - \(\$6::integer \* INTERVAL '1 second'\)/.test(sql)),
-    true,
+    false,
   )
 })
 
@@ -882,15 +1064,15 @@ test('POST /api/paddle/webhook safely reclaims an expired abandoned processing l
     return { rowCount: 1, rows: [] }
   })
 
-  const result = await postWebhook({ body: rawBody, signature: signBody(rawBody) })
-  assert.equal(result.response.status, 200)
+  const result = await processStoredEvent(rawBody, 'sandbox')
+  assert.equal(result.outcome, 'completed')
   assert.equal(attemptCount, 5)
   assert.equal(status, 'completed')
   assert.equal(mutations, 1)
   assert.notEqual(processingToken, 'abandoned-token')
 })
 
-test('simultaneous retryable deliveries atomically elect one worker and the loser returns retryable', async (t) => {
+test('simultaneous durable workers atomically elect one processor for a retryable event', async (t) => {
   const payload = buildSubscriptionUpdatedPayload({ event_id: 'evt_retryable_concurrent_claim' })
   const rawBody = JSON.stringify(payload)
   const payloadHash = crypto.createHash('sha256').update(rawBody, 'utf8').digest('hex')
@@ -947,12 +1129,10 @@ test('simultaneous retryable deliveries atomically elect one worker and the lose
   })
 
   const [first, second] = await Promise.all([
-    postWebhook({ body: rawBody, signature: signBody(rawBody) }),
-    postWebhook({ body: rawBody, signature: signBody(rawBody) }),
+    processStoredEvent(rawBody, 'sandbox'),
+    processStoredEvent(rawBody, 'sandbox'),
   ])
-  const statuses = [first.response.status, second.response.status].sort()
-  assert.deepEqual(statuses, [200, 503])
-  assert.equal([first.payload, second.payload].some((body) => body.retryable === true), true)
+  assert.deepEqual([first.outcome, second.outcome].sort(), ['completed', 'ownership_lost'])
   assert.equal(mutationCount, 1)
   assert.equal(inbox.status, 'completed')
   assert.equal(inbox.attempt_count, 2)
@@ -1070,7 +1250,8 @@ test('POST /api/paddle/webhook reclaims retryable failures and suppresses later 
         event_id: payload.event_id,
         payload_hash: payloadHash,
         status: 'processing',
-        attempt_count: 1,
+        attempt_count: 0,
+        last_attempt_at: null,
       }
       return { rowCount: 1, rows: [{ event_id: payload.event_id }] }
     }
@@ -1108,14 +1289,15 @@ test('POST /api/paddle/webhook reclaims retryable failures and suppresses later 
   })
 
   const first = await postWebhook({ body: rawBody, signature: signBody(rawBody) })
-  assert.equal(first.response.status, 500)
+  assert.equal(first.response.status, 200)
+  assert.equal(first.processing.outcome, 'failed')
   assert.equal(inbox.status, 'retryable_failed')
   assert.equal(inbox.attempt_count, 1)
   assert.deepEqual(failedClaimAttempts, [1])
 
   allowReplacement = true
-  const retry = await postWebhook({ body: rawBody, signature: signBody(rawBody) })
-  assert.equal(retry.response.status, 200)
+  const retry = await processStoredEvent(rawBody, 'sandbox')
+  assert.equal(retry.outcome, 'completed')
   assert.equal(inbox.status, 'completed')
   assert.equal(inbox.attempt_count, 2)
   assert.deepEqual(completedClaimAttempts, [2])
@@ -1155,7 +1337,7 @@ test('POST /api/paddle/webhook keeps activation notification failures retryable 
       return inbox ? { rowCount: 1, rows: [{ ...inbox }] } : { rowCount: 0, rows: [] }
     }
     if (/INSERT INTO paddle_webhook_events/.test(query)) {
-      inbox = { event_id: payload.event_id, payload_hash: payloadHash, status: 'processing', attempt_count: 1 }
+      inbox = { event_id: payload.event_id, payload_hash: payloadHash, status: 'processing', attempt_count: 0, last_attempt_at: null }
       return { rowCount: 1, rows: [{ event_id: payload.event_id }] }
     }
     if (/UPDATE paddle_webhook_events[\s\S]+SET status = 'retryable_failed'/.test(query)) {
@@ -1196,13 +1378,14 @@ test('POST /api/paddle/webhook keeps activation notification failures retryable 
   })
 
   const first = await postWebhook({ body: rawBody, signature: signBody(rawBody) })
-  assert.equal(first.response.status, 500)
+  assert.equal(first.response.status, 200)
+  assert.equal(first.processing.outcome, 'failed')
   assert.equal(inbox.status, 'retryable_failed')
   assert.equal(notificationSelections, 1)
 
   failNotificationSelection = false
-  const retry = await postWebhook({ body: rawBody, signature: signBody(rawBody) })
-  assert.equal(retry.response.status, 200)
+  const retry = await processStoredEvent(rawBody, 'sandbox')
+  assert.equal(retry.outcome, 'completed')
   assert.equal(inbox.status, 'completed')
   assert.equal(inbox.attempt_count, 2)
   assert.equal(notificationSelections, 2)
@@ -1249,7 +1432,7 @@ test('POST /api/paddle/webhook remains retryable when an activation delivery can
       return inbox ? { rowCount: 1, rows: [{ ...inbox }] } : { rowCount: 0, rows: [] }
     }
     if (/INSERT INTO paddle_webhook_events/.test(query)) {
-      inbox = { event_id: payload.event_id, payload_hash: payloadHash, status: 'processing', attempt_count: 1 }
+      inbox = { event_id: payload.event_id, payload_hash: payloadHash, status: 'processing', attempt_count: 0, last_attempt_at: null }
       return { rowCount: 1, rows: [{ event_id: payload.event_id }] }
     }
     if (/UPDATE paddle_webhook_events[\s\S]+SET status = 'retryable_failed'/.test(query)) {
@@ -1304,7 +1487,8 @@ test('POST /api/paddle/webhook remains retryable when an activation delivery can
   })
 
   const first = await postWebhook({ body: rawBody, signature: signBody(rawBody) })
-  assert.equal(first.response.status, 500)
+  assert.equal(first.response.status, 200)
+  assert.equal(first.processing.outcome, 'failed')
   assert.equal(inbox.status, 'retryable_failed')
   assert.ok(deliveryAttempts >= 1)
   assert.ok(deliveryLogAttempts >= 1)
@@ -1312,8 +1496,8 @@ test('POST /api/paddle/webhook remains retryable when an activation delivery can
   const deliveryAttemptsAfterFirstRequest = deliveryAttempts
   const deliveryLogAttemptsAfterFirstRequest = deliveryLogAttempts
   failDeliveryLogInsert = false
-  const retry = await postWebhook({ body: rawBody, signature: signBody(rawBody) })
-  assert.equal(retry.response.status, 200)
+  const retry = await processStoredEvent(rawBody, 'sandbox')
+  assert.equal(retry.outcome, 'completed')
   assert.equal(inbox.status, 'completed')
   assert.equal(inbox.attempt_count, 2)
   assert.ok(deliveryAttempts > deliveryAttemptsAfterFirstRequest)
@@ -1871,7 +2055,7 @@ test('POST /api/paddle/webhook rejects invalid JSON with valid signature before 
 })
 
 
-test('POST /api/paddle/webhook returns 200 and logs when failed-payment attempt tracking fails', async (t) => {
+test('failed-payment bookkeeping failure leaves the acknowledged event retryable instead of swallowing it', async (t) => {
   const payload = {
     event_id: 'evt_payment_failed_tracking_error',
     event_type: 'transaction.payment_failed',
@@ -1911,17 +2095,19 @@ test('POST /api/paddle/webhook returns 200 and logs when failed-payment attempt 
     return { rowCount: 1, rows: [] }
   })
 
-  const { response, payload: responsePayload } = await postWebhook({
+  const { response, payload: responsePayload, processing } = await postWebhook({
     body: rawBody,
     signature: signBody(rawBody),
   })
 
   assert.equal(response.status, 200)
   assert.deepEqual(responsePayload, { received: true })
+  assert.equal(processing.outcome, 'failed')
   assert.equal(calls.some(({ sql }) => /UPDATE users/.test(sql)), true)
   assert.equal(calls.some(({ sql }) => /INSERT INTO paddle_webhook_events/.test(sql)), true)
-  assert.equal(calls.some(({ sql, params }) => /log_errors|error_logs|INSERT INTO/.test(sql) && params?.includes?.('payment.failure.record_failed')), true)
-  assert.equal(errors.some(([message]) => String(message).includes('payment.failure.record_failed')), true)
+  assert.equal(calls.some(({ sql }) => /status = 'retryable_failed'/.test(sql)), true)
+  assert.equal(calls.some(({ sql }) => /status = 'completed'/.test(sql)), false)
+  assert.equal(errors.some(([message]) => String(message).includes('failed to update subscription state')), true)
 })
 
 test('POST /api/paddle/webhook skips stale unrelated failed-payment status for active subscription', async (t) => {
@@ -2333,7 +2519,8 @@ test('POST /api/paddle/webhook retries an identified upgrade when cancellation r
 
   const firstAttempt = await postWebhook({ body: rawBody, signature: signBody(rawBody) })
 
-  assert.equal(firstAttempt.response.status, 500)
+  assert.equal(firstAttempt.response.status, 200)
+  assert.equal(firstAttempt.processing.outcome, 'failed')
   assert.equal(calls.some(({ sql }) => /INSERT INTO paddle_webhook_events/.test(sql)), true)
   assert.equal(
     calls.some(({ sql }) => /UPDATE paddle_webhook_events[\s\S]+status = 'retryable_failed'/.test(sql)),
@@ -2898,10 +3085,11 @@ test('POST /api/paddle/webhook returns retryable failure if a completed returnin
     return { rowCount: 1, rows: [] }
   })
 
-  const { response, payload: responsePayload } = await postWebhook({ body: rawBody, signature: signBody(rawBody) })
+  const { response, payload: responsePayload, processing } = await postWebhook({ body: rawBody, signature: signBody(rawBody) })
 
-  assert.equal(response.status, 500)
-  assert.equal(responsePayload.error, 'Webhook processing failed')
+  assert.equal(response.status, 200)
+  assert.deepEqual(responsePayload, { received: true })
+  assert.equal(processing.outcome, 'failed')
 })
 
 test('POST /api/paddle/webhook prevents an old cancellation event from cancelling a newer active subscription', async (t) => {
