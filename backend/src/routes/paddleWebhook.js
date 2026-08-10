@@ -1266,11 +1266,11 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment, storedEv
           const failedUpdateResult = await db.query(
             `UPDATE users
              SET subscription_status = $2,
-                 paddle_subscription_id = COALESCE($3, paddle_subscription_id),
-                 paddle_customer_id = COALESCE($4, paddle_customer_id),
-                 subscription_plan = COALESCE($5, subscription_plan),
-                 current_period_end = COALESCE($6, current_period_end),
-                 next_billing_date = COALESCE($7, next_billing_date),
+                 paddle_subscription_id = COALESCE($3::text, paddle_subscription_id),
+                 paddle_customer_id = COALESCE($4::text, paddle_customer_id),
+                 subscription_plan = COALESCE($5::text, subscription_plan),
+                 current_period_end = COALESCE($6::timestamp, current_period_end),
+                 next_billing_date = COALESCE($7::timestamp, next_billing_date),
                  paddle_environment = $8,
                  last_paddle_event_at = CASE
                    WHEN $9::timestamptz IS NULL THEN last_paddle_event_at
@@ -1279,10 +1279,10 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment, storedEv
                  updated_at = NOW()
              WHERE id = $1
                AND (
-                 (paddle_subscription_id IS NULL AND $3 IS NULL)
-                 OR paddle_subscription_id = $3
+                 (paddle_subscription_id IS NULL AND $3::text IS NULL)
+                 OR paddle_subscription_id = $3::text
                )
-               AND ($4 IS NULL OR paddle_customer_id IS NULL OR paddle_customer_id = $4)
+               AND ($4::text IS NULL OR paddle_customer_id IS NULL OR paddle_customer_id = $4::text)
                AND COALESCE(NULLIF(LOWER(paddle_environment), ''), $8) = $8
                AND (
                  last_paddle_event_at IS NULL
