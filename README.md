@@ -132,7 +132,7 @@ CI is expected to run blocking lint and build checks before launch changes are m
 - Public marketing/legal routes are prerendered during `npm run build` for SEO.
 - Vercel rewrites route authenticated SPA paths to `index.html`; public prerendered routes remain crawlable.
 - The Express backend requires PostgreSQL, Redis, secrets, AI provider configuration, email configuration, and billing configuration for production use.
-- Configure Paddle webhooks and verify CORS/origin settings before accepting paid users.
+- Configure Paddle webhooks, enable the mandatory durable inbox and retry worker, confirm `/health` reports `billing.ready: true`, and verify CORS/origin settings before accepting paid users.
 - See `README_DEPLOYMENT.md` for deployment-specific notes.
 
 ## Security/privacy notes

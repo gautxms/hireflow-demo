@@ -57,6 +57,7 @@ Resume uploads support PDF, DOC, DOCX, and TXT files. Standard uploads are limit
 - [ ] Verify frontend rewrites keep authenticated SPA routes working.
 - [ ] Verify public prerendered pages load directly by URL.
 - [ ] Verify backend health checks, database connectivity, Redis connectivity, and queue worker startup.
+- [ ] If Paddle is configured, confirm migrations 050-052 are applied, both durable webhook flags are `true`, and `/health` reports `billing.ready: true` before enabling billing traffic.
 - [ ] Verify AI provider credentials/model settings in the target environment.
 - [ ] Verify Paddle checkout, webhook receipt, subscription updates, payment method updates, and invoice access in the target Paddle environment.
 - [ ] For production sandbox testing, follow `docs/PADDLE_SANDBOX_PRODUCTION_TESTING.md`; never change the production deployment default to sandbox.

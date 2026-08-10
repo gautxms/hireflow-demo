@@ -16,6 +16,8 @@ PADDLE_SANDBOX_MONTHLY_PRICE_ID=<sandbox monthly price ID>
 PADDLE_SANDBOX_ANNUAL_PRICE_ID=<sandbox annual price ID>
 PADDLE_SANDBOX_MONTHLY_NO_TRIAL_PRICE_ID=<sandbox monthly price with no trial>
 PADDLE_SANDBOX_ANNUAL_NO_TRIAL_PRICE_ID=<sandbox annual price with no trial>
+PADDLE_DURABLE_WEBHOOK_INBOX_ENABLED=true
+PADDLE_WEBHOOK_RETRY_WORKER_ENABLED=true
 ```
 
 The normal monthly and annual prices may include the one-time introductory trial. The `NO_TRIAL` prices must use the same recurring amounts without a trial period; HireFlow uses them for any account with previous subscription history.
@@ -49,6 +51,10 @@ PADDLE_SANDBOX_WEBHOOK_SECRET=<sandbox endpoint secret>
 ```
 
 Redeploy the backend after saving the secret. A sandbox signature is accepted only on the sandbox endpoint; production signatures and users are isolated.
+Before checkout testing, confirm `GET /health` returns HTTP 200 with
+`billing.ready: true`. A Paddle-enabled backend now refuses startup or reports
+not ready when the durable inbox schema, mandatory flags, environment-specific
+secret, or in-process retry worker is unavailable.
 
 ## 4. Select a dedicated demo user
 

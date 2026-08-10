@@ -19,7 +19,7 @@ process.env.PADDLE_SANDBOX_MONTHLY_LEGACY_PRICE_IDS = 'pri_legacy_monthly'
 process.env.PADDLE_SANDBOX_ANNUAL_LEGACY_PRICE_IDS = 'pri_legacy_annual'
 process.env.PADDLE_DURABLE_WEBHOOK_INBOX_ENABLED = 'true'
 
-test('durable webhook inbox rollout defaults off and requires an explicit true value', async (t) => {
+test('durable inbox flag parser exposes missing or false configuration to the startup readiness gate', async (t) => {
   const originalValue = process.env.PADDLE_DURABLE_WEBHOOK_INBOX_ENABLED
   const { isDurableWebhookInboxEnabled } = await import('./paddleWebhook.js')
   t.after(() => {

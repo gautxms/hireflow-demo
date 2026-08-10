@@ -4,6 +4,7 @@ import {
   DEFAULT_PADDLE_WEBHOOK_RETRY_BATCH_SIZE,
   isPaddleWebhookRetryWorkerEnabled,
   runPaddleWebhookRetryWorker,
+  startPaddleWebhookRetryWorker,
 } from './paddleWebhookRetryWorker.js'
 import {
   PADDLE_WEBHOOK_SCHEDULER_MAX_ATTEMPTS,
@@ -87,6 +88,57 @@ test('disabled worker performs no database reads', async () => {
   const db = { async query() { assert.fail('database should not be queried') } }
   const summary = await runPaddleWebhookRetryWorker({ db, env: {} })
   assert.equal(summary.scanned, 0)
+})
+
+test('worker startup proves durable-inbox access before scheduling', async () => {
+  let queryCount = 0
+  let scheduled = false
+  const states = []
+  const timer = { unref() {} }
+  const returnedTimer = await startPaddleWebhookRetryWorker(enabled, {
+    db: {
+      async query() {
+        queryCount += 1
+        return { rowCount: 0, rows: [] }
+      },
+    },
+    setInterval() {
+      scheduled = true
+      return timer
+    },
+    onStateChange(state) {
+      states.push(state)
+    },
+  })
+
+  assert.equal(queryCount, 1)
+  assert.equal(scheduled, true)
+  assert.equal(returnedTimer, timer)
+  assert.deepEqual(states, [{ ready: true, status: 'running', errorCode: null }])
+})
+
+test('worker initialization failure is surfaced and no timer is scheduled', async () => {
+  let scheduled = false
+  const states = []
+  await assert.rejects(
+    startPaddleWebhookRetryWorker(enabled, {
+      db: {
+        async query() {
+          throw Object.assign(new Error('database unavailable'), { code: 'ECONNREFUSED' })
+        },
+      },
+      setInterval() {
+        scheduled = true
+        return { unref() {} }
+      },
+      onStateChange(state) {
+        states.push(state)
+      },
+    }),
+    /database unavailable/,
+  )
+  assert.equal(scheduled, false)
+  assert.deepEqual(states, [{ ready: false, status: 'failed', errorCode: 'ECONNREFUSED' }])
 })
 
 test('an expired capped processing attempt is terminalized without starting processing', async () => {
