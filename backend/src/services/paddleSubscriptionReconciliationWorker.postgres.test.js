@@ -123,11 +123,9 @@ test('PostgreSQL automatic reconciliation is bounded, overlap-safe, and webhook-
 
   await t.test('real candidate selection enforces the requested batch limit', async () => {
     await resetSchema(db)
-    const users = await Promise.all([
-      insertUser(db, 'bounded_1'),
-      insertUser(db, 'bounded_2'),
-      insertUser(db, 'bounded_3'),
-    ])
+    await insertUser(db, 'bounded_1')
+    await insertUser(db, 'bounded_2')
+    const unselectedUser = await insertUser(db, 'bounded_3')
     let providerCalls = 0
     const summary = await runAutomaticPaddleSubscriptionReconciliation({
       db,
@@ -149,7 +147,10 @@ test('PostgreSQL automatic reconciliation is bounded, overlap-safe, and webhook-
        FROM users ORDER BY id`,
     )
     assert.equal(state.rows.filter((row) => row.last_paddle_reconciled_at).length, 2)
-    assert.equal(state.rows.find((row) => row.id === users[2].id).last_paddle_reconciliation_attempt_at, null)
+    assert.equal(
+      state.rows.find((row) => row.id === unselectedUser.id).last_paddle_reconciliation_attempt_at,
+      null,
+    )
   })
 
   await t.test('two backend instances cannot reconcile the same account concurrently', async () => {
