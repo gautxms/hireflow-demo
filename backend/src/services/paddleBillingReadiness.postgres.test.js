@@ -27,7 +27,7 @@ test('PostgreSQL billing readiness fails without the inbox schema and passes aft
   await backfillPaddleWebhookVerificationGap(db)
 
   const migrated = await verifyPaddleWebhookInboxSchema(db)
-  assert.equal(migrated.ready, true)
+  assert.equal(migrated.ready, true, JSON.stringify(migrated))
   assert.deepEqual(migrated.missingColumns, [])
   assert.deepEqual(migrated.missingIndexes, [])
 
