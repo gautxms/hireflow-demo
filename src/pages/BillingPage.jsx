@@ -223,6 +223,7 @@ export default function BillingPage() {
     && !hasScheduledCancellation
     && !isFinalCancellation
     && !subscriptionState.isPastDue
+    && subscriptionState.isActive
 
   const switchingLabel = useMemo(() => {
     if (!subscription) return ''
