@@ -3,7 +3,9 @@ import assert from 'node:assert/strict'
 import crypto from 'crypto'
 import {
   getEventDeduplicationId,
+  getPaddleSubscriptionLifecycleProjection,
   mapToSubscriptionStatus,
+  normalizePaddleSubscriptionStatus,
   verifyPaddleSignature,
   getTransactionSubscriptionId,
 } from './paddleWebhook.js'
@@ -65,9 +67,31 @@ test('getEventDeduplicationId returns event id and falls back to payload hash', 
 
 test('mapToSubscriptionStatus maps lifecycle events', () => {
   assert.equal(mapToSubscriptionStatus('subscription.created', { data: { status: 'trialing' } }), 'trialing')
+  assert.equal(mapToSubscriptionStatus('subscription.activated', { data: { status: 'active' } }), 'active')
+  assert.equal(mapToSubscriptionStatus('subscription.past_due', { data: { status: 'past_due' } }), 'past_due')
+  assert.equal(mapToSubscriptionStatus('subscription.paused', { data: { status: 'paused' } }), 'paused')
+  assert.equal(mapToSubscriptionStatus('subscription.resumed', { data: { status: 'active' } }), 'active')
   assert.equal(mapToSubscriptionStatus('transaction.completed', {}), 'active')
   assert.equal(mapToSubscriptionStatus('subscription.cancelled', {}), 'cancelled')
   assert.equal(mapToSubscriptionStatus('customer.updated', {}), null)
+})
+
+test('subscription lifecycle normalization fails closed for unknown or contradictory provider state', () => {
+  assert.equal(normalizePaddleSubscriptionStatus('canceled'), 'cancelled')
+  assert.equal(normalizePaddleSubscriptionStatus('mystery'), null)
+  assert.deepEqual(
+    getPaddleSubscriptionLifecycleProjection('subscription.updated', { data: { status: 'mystery' } }),
+    { eventType: 'subscription.updated', status: null, reason: 'unsupported_provider_status' },
+  )
+  assert.deepEqual(
+    getPaddleSubscriptionLifecycleProjection('subscription.resumed', { data: { status: 'paused' } }),
+    { eventType: 'subscription.resumed', status: null, reason: 'event_status_mismatch' },
+  )
+})
+
+test('refund events never invent a subscription lifecycle status', () => {
+  assert.equal(mapToSubscriptionStatus('transaction.refunded', { data: { status: 'refunded' } }), null)
+  assert.equal(getPaddleSubscriptionLifecycleProjection('transaction.refunded', {}), null)
 })
 
 

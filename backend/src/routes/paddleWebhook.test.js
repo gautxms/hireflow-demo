@@ -1346,6 +1346,97 @@ function userUpdateCalls(calls) {
   return calls.filter(({ sql }) => /UPDATE users/.test(sql))
 }
 
+for (const lifecycleCase of [
+  { eventType: 'subscription.trialing', providerStatus: 'trialing', storedStatus: 'trialing' },
+  { eventType: 'subscription.activated', providerStatus: 'active', storedStatus: 'active' },
+  { eventType: 'subscription.past_due', providerStatus: 'past_due', storedStatus: 'past_due' },
+  { eventType: 'subscription.paused', providerStatus: 'paused', storedStatus: 'paused' },
+  { eventType: 'subscription.resumed', providerStatus: 'active', storedStatus: 'active' },
+]) {
+  test(`POST /api/paddle/webhook projects ${lifecycleCase.eventType} through the atomic entitlement path`, async (t) => {
+    const payload = buildSubscriptionUpdatedPayload({
+      event_id: `evt_${lifecycleCase.eventType.replaceAll('.', '_')}`,
+      event_type: lifecycleCase.eventType,
+      occurred_at: '2026-08-02T10:00:00.000Z',
+      data: {
+        ...buildSubscriptionUpdatedPayload().data,
+        status: lifecycleCase.providerStatus,
+      },
+    })
+
+    const { response, calls } = await postValidWebhookWithQueryMock(t, payload)
+    const lifecycleCall = userUpdateCalls(calls)[0]
+
+    assert.equal(response.status, 200)
+    assert.ok(lifecycleCall)
+    assert.match(lifecycleCall.sql, /WITH updated_user AS[\s\S]*INSERT INTO subscriptions/)
+    assert.equal(lifecycleCall.params[1], 'sub_test_123')
+    assert.equal(lifecycleCall.params[2], lifecycleCase.storedStatus)
+    assert.equal(lifecycleCall.params[10], '2026-08-02T10:00:00.000Z')
+    assert.equal(lifecycleCall.params[11], lifecycleCase.eventType)
+    assert.equal(calls.filter(({ sql }) => /INSERT INTO subscriptions/.test(sql)).length, 1)
+  })
+}
+
+test('POST /api/paddle/webhook keeps durable trial history while projecting trialing', async (t) => {
+  const payload = buildSubscriptionUpdatedPayload({
+    event_id: 'evt_trial_history_durable',
+    event_type: 'subscription.trialing',
+    occurred_at: '2026-08-02T10:01:00.000Z',
+    data: {
+      ...buildSubscriptionUpdatedPayload().data,
+      status: 'trialing',
+    },
+  })
+
+  const { response, calls } = await postValidWebhookWithQueryMock(t, payload)
+  const lifecycleCall = userUpdateCalls(calls)[0]
+
+  assert.equal(response.status, 200)
+  assert.match(lifecycleCall.sql, /trial_consumed_at = CASE[\s\S]*COALESCE\(account\.trial_consumed_at, NOW\(\)\)/)
+  assert.match(lifecycleCall.sql, /\$3 = 'trialing'[\s\S]*account\.trial_consumed_at IS NOT NULL[\s\S]*paddle_subscription_id IS DISTINCT FROM \$2/)
+  assert.equal(lifecycleCall.params[13], '2026-07-24T00:00:00.000Z')
+})
+
+test('POST /api/paddle/webhook ignores unknown subscription.updated status without granting entitlement', async (t) => {
+  const payload = buildSubscriptionUpdatedPayload({
+    event_id: 'evt_unknown_subscription_status',
+    event_type: 'subscription.updated',
+    occurred_at: '2026-08-02T10:02:00.000Z',
+    data: {
+      ...buildSubscriptionUpdatedPayload().data,
+      status: 'mystery_state',
+    },
+  })
+
+  const { response, calls } = await postValidWebhookWithQueryMock(t, payload)
+
+  assert.equal(response.status, 200)
+  assert.equal(userUpdateCalls(calls).length, 0)
+  assert.equal(calls.some(({ sql }) => /INSERT INTO subscriptions/.test(sql)), false)
+})
+
+test('POST /api/paddle/webhook transaction.refunded does not change subscription entitlement', async (t) => {
+  const payload = {
+    event_id: 'evt_refund_financial_only',
+    event_type: 'transaction.refunded',
+    occurred_at: '2026-08-02T10:03:00.000Z',
+    data: {
+      id: 'txn_refunded_123',
+      subscription_id: 'sub_test_123',
+      customer_id: 'ctm_test_123',
+      status: 'refunded',
+      custom_data: { userId: 42, paddleEnvironment: 'sandbox' },
+    },
+  }
+
+  const { response, calls } = await postValidWebhookWithQueryMock(t, payload)
+
+  assert.equal(response.status, 200)
+  assert.equal(userUpdateCalls(calls).length, 0)
+  assert.equal(calls.some(({ sql }) => /INSERT INTO subscriptions/.test(sql)), false)
+})
+
 
 
 test('POST /api/paddle/webhook clears stale cancellation_effective_at when subscription.updated reactivates without scheduled cancellation', async (t) => {
@@ -1371,7 +1462,7 @@ test('POST /api/paddle/webhook processes active subscription.created with null s
   const [updateCall] = userUpdateCalls(calls)
 
   assert.equal(response.status, 200)
-  assert.match(updateCall.sql, /WHEN \$9::timestamp IS NOT NULL THEN \$9::timestamp/)
+  assert.match(updateCall.sql, /WHEN \$15::boolean THEN COALESCE\(\$16::timestamp, \$9::timestamp, \$6::timestamp, NOW\(\)\)/)
   assert.equal(updateCall.params[1], 'sub_01kx5pmebr2rska4ygrxz2zbeb')
   assert.equal(updateCall.params[2], 'active')
   assert.equal(updateCall.params[8], null)
@@ -1412,10 +1503,10 @@ test('POST /api/paddle/webhook clears renewal metadata when cancellation becomes
   const [updateCall] = userUpdateCalls(calls)
 
   assert.equal(response.status, 200)
-  assert.match(updateCall.sql, /subscription_renewal_date = NULL/)
-  assert.match(updateCall.sql, /next_billing_date = NULL/)
-  assert.match(updateCall.sql, /cancellation_effective_at = COALESCE\(\$5, cancellation_effective_at, \$4, NOW\(\)\)/)
-  assert.equal(updateCall.params[4], '2026-07-24T00:00:00.000Z')
+  assert.match(updateCall.sql, /subscription_renewal_date = CASE WHEN \$15::boolean THEN NULL/)
+  assert.match(updateCall.sql, /next_billing_date = CASE WHEN \$15::boolean THEN NULL/)
+  assert.equal(updateCall.params[14], true)
+  assert.equal(updateCall.params[15], '2026-07-24T00:00:00.000Z')
 })
 
 test('POST /api/paddle/webhook derives monthly from subscription.updated canonical monthly item', async (t) => {
@@ -1448,8 +1539,8 @@ test('POST /api/paddle/webhook derives annual from subscription.updated active i
 
   assert.equal(response.status, 200)
   assert.equal(userUpdateCalls(calls)[0].params[4], 'annual')
-  assert.match(userUpdateCalls(calls)[0].sql, /subscription_renewal_date = COALESCE\(\$6, subscription_renewal_date\)/)
-  assert.match(userUpdateCalls(calls)[0].sql, /last_paddle_event_at IS NOT NULL[\s\S]*\$11::timestamptz > last_paddle_event_at/)
+  assert.match(userUpdateCalls(calls)[0].sql, /subscription_renewal_date = CASE WHEN \$15::boolean THEN NULL ELSE \$6::timestamp END/)
+  assert.match(userUpdateCalls(calls)[0].sql, /\$11::timestamptz > account\.last_paddle_event_at/)
 })
 
 test('POST /api/paddle/webhook accepts a newer verified renewal date that moves backward', async (t) => {
@@ -1497,12 +1588,12 @@ test('POST /api/paddle/webhook accepts a newer verified renewal date that moves 
   assert.equal(updateCall.params[5], '2026-08-01T00:00:00.000Z')
   assert.equal(updateCall.params[6], '2026-08-01T00:00:00.000Z')
   assert.equal(updateCall.params[10], '2026-08-01T10:00:05.000Z')
-  assert.match(updateCall.sql, /\$11::timestamptz >= last_paddle_event_at/)
-  assert.match(updateCall.sql, /\$6::timestamp >= current_period_end[\s\S]*last_paddle_event_at IS NOT NULL[\s\S]*\$11::timestamptz IS NOT NULL[\s\S]*\$11::timestamptz > last_paddle_event_at/)
+  assert.match(updateCall.sql, /\$11::timestamptz > account\.last_paddle_event_at/)
+  assert.match(updateCall.sql, /account\.last_paddle_event_at IS NOT NULL[\s\S]*\$6::timestamp >= account\.current_period_end/)
   const projectionUpsert = calls.find(({ sql }) => /INSERT INTO subscriptions/.test(sql))
   assert.ok(projectionUpsert)
-  assert.match(projectionUpsert.sql, /EXCLUDED\.latest_event_payload #>> '\{occurred_at\}'[\s\S]*subscriptions\.latest_event_payload #>> '\{occurred_at\}'[\s\S]*::timestamptz[\s\S]*>/)
-  assert.match(projectionUpsert.sql, /subscriptions\.latest_event_payload #>> '\{provider_observed_at\}'/)
+  assert.match(projectionUpsert.sql, /existing_projection\.latest_event_payload #>> '\{occurred_at\}'/)
+  assert.match(projectionUpsert.sql, /existing_projection\.latest_event_payload #>> '\{provider_observed_at\}'/)
 })
 
 test('POST /api/paddle/webhook keeps backward renewal dates fenced until a provider watermark exists', async (t) => {
@@ -1546,10 +1637,11 @@ test('POST /api/paddle/webhook keeps backward renewal dates fenced until a provi
   const updateCall = userUpdateCalls(calls)[0]
 
   assert.equal(response.status, 200)
-  assert.match(updateCall.sql, /\$6::timestamp >= current_period_end/)
-  assert.match(updateCall.sql, /last_paddle_event_at IS NOT NULL/)
-  assert.match(updateCall.sql, /\$11::timestamptz > last_paddle_event_at/)
-  assert.equal(calls.some(({ sql }) => /INSERT INTO subscriptions/.test(sql)), false)
+  assert.match(updateCall.sql, /\$6::timestamp >= account\.current_period_end/)
+  assert.match(updateCall.sql, /account\.last_paddle_event_at IS NOT NULL/)
+  assert.match(updateCall.sql, /\$11::timestamptz > account\.last_paddle_event_at/)
+  assert.equal(userUpdateCalls(calls).length, 1)
+  assert.match(updateCall.sql, /WITH updated_user AS[\s\S]*INSERT INTO subscriptions/)
 })
 
 test('POST /api/paddle/webhook does not let an undated event replace a dated subscription projection', async (t) => {
@@ -1567,8 +1659,8 @@ test('POST /api/paddle/webhook does not let an undated event replace a dated sub
 
   assert.equal(response.status, 200)
   assert.ok(projectionUpsert)
-  assert.match(projectionUpsert.sql, /IS NULL\s+AND COALESCE\(subscriptions\.latest_event_payload/)
-  assert.doesNotMatch(projectionUpsert.sql, /WHERE COALESCE\(EXCLUDED[^]*\) IS NULL\s+OR/)
+  assert.match(projectionUpsert.sql, /\$11::timestamptz IS NULL[\s\S]*existing_projection\.latest_event_payload/)
+  assert.match(projectionUpsert.sql, /\$6::timestamp IS NULL/)
 })
 
 
@@ -2019,7 +2111,7 @@ test('POST /api/paddle/webhook keeps a newer Past Due state when an older Active
     if (String(sql).includes('FROM paddle_webhook_events')) return { rowCount: 0, rows: [] }
     if (String(sql).includes('FROM users')) return { rowCount: 1, rows: [{ ...state }] }
     if (/UPDATE users/.test(sql)) {
-      assert.match(String(sql), /\$11::timestamptz >= last_paddle_event_at/)
+      assert.match(String(sql), /\$11::timestamptz > account\.last_paddle_event_at/)
       return { rowCount: 0, rows: [] }
     }
     return { rowCount: 1, rows: [] }
@@ -2030,7 +2122,8 @@ test('POST /api/paddle/webhook keeps a newer Past Due state when an older Active
   assert.equal(response.status, 200)
   assert.equal(state.subscription_status, 'past_due')
   assert.equal(state.last_paddle_event_at, '2026-07-20T10:00:05.000Z')
-  assert.ok(!calls.some(({ sql }) => /INSERT INTO subscriptions/.test(sql)))
+  assert.equal(userUpdateCalls(calls).length, 1)
+  assert.match(userUpdateCalls(calls)[0].sql, /WITH updated_user AS[\s\S]*INSERT INTO subscriptions/)
 })
 
 test('POST /api/paddle/webhook resolves an older completed transaction attempt without overriding a newer failure', async (t) => {
@@ -2841,7 +2934,7 @@ test('POST /api/paddle/webhook prevents an old cancellation event from cancellin
         }],
       }
     }
-    if (/UPDATE users[\s\S]+subscription_status = 'cancelled'/.test(String(sql))) {
+    if (/UPDATE users[\s\S]+subscription_status = \$3/.test(String(sql)) && params?.[2] === 'cancelled') {
       return { rowCount: 0, rows: [] }
     }
     return { rowCount: 1, rows: [] }
@@ -2850,9 +2943,9 @@ test('POST /api/paddle/webhook prevents an old cancellation event from cancellin
   const { response } = await postWebhook({ body: rawBody, signature: signBody(rawBody) })
 
   assert.equal(response.status, 200)
-  const cancellationUpdate = calls.find(({ sql }) => /UPDATE users[\s\S]+subscription_status = 'cancelled'/.test(sql))
+  const cancellationUpdate = calls.find(({ sql, params }) => /UPDATE users/.test(sql) && params?.[2] === 'cancelled')
   assert.equal(cancellationUpdate.params[1], 'sub_old_annual')
-  assert.match(cancellationUpdate.sql, /paddle_subscription_id = \$2/)
+  assert.match(cancellationUpdate.sql, /account\.paddle_subscription_id = \$2/)
 })
 
 test('POST /api/paddle/webhook prevents a delayed active update from reviving the same finally cancelled lifecycle', async (t) => {
@@ -2897,6 +2990,6 @@ test('POST /api/paddle/webhook prevents a delayed active update from reviving th
 
   assert.equal(response.status, 200)
   const update = userUpdateCalls(calls)[0]
-  assert.match(update.sql, /AND NOT \(\s+LOWER\(COALESCE\(subscription_status, ''\)\) IN \('canceled', 'cancelled'\)/)
+  assert.match(update.sql, /AND NOT \([\s\S]*\$3 IN \('active', 'trialing'\)[\s\S]*LOWER\(COALESCE\(account\.subscription_status, ''\)\) IN \('canceled', 'cancelled'\)/)
   assert.equal(update.params[1], 'sub_old_annual')
 })

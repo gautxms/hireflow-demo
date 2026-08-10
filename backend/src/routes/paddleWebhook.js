@@ -11,6 +11,7 @@ import {
 } from '../config/paddle.js'
 import {
   getWebhookEventType,
+  getPaddleSubscriptionLifecycleProjection,
   mapToSubscriptionStatus,
   verifyPaddleSignature,
   getEventDeduplicationId,
@@ -28,6 +29,7 @@ import {
   runRecoveryBillingAdjustments,
 } from '../services/recoveryBillingAdjustment.js'
 import { markCheckoutReservationCompleted } from '../services/paddleCheckoutReservations.js'
+import { applyPaddleSubscriptionLifecycle } from '../services/paddleSubscriptionLifecycle.js'
 
 const router = express.Router()
 const WEBHOOK_PROCESSING_LEASE_SECONDS = 120
@@ -87,13 +89,6 @@ function getSubscriptionStatus(payload) {
   return payload?.data?.status || payload?.status || null
 }
 
-function getScheduledCancellationEffectiveAt(payload) {
-  const scheduledChange = payload?.data?.scheduled_change || payload?.data?.scheduledChange || payload?.scheduled_change || payload?.scheduledChange || null
-  const scheduledAction = String(scheduledChange?.action || scheduledChange?.type || '').toLowerCase()
-  if (!scheduledAction.includes('cancel')) return null
-  return scheduledChange?.effective_at || scheduledChange?.effectiveAt || null
-}
-
 function isFinalCancellationUser(user = {}, now = new Date()) {
   const status = String(user.subscription_status || '').toLowerCase()
   if (!['canceled', 'cancelled'].includes(status)) return false
@@ -147,7 +142,8 @@ async function resolveUserFromPayload(payload, paddleEnvironment, strictEnvironm
     const result = await pool.query(
       `SELECT id, paddle_customer_id, paddle_subscription_id, subscription_status, subscription_plan,
               current_period_end, next_billing_date, subscription_renewal_date, cancellation_effective_at,
-              paddle_environment, updated_at
+              paddle_environment, last_paddle_event_at, trial_ends_at, trial_consumed_at,
+              subscription_started_at, updated_at
        FROM users
        WHERE id = $1
        LIMIT 1`,
@@ -173,7 +169,8 @@ async function resolveUserFromPayload(payload, paddleEnvironment, strictEnvironm
   const result = await pool.query(
     `SELECT id, paddle_customer_id, paddle_subscription_id, subscription_status, subscription_plan,
             current_period_end, next_billing_date, subscription_renewal_date, cancellation_effective_at,
-            paddle_environment, updated_at
+            paddle_environment, last_paddle_event_at, trial_ends_at, trial_consumed_at,
+            subscription_started_at, updated_at
      FROM users
      WHERE paddle_customer_id = $1
        AND ($2::boolean = FALSE OR COALESCE(NULLIF(LOWER(paddle_environment), ''), 'production') = $3)
@@ -934,7 +931,8 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment, storedEv
       throw error
     }
 
-    const nextStatus = mapToSubscriptionStatus(eventType, payload)
+    const lifecycleProjection = getPaddleSubscriptionLifecycleProjection(eventType, payload)
+    const nextStatus = lifecycleProjection?.status ?? mapToSubscriptionStatus(eventType, payload)
     const providerEventAt = getProviderEventTimestamp(payload)
     const subscriptionId = getSubscriptionId(payload, eventType)
     const payloadEnvironment = payload?.data?.custom_data?.paddleEnvironment || payload?.custom_data?.paddleEnvironment || null
@@ -970,7 +968,7 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment, storedEv
       })
     }
 
-    let subscriptionProjection = !hasEnvironmentMismatch && nextStatus && subscriptionId
+    let subscriptionProjection = !lifecycleProjection && !hasEnvironmentMismatch && nextStatus && subscriptionId
       ? {
           subscriptionId,
           userId: user?.id || null,
@@ -1206,161 +1204,81 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment, storedEv
       }))
     }
 
-    if (!hasEnvironmentMismatch && (eventType === 'subscription.created' || eventType === 'subscription.updated' || eventType === 'subscription.trialing')) {
-      const updatedStatus = getSubscriptionStatus(payload) || mapToSubscriptionStatus(eventType, payload)
-      const subscriptionFromEvent = getSubscriptionId(payload)
-      let preservePaidPlan = eventType === 'subscription.updated' && shouldPreservePaidPlanDuringUpdate(user, payload, paddle, eventType)
+    if (lifecycleProjection && !hasEnvironmentMismatch) {
+      const lifecycleEventType = lifecycleProjection.eventType
+      const lifecycleStatus = lifecycleProjection.status
+      const subscriptionFromEvent = getSubscriptionId(payload, lifecycleEventType)
+      let preservePaidPlan = lifecycleEventType === 'subscription.updated'
+        && shouldPreservePaidPlanDuringUpdate(user, payload, paddle, lifecycleEventType)
 
-      if (preservePaidPlan && getPlanChangeMetadata(payload) && String(updatedStatus || '').toLowerCase() === 'past_due') {
-        const recovery = await recoverFailedPlanChangeFromWebhook(user, payload, paddle)
-        preservePaidPlan = recovery.outcome === PLAN_CHANGE_RECOVERY_OUTCOME.RECOVERED
-        subscriptionProjection = recoveredSubscriptionProjection(subscriptionProjection, recovery)
-      } else if (preservePaidPlan) {
-        subscriptionProjection = null
-      }
-
-      if (user?.id && updatedStatus && !preservePaidPlan) {
-        const subscriptionUpdateResult = await pool.query(
-          `UPDATE users
-           SET paddle_subscription_id = COALESCE($2, paddle_subscription_id),
-               subscription_status = $3,
-               paddle_customer_id = COALESCE($4, paddle_customer_id),
-               subscription_plan = COALESCE($5, subscription_plan),
-               current_period_end = COALESCE($6, current_period_end),
-               subscription_renewal_date = COALESCE($6, subscription_renewal_date),
-               next_billing_date = COALESCE($7, next_billing_date),
-               paddle_environment = $8,
-               cancellation_effective_at = CASE
-                 WHEN $9::timestamp IS NOT NULL THEN $9::timestamp
-                 WHEN $3 IN ('active', 'trialing') THEN NULL
-                 ELSE cancellation_effective_at
-               END,
-               subscription_started_at = CASE WHEN $3 IN ('active', 'trialing') THEN COALESCE(subscription_started_at, NOW()) ELSE subscription_started_at END,
-               quota_anchor_at = CASE
-                 WHEN $3 = 'active' THEN COALESCE(quota_anchor_at, $10)
-                 ELSE quota_anchor_at
-               END,
-               trial_consumed_at = CASE WHEN $3 IN ('active', 'trialing') THEN COALESCE(trial_consumed_at, NOW()) ELSE trial_consumed_at END,
-               last_paddle_event_at = CASE
-                 WHEN $11::timestamptz IS NULL THEN last_paddle_event_at
-                 ELSE GREATEST(COALESCE(last_paddle_event_at, $11::timestamptz), $11::timestamptz)
-               END,
-               updated_at = NOW()
-           WHERE id = $1
-             AND ($4 IS NULL OR paddle_customer_id IS NULL OR paddle_customer_id = $4)
-             AND COALESCE(NULLIF(LOWER(paddle_environment), ''), $8) = $8
-             AND (
-               $2 IS DISTINCT FROM paddle_subscription_id
-               OR last_paddle_event_at IS NULL
-               OR ($11::timestamptz IS NOT NULL AND $11::timestamptz >= last_paddle_event_at)
-             )
-             AND (
-               (
-                 $2 IS NOT NULL
-                 AND (paddle_subscription_id IS NULL OR $2 = paddle_subscription_id)
-                 AND NOT (
-                   LOWER(COALESCE(subscription_status, '')) IN ('canceled', 'cancelled')
-                   AND (cancellation_effective_at IS NULL OR cancellation_effective_at <= NOW())
-                 )
-                 AND (
-                   $6::timestamp IS NULL
-                   OR current_period_end IS NULL
-                   OR $6::timestamp >= current_period_end
-                   OR (
-                     last_paddle_event_at IS NOT NULL
-                     AND $11::timestamptz IS NOT NULL
-                     AND $11::timestamptz > last_paddle_event_at
-                   )
-                 )
-               )
-               OR (
-                 $2 IS NOT NULL
-                 AND $5 IS NOT NULL
-                 AND $6::timestamp IS NOT NULL
-                 AND $2 IS DISTINCT FROM paddle_subscription_id
-                 AND LOWER(COALESCE(subscription_status, '')) IN ('canceled', 'cancelled')
-                 AND (cancellation_effective_at IS NULL OR cancellation_effective_at <= NOW())
-               )
-             )`,
-          [
-            user.id,
-            subscriptionFromEvent,
-            updatedStatus,
-            getPaddleCustomerId(payload),
-            getStoredSubscriptionPlan(payload, paddle),
-            payload?.data?.current_billing_period?.ends_at || null,
-            payload?.data?.next_billed_at || payload?.data?.current_billing_period?.ends_at || null,
-            paddle.environment,
-            getScheduledCancellationEffectiveAt(payload),
-            payload?.data?.current_billing_period?.starts_at || null,
-            providerEventAt,
-          ],
-        )
-
-        if (subscriptionUpdateResult.rowCount === 0) {
-          subscriptionProjection = null
+      if (!lifecycleStatus) {
+        console.warn('[Paddle webhook] unsupported subscription lifecycle state ignored', {
+          eventType: lifecycleEventType,
+          environment: paddle.environment,
+          providerStatus: getSubscriptionStatus(payload),
+          reason: lifecycleProjection.reason,
+          userId: user?.id || null,
+          subscriptionId: subscriptionFromEvent,
+        })
+      } else {
+        if (preservePaidPlan && getPlanChangeMetadata(payload) && lifecycleStatus === 'past_due') {
+          const recovery = await recoverFailedPlanChangeFromWebhook(user, payload, paddle)
+          preservePaidPlan = recovery.outcome === PLAN_CHANGE_RECOVERY_OUTCOME.RECOVERED
+          subscriptionProjection = recoveredSubscriptionProjection({
+            subscriptionId: subscriptionFromEvent,
+            userId: user?.id || null,
+            status: lifecycleStatus,
+            eventType: lifecycleEventType,
+            payload,
+            environment: paddle.environment,
+          }, recovery)
         }
 
-        if (
-          subscriptionUpdateResult.rowCount === 0
-          && isFinalCancellationUser(user)
-          && subscriptionFromEvent
-          && subscriptionFromEvent !== user.paddle_subscription_id
-        ) {
-          throw new Error('Active subscription could not replace the cancelled subscription lifecycle')
+        if (!preservePaidPlan && user?.id) {
+          const lifecycleResult = await applyPaddleSubscriptionLifecycle({
+            user,
+            subscriptionId: subscriptionFromEvent,
+            customerId: getPaddleCustomerId(payload),
+            environment: paddle.environment,
+            eventType: lifecycleEventType,
+            status: lifecycleStatus,
+            plan: getStoredSubscriptionPlan(payload, paddle),
+            providerEventAt,
+            payload,
+          })
+
+          if (
+            !lifecycleResult.applied
+            && isFinalCancellationUser(user)
+            && lifecycleStatus === 'active'
+            && subscriptionFromEvent
+            && subscriptionFromEvent !== user.paddle_subscription_id
+          ) {
+            throw new Error('Active subscription could not replace the cancelled subscription lifecycle')
+          }
+
+          console.info('[Paddle webhook] subscription lifecycle projection', {
+            eventType: lifecycleEventType,
+            environment: paddle.environment,
+            userId: user.id,
+            subscriptionId: subscriptionFromEvent,
+            status: lifecycleStatus,
+            applied: lifecycleResult.applied,
+            reason: lifecycleResult.reason,
+          })
+
+          if (lifecycleResult.applied && lifecycleStatus === 'cancelled') {
+            postProcessingTasks.push(() => trackEvent({
+              userId: user.id,
+              eventType: 'cancellation',
+              metadata: {
+                source: 'paddle.webhook',
+                subscription_id: subscriptionFromEvent,
+              },
+            }))
+          }
         }
       }
-    }
-
-    if (!hasEnvironmentMismatch && (eventType === 'subscription.canceled' || eventType === 'subscription.cancelled')) {
-      const canceledSubscriptionId = getSubscriptionId(payload, eventType)
-
-      if (user?.id) {
-        const cancellationResult = await pool.query(
-          `UPDATE users
-           SET subscription_status = 'cancelled',
-               paddle_subscription_id = COALESCE($2, paddle_subscription_id),
-               paddle_customer_id = COALESCE($3, paddle_customer_id),
-               current_period_end = COALESCE($4, current_period_end),
-               subscription_renewal_date = NULL,
-               next_billing_date = NULL,
-               cancellation_effective_at = COALESCE($5, cancellation_effective_at, $4, NOW()),
-               paddle_environment = $6,
-               last_paddle_event_at = CASE
-                 WHEN $7::timestamptz IS NULL THEN last_paddle_event_at
-                 ELSE GREATEST(COALESCE(last_paddle_event_at, $7::timestamptz), $7::timestamptz)
-               END,
-               updated_at = NOW()
-           WHERE id = $1
-             AND $2 IS NOT NULL
-             AND (paddle_subscription_id IS NULL OR paddle_subscription_id = $2)
-             AND ($3 IS NULL OR paddle_customer_id IS NULL OR paddle_customer_id = $3)
-             AND COALESCE(NULLIF(LOWER(paddle_environment), ''), $6) = $6
-             AND (
-               last_paddle_event_at IS NULL
-               OR ($7::timestamptz IS NOT NULL AND $7::timestamptz >= last_paddle_event_at)
-             )`,
-          [
-            user.id,
-            canceledSubscriptionId,
-            getPaddleCustomerId(payload),
-            payload?.data?.current_billing_period?.ends_at || null,
-            payload?.data?.canceled_at || payload?.data?.scheduled_change?.effective_at || payload?.data?.current_billing_period?.ends_at || null,
-            paddle.environment,
-            providerEventAt,
-          ],
-        )
-        if (cancellationResult.rowCount === 0) subscriptionProjection = null
-      }
-
-      postProcessingTasks.push(() => trackEvent({
-        userId: user?.id || null,
-        eventType: 'cancellation',
-        metadata: {
-          source: 'paddle.webhook',
-          subscription_id: canceledSubscriptionId,
-        },
-      }))
     }
 
     if (subscriptionProjection) {
