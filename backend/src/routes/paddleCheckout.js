@@ -11,6 +11,14 @@ const router = Router()
 const TEST_MONTHLY_PLAN = 'test-monthly'
 const TEST_MONTHLY_STORED_PLAN = 'monthly'
 const CHECKOUT_BLOCKED_STATUSES = new Set(['active', 'trialing', 'trial', 'past_due', 'payment_failed', 'paused'])
+const CHECKOUT_RESERVATION_TTL_MS = 24 * 60 * 60 * 1000
+export const CHECKOUT_CREATION_RECOVERY_GRACE_MS = 10 * 60 * 1000
+
+const CHECKOUT_USER_SELECT = `id, email, subscription_status, subscription_started_at, trial_ends_at, trial_consumed_at,
+  subscription_plan, current_period_end, subscription_renewal_date, next_billing_date,
+  cancellation_effective_at, paddle_customer_id, paddle_subscription_id, paddle_environment,
+  last_paddle_event_at,
+  EXISTS (SELECT 1 FROM payment_attempts attempt WHERE attempt.user_id = users.id) AS has_payment_attempts`
 
 function normalizeStatus(value) {
   return String(value || '').trim().toLowerCase()
@@ -238,19 +246,28 @@ export async function persistVerifiedCheckoutSubscription({
       return { synced: false, reason: superseded ? 'recovery_superseded' : 'reconciliation_failed' }
     }
 
-    await client.query(
+    const projectionResult = await client.query(
       `INSERT INTO subscriptions (paddle_subscription_id, user_id, status, latest_event_type, latest_event_payload, paddle_environment)
        VALUES ($1, $2, $3, 'checkout.reconciled', $4::jsonb, $5)
-       ON CONFLICT (paddle_subscription_id)
+       ON CONFLICT (paddle_environment, paddle_subscription_id)
        DO UPDATE SET
-         user_id = EXCLUDED.user_id,
+         user_id = COALESCE(subscriptions.user_id, EXCLUDED.user_id),
          status = EXCLUDED.status,
          latest_event_type = EXCLUDED.latest_event_type,
          latest_event_payload = EXCLUDED.latest_event_payload,
          paddle_environment = EXCLUDED.paddle_environment,
-         updated_at = NOW()`,
+         updated_at = NOW()
+       WHERE (subscriptions.user_id IS NULL OR subscriptions.user_id = EXCLUDED.user_id)
+         AND COALESCE(NULLIF(LOWER(subscriptions.paddle_environment), ''), 'production')
+             = COALESCE(NULLIF(LOWER(EXCLUDED.paddle_environment), ''), 'production')
+       RETURNING id`,
       [subscription.id, user.id, normalizeStatus(subscription.status), JSON.stringify({ data: subscription }), paddle.environment],
     )
+    if (projectionResult.rowCount !== 1) {
+      const error = new Error('Paddle subscription projection ownership conflict')
+      error.code = 'PADDLE_OWNERSHIP_CONFLICT'
+      throw error
+    }
     if (isPastDueRecovery) {
       await client.query(
         `UPDATE payment_attempts
@@ -324,6 +341,226 @@ function getAppOrigin(req) {
   return process.env.APP_ORIGIN || process.env.FRONTEND_ORIGIN || `${req.protocol}://${req.get('host')}`
 }
 
+function checkoutPurchaseMatches(reservation, purchase) {
+  return reservation.requested_plan === purchase.requestedPlan
+    && reservation.stored_plan === purchase.storedPlan
+    && reservation.price_id === purchase.priceId
+    && reservation.trial_eligible === purchase.trialEligible
+    && reservation.checkout_mode === purchase.checkoutMode
+    && reservation.paddle_environment === purchase.environment
+}
+
+function reservationAgeMs(reservation, now = new Date()) {
+  const createdAt = new Date(reservation?.created_at)
+  if (Number.isNaN(createdAt.getTime())) return Number.POSITIVE_INFINITY
+  return Math.max(0, now.getTime() - createdAt.getTime())
+}
+
+export async function acquireCheckoutReservation({
+  db = pool,
+  userId,
+  paddle,
+  plan,
+  testKey,
+  now = new Date(),
+}) {
+  const client = await db.connect()
+
+  try {
+    await client.query('BEGIN')
+    const userResult = await client.query(
+      `SELECT ${CHECKOUT_USER_SELECT}
+       FROM users
+       WHERE id = $1
+       FOR UPDATE`,
+      [userId],
+    )
+    const user = userResult.rows[0]
+
+    if (!user) {
+      await client.query('ROLLBACK')
+      return { action: 'user_not_found' }
+    }
+
+    if (resolvePaddleEnvironmentForUser(user) !== paddle.environment) {
+      await client.query('ROLLBACK')
+      return { action: 'environment_changed' }
+    }
+
+    const block = getCheckoutBlockReason(user)
+    if (block) {
+      await client.query('ROLLBACK')
+      return { action: 'blocked', block, user }
+    }
+
+    const trialEligible = isTrialEligibleForUser(user)
+    const planAccess = validatePaddleCheckoutPlan({ plan, testKey, paddle, trialEligible })
+    if (!planAccess.ok) {
+      await client.query('ROLLBACK')
+      return { action: 'invalid_plan', planAccess, user }
+    }
+
+    const purchase = {
+      requestedPlan: plan,
+      storedPlan: planAccess.storedPlan || plan,
+      priceId: planAccess.priceId,
+      trialEligible: planAccess.trialEligible,
+      checkoutMode: planAccess.checkoutMode,
+      environment: paddle.environment,
+    }
+
+    if (!purchase.priceId) {
+      await client.query('ROLLBACK')
+      return { action: 'price_missing', purchase, user }
+    }
+
+    const existingResult = await client.query(
+      `SELECT id, reservation_token, user_id, paddle_environment, requested_plan, stored_plan,
+              price_id, trial_eligible, checkout_mode, status, paddle_transaction_id,
+              paddle_customer_id, checkout_url, provider_status, failure_code,
+              expires_at, created_at, updated_at
+       FROM paddle_checkout_reservations
+       WHERE user_id = $1
+         AND paddle_environment = $2
+         AND status IN ('creating', 'ready')
+       LIMIT 1
+       FOR UPDATE`,
+      [user.id, paddle.environment],
+    )
+    const existing = existingResult.rows[0]
+
+    if (existing) {
+      await client.query('COMMIT')
+      if (!checkoutPurchaseMatches(existing, purchase)) {
+        return { action: 'purchase_conflict', reservation: existing, purchase, user }
+      }
+      if (existing.status === 'ready') {
+        return { action: 'reuse', reservation: existing, purchase, user }
+      }
+      return {
+        action: reservationAgeMs(existing, now) >= CHECKOUT_CREATION_RECOVERY_GRACE_MS
+          ? 'recover'
+          : 'in_progress',
+        reservation: existing,
+        purchase,
+        user,
+      }
+    }
+
+    const expiresAt = new Date(now.getTime() + CHECKOUT_RESERVATION_TTL_MS).toISOString()
+    const inserted = await client.query(
+      `INSERT INTO paddle_checkout_reservations (
+         user_id, paddle_environment, requested_plan, stored_plan, price_id,
+         trial_eligible, checkout_mode, status, expires_at
+       )
+       VALUES ($1, $2, $3, $4, $5, $6, $7, 'creating', $8::timestamptz)
+       RETURNING id, reservation_token, user_id, paddle_environment, requested_plan, stored_plan,
+                 price_id, trial_eligible, checkout_mode, status, paddle_transaction_id,
+                 paddle_customer_id, checkout_url, provider_status, failure_code,
+                 expires_at, created_at, updated_at`,
+      [
+        user.id,
+        paddle.environment,
+        purchase.requestedPlan,
+        purchase.storedPlan,
+        purchase.priceId,
+        purchase.trialEligible,
+        purchase.checkoutMode,
+        expiresAt,
+      ],
+    )
+    await client.query('COMMIT')
+    return { action: 'create', reservation: inserted.rows[0], purchase, user }
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {})
+    throw error
+  } finally {
+    client.release()
+  }
+}
+
+export async function storeCheckoutReservationResult({
+  db = pool,
+  reservation,
+  transaction,
+}) {
+  const transactionId = transaction?.id || null
+  const checkoutUrl = transaction?.checkout?.url || null
+
+  if (!transactionId || !checkoutUrl) {
+    return { stored: false, reason: 'provider_result_incomplete' }
+  }
+
+  const result = await db.query(
+    `UPDATE paddle_checkout_reservations
+     SET status = 'ready',
+         paddle_transaction_id = $3,
+         paddle_customer_id = $4,
+         checkout_url = $5,
+         provider_status = $6,
+         failure_code = NULL,
+         updated_at = NOW()
+     WHERE id = $1
+       AND reservation_token = $2
+       AND status = 'creating'
+     RETURNING *`,
+    [
+      reservation.id,
+      reservation.reservation_token,
+      transactionId,
+      transaction.customer_id || null,
+      checkoutUrl,
+      normalizeStatus(transaction.status),
+    ],
+  )
+
+  if (result.rowCount === 1) return { stored: true, reservation: result.rows[0] }
+
+  const current = await db.query(
+    `SELECT * FROM paddle_checkout_reservations
+     WHERE id = $1 AND reservation_token = $2`,
+    [reservation.id, reservation.reservation_token],
+  )
+  return { stored: false, reason: 'reservation_superseded', reservation: current.rows[0] || null }
+}
+
+export async function updateCheckoutReservationStatus({
+  db = pool,
+  reservation,
+  status,
+  failureCode = null,
+  providerStatus = null,
+  transaction = null,
+}) {
+  if (!['completed', 'failed', 'conflict'].includes(status)) {
+    throw new Error('Invalid checkout reservation terminal status')
+  }
+
+  return db.query(
+    `UPDATE paddle_checkout_reservations
+     SET status = $3,
+         paddle_transaction_id = COALESCE($4, paddle_transaction_id),
+         paddle_customer_id = COALESCE($5, paddle_customer_id),
+         checkout_url = NULL,
+         provider_status = COALESCE($6, provider_status),
+         failure_code = $7,
+         updated_at = NOW()
+     WHERE id = $1
+       AND reservation_token = $2
+       AND status IN ('creating', 'ready')
+     RETURNING *`,
+    [
+      reservation.id,
+      reservation.reservation_token,
+      status,
+      transaction?.id || null,
+      transaction?.customer_id || null,
+      providerStatus || normalizeStatus(transaction?.status) || null,
+      failureCode,
+    ],
+  )
+}
+
 export function validatePaddleCheckoutPlan({ plan, testKey, paddle, trialEligible = true }) {
   if (plan !== TEST_MONTHLY_PLAN) {
     const priceId = trialEligible
@@ -381,6 +618,194 @@ async function loadProviderSubscription(user, paddle) {
   return payload?.data || payload
 }
 
+function transactionPriceIds(transaction = {}) {
+  return (transaction.items || [])
+    .map((item) => item?.price_id || item?.price?.id)
+    .filter(Boolean)
+}
+
+export function transactionMatchesCheckoutReservation(transaction = {}, reservation = {}, user = {}) {
+  const customData = transaction.custom_data || {}
+  const transactionUserId = customData.userId ?? customData.user_id
+  const reservationToken = customData.checkoutReservationId ?? customData.checkout_reservation_id
+
+  return String(transactionUserId || '') === String(user.id || '')
+    && String(reservationToken || '') === String(reservation.reservation_token || '')
+    && customData.paddleEnvironment === reservation.paddle_environment
+    && customData.requestedPlan === reservation.requested_plan
+    && customData.plan === reservation.stored_plan
+    && customData.checkoutMode === reservation.checkout_mode
+    && customData.trialEligible === reservation.trial_eligible
+    && transactionPriceIds(transaction).includes(reservation.price_id)
+    && (!user.paddle_customer_id || transaction.customer_id === user.paddle_customer_id)
+}
+
+function isReusableCheckoutTransaction(transaction = {}) {
+  return ['draft', 'ready'].includes(normalizeStatus(transaction.status))
+    && !transaction.subscription_id
+    && Boolean(transaction?.checkout?.url)
+}
+
+async function loadPaddleTransaction(transactionId, paddle) {
+  const payload = await paddleApiGet(`/transactions/${encodeURIComponent(transactionId)}`, paddle)
+  return dataFromPayload(payload)
+}
+
+async function findReservationTransactions(reservation, user, paddle) {
+  const customerIds = new Set([
+    reservation.paddle_customer_id,
+    user.paddle_customer_id,
+  ].filter(Boolean))
+
+  if (customerIds.size === 0 && user.email) {
+    const customerQuery = new URLSearchParams({
+      email: user.email,
+      status: 'active',
+      per_page: '200',
+    })
+    const customerPayload = await paddleApiGet(`/customers?${customerQuery.toString()}`, paddle)
+    for (const customer of customerPayload?.data || []) {
+      if (customer?.id) customerIds.add(customer.id)
+      if (customerIds.size >= 10) break
+    }
+  }
+
+  const matches = []
+  for (const customerId of customerIds) {
+    const transactionQuery = new URLSearchParams({
+      customer_id: customerId,
+      origin: 'api',
+      order_by: 'created_at[DESC]',
+      per_page: '30',
+    })
+    const payload = await paddleApiGet(`/transactions?${transactionQuery.toString()}`, paddle)
+    for (const transaction of payload?.data || []) {
+      if (transactionMatchesCheckoutReservation(transaction, reservation, user)) {
+        matches.push(transaction)
+      }
+    }
+  }
+
+  return matches.filter((transaction, index, all) => (
+    all.findIndex((candidate) => candidate.id === transaction.id) === index
+  ))
+}
+
+async function resolveReservedCheckout({ acquisition, paddle }) {
+  const { reservation, user } = acquisition
+  let transaction = null
+
+  try {
+    if (reservation.paddle_transaction_id) {
+      transaction = await loadPaddleTransaction(reservation.paddle_transaction_id, paddle)
+    } else {
+      const matches = await findReservationTransactions(reservation, user, paddle)
+      if (matches.length > 1) {
+        await updateCheckoutReservationStatus({
+          reservation,
+          status: 'conflict',
+          failureCode: 'multiple_provider_transactions',
+        })
+        console.error('[Paddle checkout] checkout ownership conflict rejected', {
+          userId: user.id,
+          environment: paddle.environment,
+          reservationId: reservation.id,
+          transactionCount: matches.length,
+        })
+        return { action: 'conflict' }
+      }
+      transaction = matches[0] || null
+    }
+  } catch (error) {
+    if (error.status === 404 && reservation.paddle_transaction_id) {
+      await updateCheckoutReservationStatus({
+        reservation,
+        status: 'failed',
+        failureCode: 'provider_transaction_missing',
+        providerStatus: 'missing',
+      })
+      return { action: 'retry' }
+    }
+    throw error
+  }
+
+  if (!transaction) {
+    await updateCheckoutReservationStatus({
+      reservation,
+      status: 'failed',
+      failureCode: 'stale_creation_without_provider_transaction',
+      providerStatus: 'missing',
+    })
+    console.warn('[Paddle checkout] stale reservation recovered without a provider transaction', {
+      userId: user.id,
+      environment: paddle.environment,
+      reservationId: reservation.id,
+    })
+    return { action: 'retry' }
+  }
+
+  if (!transactionMatchesCheckoutReservation(transaction, reservation, user)) {
+    await updateCheckoutReservationStatus({
+      reservation,
+      status: 'conflict',
+      failureCode: 'provider_transaction_mismatch',
+      transaction,
+    })
+    console.error('[Paddle checkout] provider transaction mismatch rejected', {
+      userId: user.id,
+      environment: paddle.environment,
+      reservationId: reservation.id,
+      transactionId: transaction.id || null,
+      customerId: transaction.customer_id || null,
+    })
+    return { action: 'conflict' }
+  }
+
+  if (isReusableCheckoutTransaction(transaction)) {
+    if (reservation.status === 'creating') {
+      await storeCheckoutReservationResult({ reservation, transaction })
+    }
+    console.info('[Paddle checkout] existing checkout reused', {
+      userId: user.id,
+      environment: paddle.environment,
+      reservationId: reservation.id,
+      transactionId: transaction.id,
+    })
+    return { action: 'reuse', transaction }
+  }
+
+  const status = normalizeStatus(transaction.status)
+  if (['paid', 'completed'].includes(status) || transaction.subscription_id) {
+    await updateCheckoutReservationStatus({ reservation, status: 'completed', transaction })
+    return { action: 'completed', transaction }
+  }
+
+  if (['canceled', 'cancelled', 'past_due'].includes(status)) {
+    await updateCheckoutReservationStatus({
+      reservation,
+      status: 'failed',
+      failureCode: `provider_${status}`,
+      transaction,
+    })
+    return { action: 'retry' }
+  }
+
+  return { action: 'in_progress' }
+}
+
+function checkoutResponse({ transaction, user, paddle, purchase }) {
+  return {
+    checkoutUrl: transaction.checkout.url,
+    transactionId: transaction.id,
+    userEmail: user.email,
+    clientToken: paddle.clientToken,
+    paddleEnvironment: paddle.environment,
+    trialEligible: purchase.trialEligible,
+    checkoutMode: purchase.checkoutMode,
+    _version: 'WITH_USER_EMAIL_2026_03_26',
+  }
+}
+
 export async function prepareCheckoutSubscriptionState({
   user,
   paddle,
@@ -409,7 +834,7 @@ export async function prepareCheckoutSubscriptionState({
   }
 }
 
-async function createCheckout(req, res, logLabel) {
+export async function createCheckout(req, res, logLabel = 'checkout') {
   const { plan, testKey } = req.body || {}
 
   let user
@@ -427,9 +852,12 @@ async function createCheckout(req, res, logLabel) {
     )
     user = userResult.rows[0]
   } catch (error) {
+    console.error(`[Paddle ${logLabel}] failed to load checkout account`, {
+      userId: req.userId,
+      error: error?.code || error?.name || 'unknown_error',
+    })
     return res.status(500).json({
       error: 'Failed to create checkout',
-      message: error.message,
     })
   }
 
@@ -501,95 +929,225 @@ async function createCheckout(req, res, logLabel) {
       })
     }
   } catch (error) {
+    console.error(`[Paddle ${logLabel}] existing subscription verification failed`, {
+      userId: user.id,
+      environment: paddle.environment,
+      providerStatusCode: error?.status || null,
+    })
     return res.status(502).json({
       error: 'Unable to verify the existing subscription before checkout. Please try again.',
-      message: error.message,
     })
-  }
-
-  const trialEligible = isTrialEligibleForUser(user)
-
-  const planAccess = validatePaddleCheckoutPlan({ plan, testKey, paddle, trialEligible })
-
-  if (!planAccess.ok) {
-    return res.status(planAccess.status).json({ error: planAccess.error })
-  }
-
-  const priceId = planAccess.priceId
-  const storedPlan = planAccess.storedPlan || plan
-
-  if (!priceId) {
-    return res.status(500).json({ error: `Paddle price ID is missing for ${plan} plan` })
   }
 
   try {
-    const appOrigin = getAppOrigin(req)
-    const successUrl = `${appOrigin}/billing/success`
-
-    const paddleResponse = await fetch(`${paddle.apiBaseUrl}/transactions`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${paddle.apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        items: [{
-          price_id: priceId,
-          quantity: 1,
-        }],
-        ...(user.paddle_customer_id
-          ? { customer_id: user.paddle_customer_id }
-          : { customer: { email: user.email } }),
-        custom_data: {
-          userId: user.id,
-          email: user.email,
-          plan: storedPlan,
-          requestedPlan: plan,
-          paddleEnvironment: paddle.environment,
-          trialEligible: planAccess.trialEligible,
-          checkoutMode: planAccess.checkoutMode,
-        },
-        return_url: successUrl,
-      }),
-    })
-
-    const paddlePayload = await paddleResponse.json()
-
-    if (!paddleResponse.ok) {
-      return res.status(502).json({
-        error: 'Failed to create Paddle transaction',
-        details: {
-          status: paddleResponse.status,
-          paddle: paddlePayload,
-          environment: paddle.environment,
-        },
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const acquisition = await acquireCheckoutReservation({
+        userId: user.id,
+        paddle,
+        plan,
+        testKey,
       })
+
+      if (acquisition.action === 'user_not_found') {
+        return res.status(404).json({ error: 'User not found' })
+      }
+      if (acquisition.action === 'environment_changed') {
+        return res.status(409).json({
+          error: 'Checkout environment changed while the request was being prepared. Please retry.',
+          code: 'checkout_environment_changed',
+        })
+      }
+      if (acquisition.action === 'blocked') {
+        return res.status(409).json({
+          error: 'Checkout is unavailable because a Paddle subscription still requires attention.',
+          code: acquisition.block.reason,
+          redirectTo: acquisition.block.redirectTo,
+        })
+      }
+      if (acquisition.action === 'invalid_plan') {
+        return res.status(acquisition.planAccess.status).json({ error: acquisition.planAccess.error })
+      }
+      if (acquisition.action === 'price_missing') {
+        return res.status(500).json({ error: `Paddle price ID is missing for ${plan} plan` })
+      }
+      if (acquisition.action === 'purchase_conflict') {
+        console.warn('[Paddle checkout] duplicate request prevented for a different purchase', {
+          userId: acquisition.user.id,
+          environment: paddle.environment,
+          reservationId: acquisition.reservation.id,
+          requestedPlan: acquisition.purchase.requestedPlan,
+        })
+        return res.status(409).json({
+          error: 'A different checkout is already in progress. Complete or close it before changing plans.',
+          code: 'checkout_purchase_conflict',
+        })
+      }
+      if (acquisition.action === 'in_progress') {
+        console.info('[Paddle checkout] duplicate request prevented while checkout creation is in progress', {
+          userId: acquisition.user.id,
+          environment: paddle.environment,
+          reservationId: acquisition.reservation.id,
+        })
+        return res.status(409).json({
+          error: 'Checkout is already being prepared. Please retry shortly.',
+          code: 'checkout_in_progress',
+        })
+      }
+      if (acquisition.action === 'reuse' || acquisition.action === 'recover') {
+        const resolved = await resolveReservedCheckout({ acquisition, paddle })
+        if (resolved.action === 'reuse') {
+          return res.json(checkoutResponse({
+            transaction: resolved.transaction,
+            user: acquisition.user,
+            paddle,
+            purchase: acquisition.purchase,
+          }))
+        }
+        if (resolved.action === 'completed') {
+          return res.status(409).json({
+            error: 'This checkout has already completed. Subscription confirmation is in progress.',
+            code: 'checkout_completed',
+            redirectTo: '/billing/success',
+          })
+        }
+        if (resolved.action === 'conflict') {
+          return res.status(409).json({
+            error: 'Checkout ownership could not be verified. Please contact support.',
+            code: 'checkout_ownership_conflict',
+          })
+        }
+        if (resolved.action === 'in_progress') {
+          return res.status(409).json({
+            error: 'Checkout is still being prepared. Please retry shortly.',
+            code: 'checkout_in_progress',
+          })
+        }
+        if (resolved.action === 'retry') continue
+      }
+
+      if (acquisition.action !== 'create') {
+        return res.status(409).json({ error: 'Checkout could not be prepared safely. Please retry.' })
+      }
+
+      const appOrigin = getAppOrigin(req)
+      const successUrl = `${appOrigin}/billing/success`
+      let paddleResponse
+      let paddlePayload
+
+      try {
+        paddleResponse = await fetch(`${paddle.apiBaseUrl}/transactions`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${paddle.apiKey}`,
+            'Content-Type': 'application/json',
+            'Paddle-Version': paddle.apiVersion,
+          },
+          body: JSON.stringify({
+            items: [{
+              price_id: acquisition.purchase.priceId,
+              quantity: 1,
+            }],
+            ...(acquisition.user.paddle_customer_id
+              ? { customer_id: acquisition.user.paddle_customer_id }
+              : { customer: { email: acquisition.user.email } }),
+            custom_data: {
+              userId: acquisition.user.id,
+              email: acquisition.user.email,
+              plan: acquisition.purchase.storedPlan,
+              requestedPlan: acquisition.purchase.requestedPlan,
+              paddleEnvironment: paddle.environment,
+              trialEligible: acquisition.purchase.trialEligible,
+              checkoutMode: acquisition.purchase.checkoutMode,
+              checkoutReservationId: acquisition.reservation.reservation_token,
+            },
+            return_url: successUrl,
+          }),
+        })
+        paddlePayload = await paddleResponse.json().catch(() => ({}))
+      } catch (error) {
+        console.error('[Paddle checkout] provider transaction creation outcome is unknown', {
+          userId: acquisition.user.id,
+          environment: paddle.environment,
+          reservationId: acquisition.reservation.id,
+          error: error?.message || String(error),
+        })
+        return res.status(502).json({
+          error: 'Paddle checkout could not be confirmed. Please retry shortly.',
+          code: 'checkout_provider_outcome_unknown',
+        })
+      }
+
+      if (!paddleResponse.ok) {
+        if (paddleResponse.status >= 400 && paddleResponse.status < 500) {
+          await updateCheckoutReservationStatus({
+            reservation: acquisition.reservation,
+            status: 'failed',
+            failureCode: `provider_rejected_${paddleResponse.status}`,
+          })
+        }
+        console.error('[Paddle checkout] provider transaction creation failed', {
+          userId: acquisition.user.id,
+          environment: paddle.environment,
+          reservationId: acquisition.reservation.id,
+          providerStatusCode: paddleResponse.status,
+          providerRequestId: paddlePayload?.meta?.request_id || null,
+        })
+        return res.status(502).json({ error: 'Failed to create Paddle transaction' })
+      }
+
+      const transaction = dataFromPayload(paddlePayload)
+      if (!transactionMatchesCheckoutReservation(transaction, acquisition.reservation, acquisition.user)) {
+        await updateCheckoutReservationStatus({
+          reservation: acquisition.reservation,
+          status: 'conflict',
+          failureCode: 'created_transaction_mismatch',
+          transaction,
+        })
+        return res.status(502).json({ error: 'Paddle checkout ownership could not be verified' })
+      }
+
+      if (!isReusableCheckoutTransaction(transaction)) {
+        return res.status(502).json({ error: 'Paddle checkout was not ready for use' })
+      }
+
+      const stored = await storeCheckoutReservationResult({
+        reservation: acquisition.reservation,
+        transaction,
+      })
+      if (!stored.stored) {
+        return res.status(409).json({
+          error: 'Checkout state changed while the transaction was being prepared.',
+          code: 'checkout_state_changed',
+          redirectTo: stored.reservation?.status === 'completed' ? '/billing/success' : undefined,
+        })
+      }
+
+      console.info('[Paddle checkout] checkout reservation created', {
+        userId: acquisition.user.id,
+        environment: paddle.environment,
+        reservationId: acquisition.reservation.id,
+        transactionId: transaction.id,
+      })
+      return res.json(checkoutResponse({
+        transaction,
+        user: acquisition.user,
+        paddle,
+        purchase: acquisition.purchase,
+      }))
     }
 
-    const transactionId = paddlePayload?.data?.id
-    const checkoutUrl = paddlePayload?.data?.checkout?.url
-
-    if (!transactionId) {
-      return res.status(502).json({ error: 'Paddle transaction ID was missing in response' })
-    }
-
-    if (!checkoutUrl) {
-      return res.status(502).json({ error: 'Paddle checkout URL was missing in response' })
-    }
-
-    return res.json({
-      checkoutUrl,
-      userEmail: user.email,
-      clientToken: paddle.clientToken,
-      paddleEnvironment: paddle.environment,
-      trialEligible: planAccess.trialEligible,
-      checkoutMode: planAccess.checkoutMode,
-      _version: 'WITH_USER_EMAIL_2026_03_26',
+    return res.status(409).json({
+      error: 'Checkout could not be prepared safely. Please retry.',
+      code: 'checkout_retry_required',
     })
   } catch (error) {
+    console.error(`[Paddle ${logLabel}] checkout preparation failed`, {
+      userId: user.id,
+      environment: paddle.environment,
+      error: error?.code || error?.name || 'unknown_error',
+    })
     return res.status(500).json({
       error: 'Failed to create checkout',
-      message: error.message,
     })
   }
 }

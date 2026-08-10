@@ -860,6 +860,11 @@ test('GET /api/subscriptions/current atomically recovers the same Past Due lifec
   assert.match(recovery.sql, /status = CASE WHEN transaction_id=\$14 THEN 'succeeded' ELSE status END/)
   assert.match(recovery.sql, /next_retry_at = NULL/)
   assert.match(recovery.sql, /WHEN \$14::text IS NULL[\s\S]*subscription_get_reconciliation_pending/)
+  assert.match(
+    recovery.sql,
+    /owned_subscription\.paddle_subscription_id = \$4[\s\S]*LOWER\(owned_subscription\.paddle_environment\)[\s\S]*= \$8[\s\S]*owned_subscription\.user_id <> users\.id/,
+  )
+  assert.doesNotMatch(recovery.sql, /LOWER\(owned_subscription\.paddle_environment\)[\s\S]*<> \$8/)
 })
 
 test('GET reconciliation reports a new recovery as pending instead of reusing an older terminal state', async () => {

@@ -502,6 +502,15 @@ test('verification-gap backfill follows retry scheduling and repairs only persis
   assert.doesNotMatch(sql, /DELETE|DROP|TRUNCATE/)
 })
 
+test('checkout ownership protection follows durable webhook verification backfill', async () => {
+  const source = await readRunnerSource()
+  assert.match(source, /'053-protect-paddle-checkout-ownership'/)
+  assert.ok(
+    source.indexOf("'052-backfill-paddle-webhook-verification-gap'") <
+      source.indexOf("'053-protect-paddle-checkout-ownership'"),
+  )
+})
+
 test('recovery billing adjustment migration is additive, durable, and uniquely idempotent', async () => {
   const queries = []
   const { up } = await import('./049-add-recovery-billing-adjustments.js')

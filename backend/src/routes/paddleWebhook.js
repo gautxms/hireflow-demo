@@ -27,6 +27,7 @@ import {
   isRecoveryBillingAdjustmentEnabled,
   runRecoveryBillingAdjustments,
 } from '../services/recoveryBillingAdjustment.js'
+import { markCheckoutReservationCompleted } from '../services/paddleCheckoutReservations.js'
 
 const router = express.Router()
 const WEBHOOK_PROCESSING_LEASE_SECONDS = 120
@@ -104,6 +105,43 @@ function isFinalCancellationUser(user = {}, now = new Date()) {
 
 async function resolveUserFromPayload(payload, paddleEnvironment, strictEnvironment = false) {
   const explicitUserId = payload?.data?.custom_data?.userId || payload?.custom_data?.userId || null
+  const providerCustomerId = getPaddleCustomerId(payload)
+  const providerSubscriptionId = getTransactionSubscriptionId(payload)
+    || (String(payload?.data?.id || '').startsWith('sub_') ? payload.data.id : null)
+
+  async function findOwnershipConflict(user) {
+    if (!user || (!providerCustomerId && !providerSubscriptionId)) return null
+
+    const conflictResult = await pool.query(
+      `SELECT id, 'user' AS source
+       FROM users
+       WHERE id <> $1
+         AND COALESCE(NULLIF(LOWER(paddle_environment), ''), 'production') = $2
+         AND (
+           ($3::text IS NOT NULL AND paddle_customer_id = $3)
+           OR ($4::text IS NOT NULL AND paddle_subscription_id = $4)
+         )
+       UNION ALL
+       SELECT user_id AS id, 'subscription_projection' AS source
+       FROM subscriptions
+       WHERE $4::text IS NOT NULL
+         AND paddle_subscription_id = $4
+         AND COALESCE(NULLIF(LOWER(paddle_environment), ''), 'production') = $2
+         AND user_id IS NOT NULL
+         AND user_id <> $1
+       LIMIT 1`,
+      [user.id, paddleEnvironment, providerCustomerId, providerSubscriptionId],
+    )
+    const conflict = conflictResult.rows[0]
+    if (!conflict || String(conflict.id || '') === String(user.id)) return null
+
+    return {
+      existingOwnerId: conflict.id,
+      source: conflict.source,
+      providerCustomerId,
+      providerSubscriptionId,
+    }
+  }
 
   if (explicitUserId) {
     const result = await pool.query(
@@ -122,13 +160,14 @@ async function resolveUserFromPayload(payload, paddleEnvironment, strictEnvironm
     return {
       user,
       environmentMismatch: Boolean(strictEnvironment && user && userEnvironment !== paddleEnvironment),
+      ownershipConflict: await findOwnershipConflict(user),
     }
   }
 
   const paddleCustomerId = getPaddleCustomerId(payload)
 
   if (!paddleCustomerId) {
-    return { user: null, environmentMismatch: false }
+    return { user: null, environmentMismatch: false, ownershipConflict: null }
   }
 
   const result = await pool.query(
@@ -142,7 +181,12 @@ async function resolveUserFromPayload(payload, paddleEnvironment, strictEnvironm
     [paddleCustomerId, strictEnvironment, paddleEnvironment],
   )
 
-  return { user: result.rows[0] || null, environmentMismatch: false }
+  const user = result.rows[0] || null
+  return {
+    user,
+    environmentMismatch: false,
+    ownershipConflict: await findOwnershipConflict(user),
+  }
 }
 
 function shouldApplyFailedPaymentToUser(user, payload, eventType) {
@@ -680,7 +724,7 @@ async function upsertSubscriptionProjection({ subscriptionId, userId, status, ev
   await pool.query(
     `INSERT INTO subscriptions (paddle_subscription_id, user_id, status, latest_event_type, latest_event_payload, paddle_environment)
      VALUES ($1, $2, $3, $4, $5::jsonb, $6)
-     ON CONFLICT (paddle_subscription_id)
+     ON CONFLICT (paddle_environment, paddle_subscription_id)
      DO UPDATE SET
        user_id = COALESCE(EXCLUDED.user_id, subscriptions.user_id),
        status = EXCLUDED.status,
@@ -688,33 +732,60 @@ async function upsertSubscriptionProjection({ subscriptionId, userId, status, ev
        latest_event_payload = EXCLUDED.latest_event_payload,
        updated_at = NOW(),
        paddle_environment = EXCLUDED.paddle_environment
-     WHERE (
-       COALESCE(EXCLUDED.latest_event_payload #>> '{data,current_billing_period,ends_at}', EXCLUDED.latest_event_payload #>> '{data,billing_period,ends_at}') IS NOT NULL
+     WHERE (subscriptions.user_id IS NULL OR EXCLUDED.user_id IS NULL OR subscriptions.user_id = EXCLUDED.user_id)
+       AND COALESCE(NULLIF(LOWER(subscriptions.paddle_environment), ''), 'production')
+           = COALESCE(NULLIF(LOWER(EXCLUDED.paddle_environment), ''), 'production')
        AND (
-         COALESCE(subscriptions.latest_event_payload #>> '{data,current_billing_period,ends_at}', subscriptions.latest_event_payload #>> '{data,billing_period,ends_at}') IS NULL
-         OR COALESCE(EXCLUDED.latest_event_payload #>> '{data,current_billing_period,ends_at}', EXCLUDED.latest_event_payload #>> '{data,billing_period,ends_at}')::timestamptz
-            >= COALESCE(subscriptions.latest_event_payload #>> '{data,current_billing_period,ends_at}', subscriptions.latest_event_payload #>> '{data,billing_period,ends_at}')::timestamptz
-         OR (
-           COALESCE(EXCLUDED.latest_event_payload #>> '{occurred_at}', EXCLUDED.latest_event_payload #>> '{notification,occurred_at}') IS NOT NULL
-           AND COALESCE(
-             subscriptions.latest_event_payload #>> '{occurred_at}',
-             subscriptions.latest_event_payload #>> '{notification,occurred_at}',
-             subscriptions.latest_event_payload #>> '{provider_observed_at}'
-           ) IS NOT NULL
-           AND COALESCE(EXCLUDED.latest_event_payload #>> '{occurred_at}', EXCLUDED.latest_event_payload #>> '{notification,occurred_at}')::timestamptz
-              > COALESCE(
-                subscriptions.latest_event_payload #>> '{occurred_at}',
-                subscriptions.latest_event_payload #>> '{notification,occurred_at}',
-                subscriptions.latest_event_payload #>> '{provider_observed_at}'
-              )::timestamptz
+         (
+           COALESCE(EXCLUDED.latest_event_payload #>> '{data,current_billing_period,ends_at}', EXCLUDED.latest_event_payload #>> '{data,billing_period,ends_at}') IS NOT NULL
+           AND (
+             COALESCE(subscriptions.latest_event_payload #>> '{data,current_billing_period,ends_at}', subscriptions.latest_event_payload #>> '{data,billing_period,ends_at}') IS NULL
+             OR COALESCE(EXCLUDED.latest_event_payload #>> '{data,current_billing_period,ends_at}', EXCLUDED.latest_event_payload #>> '{data,billing_period,ends_at}')::timestamptz
+                >= COALESCE(subscriptions.latest_event_payload #>> '{data,current_billing_period,ends_at}', subscriptions.latest_event_payload #>> '{data,billing_period,ends_at}')::timestamptz
+             OR (
+               COALESCE(EXCLUDED.latest_event_payload #>> '{occurred_at}', EXCLUDED.latest_event_payload #>> '{notification,occurred_at}') IS NOT NULL
+               AND COALESCE(
+                 subscriptions.latest_event_payload #>> '{occurred_at}',
+                 subscriptions.latest_event_payload #>> '{notification,occurred_at}',
+                 subscriptions.latest_event_payload #>> '{provider_observed_at}'
+               ) IS NOT NULL
+               AND COALESCE(EXCLUDED.latest_event_payload #>> '{occurred_at}', EXCLUDED.latest_event_payload #>> '{notification,occurred_at}')::timestamptz
+                  > COALESCE(
+                    subscriptions.latest_event_payload #>> '{occurred_at}',
+                    subscriptions.latest_event_payload #>> '{notification,occurred_at}',
+                    subscriptions.latest_event_payload #>> '{provider_observed_at}'
+                  )::timestamptz
+             )
+           )
+         ) OR (
+           COALESCE(EXCLUDED.latest_event_payload #>> '{data,current_billing_period,ends_at}', EXCLUDED.latest_event_payload #>> '{data,billing_period,ends_at}') IS NULL
+           AND COALESCE(subscriptions.latest_event_payload #>> '{data,current_billing_period,ends_at}', subscriptions.latest_event_payload #>> '{data,billing_period,ends_at}') IS NULL
          )
        )
-     ) OR (
-       COALESCE(EXCLUDED.latest_event_payload #>> '{data,current_billing_period,ends_at}', EXCLUDED.latest_event_payload #>> '{data,billing_period,ends_at}') IS NULL
-       AND COALESCE(subscriptions.latest_event_payload #>> '{data,current_billing_period,ends_at}', subscriptions.latest_event_payload #>> '{data,billing_period,ends_at}') IS NULL
-     )`,
+     RETURNING user_id, paddle_environment`,
     [subscriptionId, userId || null, status, eventType, JSON.stringify(payload), environment],
-  )
+  ).then(async (result) => {
+    if (result.rowCount > 0) return
+
+    const existing = await pool.query(
+      `SELECT user_id, paddle_environment
+       FROM subscriptions
+       WHERE paddle_subscription_id = $1
+         AND COALESCE(NULLIF(LOWER(paddle_environment), ''), 'production') = $2`,
+      [subscriptionId, environment],
+    )
+    const row = existing.rows[0]
+    const existingEnvironment = resolvePaddleEnvironmentForUser({ paddle_environment: row?.paddle_environment })
+    if (
+      row?.user_id != null
+      && userId != null
+      && (String(row.user_id) !== String(userId) || existingEnvironment !== environment)
+    ) {
+      const error = new Error('Paddle subscription projection is already owned by another HireFlow account')
+      error.code = 'PADDLE_OWNERSHIP_CONFLICT'
+      throw error
+    }
+  })
 }
 
 function recoveredSubscriptionProjection(currentProjection, recovery) {
@@ -869,6 +940,22 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment, storedEv
     const payloadEnvironment = payload?.data?.custom_data?.paddleEnvironment || payload?.custom_data?.paddleEnvironment || null
     const userResolution = await resolveUserFromPayload(payload, paddle.environment, strictEnvironment)
     const user = userResolution.user
+
+    if (userResolution.ownershipConflict) {
+      console.error('[Paddle webhook] provider ownership conflict rejected', {
+        eventType,
+        environment: paddle.environment,
+        intendedUserId: user?.id || null,
+        existingOwnerId: userResolution.ownershipConflict.existingOwnerId,
+        ownershipSource: userResolution.ownershipConflict.source,
+        customerId: userResolution.ownershipConflict.providerCustomerId,
+        subscriptionId: userResolution.ownershipConflict.providerSubscriptionId,
+      })
+      const ownershipError = new Error('Paddle provider identity is already owned by another HireFlow account')
+      ownershipError.code = 'PADDLE_OWNERSHIP_CONFLICT'
+      throw ownershipError
+    }
+
     const hasEnvironmentMismatch = Boolean(
       (payloadEnvironment && payloadEnvironment !== paddle.environment)
       || userResolution.environmentMismatch,
@@ -899,11 +986,23 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment, storedEv
       const userId = user?.id || null
       const transactionSubscriptionId = getTransactionSubscriptionId(payload)
       const transactionId = payload?.data?.id || payload?.transaction_id || payload?.id || null
+      const checkoutReservationId = payload?.data?.custom_data?.checkoutReservationId
+        || payload?.custom_data?.checkoutReservationId
+        || null
       const completedPlanChange = getPlanChangeMetadata(payload)
       const isRecoveredPlanChange = isSubscriptionUpdateTransaction(payload) && completedPlanChange?.outcome === 'recovered'
       let activationApplied = false
 
       if (!hasEnvironmentMismatch && !isRecoveredPlanChange) {
+        if (userId && transactionId && checkoutReservationId) {
+          await markCheckoutReservationCompleted({
+            reservationToken: checkoutReservationId,
+            userId,
+            environment: paddle.environment,
+            transactionId,
+            customerId: getPaddleCustomerId(payload),
+          })
+        }
         if (userId) {
           const activationResult = await pool.query(
             `UPDATE users

@@ -990,6 +990,14 @@ router.get('/current', requireAuth, async (req, res) => {
              AND subscription_plan = $5
              AND COALESCE(NULLIF(LOWER(paddle_environment), ''), 'production') = $8
              AND paddle_customer_id = $13
+             AND NOT EXISTS (
+               SELECT 1
+               FROM subscriptions owned_subscription
+               WHERE owned_subscription.paddle_subscription_id = $4
+                 AND COALESCE(NULLIF(LOWER(owned_subscription.paddle_environment), ''), 'production') = $8
+                 AND owned_subscription.user_id IS NOT NULL
+                 AND owned_subscription.user_id <> users.id
+             )
              AND (
                NOT $9
                OR (
@@ -1025,14 +1033,17 @@ router.get('/current', requireAuth, async (req, res) => {
          INSERT INTO subscriptions (paddle_subscription_id, user_id, status, latest_event_type, latest_event_payload, paddle_environment)
          SELECT $4, id, $6, 'subscription.reconciled', $7::jsonb, $8
          FROM reconciled_user
-         ON CONFLICT (paddle_subscription_id)
+         ON CONFLICT (paddle_environment, paddle_subscription_id)
          DO UPDATE SET
-           user_id = EXCLUDED.user_id,
+           user_id = COALESCE(subscriptions.user_id, EXCLUDED.user_id),
            status = EXCLUDED.status,
            latest_event_type = EXCLUDED.latest_event_type,
            latest_event_payload = EXCLUDED.latest_event_payload,
            paddle_environment = EXCLUDED.paddle_environment,
-           updated_at = NOW()`,
+           updated_at = NOW()
+         WHERE (subscriptions.user_id IS NULL OR subscriptions.user_id = EXCLUDED.user_id)
+           AND COALESCE(NULLIF(LOWER(subscriptions.paddle_environment), ''), 'production')
+               = COALESCE(NULLIF(LOWER(EXCLUDED.paddle_environment), ''), 'production')`,
         [
           user.id,
           paddleCurrentPeriodEnd,
@@ -1352,17 +1363,21 @@ async function persistSuccessfulPlanChange(userId, context, paddleUpdate) {
       [visiblePlan, dates.status, dates.providerSubscriptionId, dates.currentPeriodEnd, dates.nextBillingDate, userId],
     )
 
-    await client.query(
+    const projectionResult = await client.query(
       `INSERT INTO subscriptions (paddle_subscription_id, user_id, status, latest_event_type, latest_event_payload, paddle_environment)
        VALUES ($1, $2, $3, 'subscription.reconciled', $4::jsonb, $5)
-       ON CONFLICT (paddle_subscription_id)
+       ON CONFLICT (paddle_environment, paddle_subscription_id)
        DO UPDATE SET
-         user_id = EXCLUDED.user_id,
+         user_id = COALESCE(subscriptions.user_id, EXCLUDED.user_id),
          status = EXCLUDED.status,
          latest_event_type = EXCLUDED.latest_event_type,
          latest_event_payload = EXCLUDED.latest_event_payload,
          paddle_environment = EXCLUDED.paddle_environment,
-         updated_at = NOW()`,
+         updated_at = NOW()
+       WHERE (subscriptions.user_id IS NULL OR subscriptions.user_id = EXCLUDED.user_id)
+         AND COALESCE(NULLIF(LOWER(subscriptions.paddle_environment), ''), 'production')
+             = COALESCE(NULLIF(LOWER(EXCLUDED.paddle_environment), ''), 'production')
+       RETURNING id`,
       [
         dates.providerSubscriptionId || context.user.paddle_subscription_id,
         userId,
@@ -1371,6 +1386,11 @@ async function persistSuccessfulPlanChange(userId, context, paddleUpdate) {
         context.paddle.environment,
       ],
     )
+    if (projectionResult.rowCount !== 1) {
+      const error = new Error('Paddle subscription projection ownership conflict')
+      error.code = 'PADDLE_OWNERSHIP_CONFLICT'
+      throw error
+    }
 
     await client.query(
       `INSERT INTO subscription_change_events (user_id, from_plan, to_plan, change_type, effective_at, prorated_credit_cents, metadata)
