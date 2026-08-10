@@ -135,8 +135,20 @@ postgresTest('failed-payment mutation rolls back atomically, retries, and comple
   })
   await resetSchema()
   const userResult = await pool.query(
-    `INSERT INTO users (paddle_environment, subscription_status, subscription_plan)
-     VALUES ('sandbox', 'inactive', 'monthly')
+    `INSERT INTO users (
+       paddle_environment,
+       subscription_status,
+       subscription_plan,
+       paddle_customer_id,
+       paddle_subscription_id
+     )
+     VALUES (
+       'sandbox',
+       'inactive',
+       'monthly',
+       'ctm_pg_failed_payment_atomicity',
+       'sub_pg_failed_payment_atomicity'
+     )
      RETURNING id`,
   )
   const userId = userResult.rows[0].id
