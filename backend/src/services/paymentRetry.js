@@ -37,7 +37,7 @@ function getUserId(payload) {
   return payload?.data?.custom_data?.userId || payload?.custom_data?.userId || null
 }
 
-export async function recordFailedPaymentAttempt(payload, errorMessage = null, paddleEnvironment = null) {
+export async function recordFailedPaymentAttempt(payload, errorMessage = null, paddleEnvironment = null, db = pool) {
   const transactionId = getTransactionId(payload)
 
   if (!transactionId) {
@@ -54,7 +54,7 @@ export async function recordFailedPaymentAttempt(payload, errorMessage = null, p
       || payload?.custom_data?.paddleEnvironment,
   )
 
-  const result = await pool.query(
+  const result = await db.query(
     `INSERT INTO payment_attempts (
       transaction_id,
       user_id,

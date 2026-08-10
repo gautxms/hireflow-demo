@@ -63,8 +63,10 @@ Railway redeploys automatically after variable updates.
 
 - Endpoint: `POST /api/paddle/webhook`
 - Signature header: `Paddle-Signature` (`ts` + `h1` HMAC SHA256)
-- Processed events: `subscription_created`, `subscription_payment_succeeded`, `subscription_cancelled`
-- Every webhook payload is written to `paddle_webhook_audit`.
+- Verified events are committed to `paddle_webhook_events` with their audit row before the endpoint acknowledges receipt.
+- Business processing runs asynchronously through the durable webhook retry worker; the HTTP route does not update billing state or call Paddle after persistence.
+- Required billing mutations are transactional. Processing failures stay retryable in the inbox and use the existing lease, backoff, and attempt limits.
+- Explicit environment endpoints are also available at `/api/paddle/webhook/production` and `/api/paddle/webhook/sandbox`.
 
 
 ## Paddle hosted checkout

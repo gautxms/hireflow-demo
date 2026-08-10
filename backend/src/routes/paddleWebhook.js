@@ -243,7 +243,7 @@ function getProviderEventTimestamp(payload) {
   return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString()
 }
 
-async function restorePlanChangeEntitlement(user, metadata) {
+async function restorePlanChangeEntitlement(user, metadata, db = pool) {
   if (!user?.id || !metadata?.fromPlan) return
 
   const priorStatus = ['active', 'trialing'].includes(metadata.priorStatus)
@@ -252,7 +252,7 @@ async function restorePlanChangeEntitlement(user, metadata) {
       ? String(user.subscription_status).toLowerCase()
       : 'active'
 
-  await pool.query(
+  await db.query(
     `UPDATE users
      SET subscription_plan = $2,
          subscription_status = $3,
@@ -283,10 +283,6 @@ async function recoverFailedPlanChangeFromWebhook(user, payload, paddle) {
     metadata,
     existingCustomData: payload?.data?.custom_data || payload?.custom_data || {},
   })
-
-  if (result.outcome === PLAN_CHANGE_RECOVERY_OUTCOME.RECOVERED) {
-    await restorePlanChangeEntitlement(user, metadata)
-  }
 
   return { ...result, metadata }
 }
@@ -389,14 +385,14 @@ function getPaymentAmount(payload) {
   return 0
 }
 
-async function markPaymentAttemptSucceeded(payload) {
+async function markPaymentAttemptSucceeded(payload, db = pool) {
   const transactionId = payload?.data?.id || payload?.transaction_id || payload?.id || null
 
   if (!transactionId) {
     return
   }
 
-  await pool.query(
+  await db.query(
     `UPDATE payment_attempts
      SET status = 'succeeded',
          next_retry_at = NULL,
@@ -404,14 +400,6 @@ async function markPaymentAttemptSucceeded(payload) {
          metadata = COALESCE(metadata, '{}'::jsonb) || $2::jsonb
      WHERE transaction_id = $1`,
     [transactionId, JSON.stringify({ resolved_by: 'webhook', event: 'transaction.completed' })],
-  )
-}
-
-async function logWebhookAudit(eventType, payload, isValidSignature, errorMessage = null) {
-  await pool.query(
-    `INSERT INTO paddle_webhook_audit (event_type, payload, signature_valid, error_message)
-     VALUES ($1, $2::jsonb, $3, $4)`,
-    [eventType || 'unknown', JSON.stringify(payload), isValidSignature, errorMessage],
   )
 }
 
@@ -429,6 +417,71 @@ async function getWebhookInboxEvent(eventId) {
     [eventId],
   )
   return result.rows[0] || null
+}
+
+export async function persistVerifiedWebhookInboxEvent({ eventId, eventType, payloadHash, payload, environment }) {
+  const existingBeforeInsert = await getWebhookInboxEvent(eventId)
+  if (existingBeforeInsert) {
+    if (
+      (existingBeforeInsert.payload_hash && existingBeforeInsert.payload_hash !== payloadHash)
+      || (existingBeforeInsert.paddle_environment && existingBeforeInsert.paddle_environment !== environment)
+    ) {
+      return { persisted: false, conflict: true }
+    }
+    return {
+      persisted: true,
+      duplicate: true,
+      status: normalizeInboxStatus(existingBeforeInsert.status),
+    }
+  }
+
+  const insertResult = await pool.query(
+    `WITH inserted_event AS (
+       INSERT INTO paddle_webhook_events (
+         event_id,
+         event_type,
+         payload_hash,
+         payload,
+         paddle_environment,
+         status,
+         attempt_count,
+         first_received_at,
+         last_attempt_at,
+         processed_at,
+         processing_token,
+         verified_at
+       )
+       VALUES ($1, $2, $3, $4::jsonb, $5, 'processing', 0, NOW(), NULL, NULL, NULL, NOW())
+       ON CONFLICT (event_id) DO NOTHING
+       RETURNING event_id
+     ), audit_entry AS (
+       INSERT INTO paddle_webhook_audit (event_type, payload, signature_valid, error_message)
+       SELECT $2, $4::jsonb, TRUE, NULL
+       FROM inserted_event
+     )
+     SELECT * FROM inserted_event`,
+    [eventId, eventType || 'unknown', payloadHash, JSON.stringify(payload), environment],
+  )
+
+  if (insertResult.rowCount > 0) {
+    return { persisted: true, duplicate: false }
+  }
+
+  const existing = await getWebhookInboxEvent(eventId)
+  if (!existing) {
+    const error = new Error('Paddle webhook inbox insert did not persist an event')
+    error.code = 'PADDLE_WEBHOOK_PERSISTENCE_FAILED'
+    throw error
+  }
+
+  if (
+    (existing.payload_hash && existing.payload_hash !== payloadHash)
+    || (existing.paddle_environment && existing.paddle_environment !== environment)
+  ) {
+    return { persisted: false, conflict: true }
+  }
+
+  return { persisted: true, duplicate: true, status: normalizeInboxStatus(existing.status) }
 }
 
 export async function reclaimWebhookInboxEvent({ eventId, payloadHash, payload, environment, processingToken, source = 'live' }) {
@@ -713,10 +766,10 @@ export function createWebhookInboxLease({
   }
 }
 
-async function upsertSubscriptionProjection({ subscriptionId, userId, status, eventType, payload, environment }) {
+async function upsertSubscriptionProjection({ subscriptionId, userId, status, eventType, payload, environment }, db = pool) {
   if (!subscriptionId || !status) return
 
-  await pool.query(
+  await db.query(
     `INSERT INTO subscriptions (paddle_subscription_id, user_id, status, latest_event_type, latest_event_payload, paddle_environment)
      VALUES ($1, $2, $3, $4, $5::jsonb, $6)
      ON CONFLICT (paddle_environment, paddle_subscription_id)
@@ -762,7 +815,7 @@ async function upsertSubscriptionProjection({ subscriptionId, userId, status, ev
   ).then(async (result) => {
     if (result.rowCount > 0) return
 
-    const existing = await pool.query(
+    const existing = await db.query(
       `SELECT user_id, paddle_environment
        FROM subscriptions
        WHERE paddle_subscription_id = $1
@@ -781,6 +834,21 @@ async function upsertSubscriptionProjection({ subscriptionId, userId, status, ev
       throw error
     }
   })
+}
+
+async function withWebhookTransaction(task) {
+  const client = await pool.connect()
+  try {
+    await client.query('BEGIN')
+    const result = await task(client)
+    await client.query('COMMIT')
+    return result
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {})
+    throw error
+  } finally {
+    client.release()
+  }
 }
 
 function recoveredSubscriptionProjection(currentProjection, recovery) {
@@ -832,17 +900,58 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment, storedEv
     hasWebhookSecret: Boolean(secret),
   })
 
-  if (!storedEvent) {
-    try {
-      await logWebhookAudit(eventType, payload, signatureCheck.isValid, signatureCheck.reason)
-    } catch (error) {
-      console.error('[Paddle webhook] failed to write audit log', error)
-    }
-  }
-
   const dedupeEventId = storedEvent?.eventId || getEventDeduplicationId(payload, rawBody)
   const payloadHash = storedEvent?.payloadHash || crypto.createHash('sha256').update(rawBody || '', 'utf8').digest('hex')
   const durableInboxEnabled = isDurableWebhookInboxEnabled()
+
+  if (!storedEvent) {
+    if (!eventType) {
+      return res.status(400).json({ error: 'Webhook event type is required' })
+    }
+
+    const payloadEnvironment = payload?.data?.custom_data?.paddleEnvironment
+      || payload?.custom_data?.paddleEnvironment
+      || null
+    if (payloadEnvironment && payloadEnvironment !== paddle.environment) {
+      return res.status(400).json({ error: 'Webhook environment mismatch' })
+    }
+
+    if (!durableInboxEnabled) {
+      res.set('Retry-After', String(WEBHOOK_PROCESSING_LEASE_SECONDS))
+      return res.status(503).json({
+        error: 'Durable webhook processing is unavailable',
+        retryable: true,
+      })
+    }
+
+    try {
+      const persisted = await persistVerifiedWebhookInboxEvent({
+        eventId: dedupeEventId,
+        eventType,
+        payloadHash,
+        payload,
+        environment: paddle.environment,
+      })
+
+      if (persisted.conflict) {
+        console.error('[Paddle webhook] rejected reused event id with different payload', {
+          environment: paddle.environment,
+          eventType,
+          eventId: dedupeEventId,
+        })
+        return res.status(409).json({ error: 'Webhook event payload conflict' })
+      }
+
+      return res.status(200).json({
+        received: true,
+        ...(persisted.duplicate ? { duplicate: true } : {}),
+      })
+    } catch (error) {
+      console.error('[Paddle webhook] failed to durably persist verified event', getSafeErrorContext(error))
+      return res.status(500).json({ error: 'Webhook persistence failed' })
+    }
+  }
+
   let inboxClaimed = false
   let inboxAttemptCount = null
   let inboxProcessingToken = null
@@ -858,7 +967,7 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment, storedEv
       payloadHash,
       payload,
       environment: paddle.environment,
-      source: storedEvent ? 'scheduled' : 'live',
+      source: 'scheduled',
     }
     const inboxClaim = durableInboxEnabled
       ? await claimWebhookInboxEvent(claimInput)
@@ -977,6 +1086,7 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment, storedEv
         }
       : null
     let recoveryAdjustmentCandidate = null
+    let planChangeRestoration = null
 
     if (eventType === 'transaction.completed') {
       const userId = user?.id || null
@@ -990,17 +1100,19 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment, storedEv
       let activationApplied = false
 
       if (!hasEnvironmentMismatch && !isRecoveredPlanChange) {
-        if (userId && transactionId && checkoutReservationId) {
-          await markCheckoutReservationCompleted({
-            reservationToken: checkoutReservationId,
-            userId,
-            environment: paddle.environment,
-            transactionId,
-            customerId: getPaddleCustomerId(payload),
-          })
-        }
-        if (userId) {
-          const activationResult = await pool.query(
+        await withWebhookTransaction(async (db) => {
+          if (userId && transactionId && checkoutReservationId) {
+            await markCheckoutReservationCompleted({
+              db,
+              reservationToken: checkoutReservationId,
+              userId,
+              environment: paddle.environment,
+              transactionId,
+              customerId: getPaddleCustomerId(payload),
+            })
+          }
+          if (userId) {
+            const activationResult = await db.query(
             `UPDATE users
              SET subscription_status = 'active',
                  subscription_started_at = COALESCE(subscription_started_at, NOW()),
@@ -1065,28 +1177,31 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment, storedEv
               providerEventAt,
             ],
           )
-          activationApplied = activationResult.rowCount > 0
+            activationApplied = activationResult.rowCount > 0
 
-          if (
-            activationResult.rowCount === 0
-            && isFinalCancellationUser(user)
-            && transactionSubscriptionId
-            && transactionSubscriptionId !== user.paddle_subscription_id
-          ) {
-            throw new Error('Completed checkout could not replace the cancelled subscription lifecycle')
+            if (
+              activationResult.rowCount === 0
+              && isFinalCancellationUser(user)
+              && transactionSubscriptionId
+              && transactionSubscriptionId !== user.paddle_subscription_id
+            ) {
+              throw new Error('Completed checkout could not replace the cancelled subscription lifecycle')
+            }
           }
-        }
 
-        // A completed transaction is authoritative for its own payment attempt even
-        // when a newer subscription event has already won the user projection CAS.
-        await markPaymentAttemptSucceeded(payload)
+          // A completed transaction is authoritative for its own payment attempt even
+          // when a newer subscription event has already won the user projection CAS.
+          await markPaymentAttemptSucceeded(payload, db)
+          if (activationApplied && subscriptionProjection) {
+            await upsertSubscriptionProjection(subscriptionProjection, db)
+          }
+        })
+
         if (userId && transactionId && isRecoveryBillingAdjustmentEnabled(paddle.environment)) {
           recoveryAdjustmentCandidate = { userId, transactionId }
         }
 
-        if (!activationApplied) {
-          subscriptionProjection = null
-        }
+        subscriptionProjection = null
 
         postProcessingTasks.push(() => trackEvent({
           userId,
@@ -1121,6 +1236,9 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment, storedEv
           const recovery = await recoverFailedPlanChangeFromWebhook(user, payload, paddle)
           preservePaidPlan = recovery.outcome === PLAN_CHANGE_RECOVERY_OUTCOME.RECOVERED
           subscriptionProjection = recoveredSubscriptionProjection(subscriptionProjection, recovery)
+          if (preservePaidPlan) {
+            planChangeRestoration = { user, metadata: recovery.metadata }
+          }
         }
       }
 
@@ -1128,66 +1246,73 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment, storedEv
       const shouldApplyFailure = !hasEnvironmentMismatch
         && !preservePaidPlan
         && shouldApplyFailedPaymentToUser(user, payload, eventType)
-      if (shouldApplyFailure) {
-        const failedUpdateResult = await pool.query(
-          `UPDATE users
-           SET subscription_status = $2,
-               paddle_subscription_id = COALESCE($3, paddle_subscription_id),
-               paddle_customer_id = COALESCE($4, paddle_customer_id),
-               subscription_plan = COALESCE($5, subscription_plan),
-               current_period_end = COALESCE($6, current_period_end),
-               next_billing_date = COALESCE($7, next_billing_date),
-               paddle_environment = $8,
-               last_paddle_event_at = CASE
-                 WHEN $9::timestamptz IS NULL THEN last_paddle_event_at
-                 ELSE GREATEST(COALESCE(last_paddle_event_at, $9::timestamptz), $9::timestamptz)
-               END,
-               updated_at = NOW()
-           WHERE id = $1
-             AND (
-               (paddle_subscription_id IS NULL AND $3 IS NULL)
-               OR paddle_subscription_id = $3
-             )
-             AND ($4 IS NULL OR paddle_customer_id IS NULL OR paddle_customer_id = $4)
-             AND COALESCE(NULLIF(LOWER(paddle_environment), ''), $8) = $8
-             AND (
-               last_paddle_event_at IS NULL
-               OR ($9::timestamptz IS NOT NULL AND $9::timestamptz >= last_paddle_event_at)
-             )`,
-          [
-            user.id,
-            nextStatus || 'payment_failed',
-            getTransactionSubscriptionId(payload),
-            getPaddleCustomerId(payload),
-            getStoredSubscriptionPlan(payload, paddle),
-            payload?.data?.billing_period?.ends_at || payload?.data?.current_billing_period?.ends_at || null,
-            payload?.data?.billing_period?.ends_at || payload?.data?.next_billed_at || null,
-            paddle.environment,
-            providerEventAt,
-          ],
-        )
-        failedStatusApplied = failedUpdateResult.rowCount > 0
-        if (!failedStatusApplied) subscriptionProjection = null
+      const failedTransactionId = payload?.data?.id || payload?.transaction_id || payload?.id || null
+      if (!failedTransactionId) {
+        const error = new Error('Failed Paddle transaction is missing its transaction id')
+        error.code = 'PADDLE_TRANSACTION_ID_MISSING'
+        error.permanent = true
+        throw error
       }
+      await withWebhookTransaction(async (db) => {
+        if (planChangeRestoration) {
+          await restorePlanChangeEntitlement(
+            planChangeRestoration.user,
+            planChangeRestoration.metadata,
+            db,
+          )
+        }
 
-      try {
+        if (shouldApplyFailure) {
+          const failedUpdateResult = await db.query(
+            `UPDATE users
+             SET subscription_status = $2,
+                 paddle_subscription_id = COALESCE($3::text, paddle_subscription_id),
+                 paddle_customer_id = COALESCE($4::text, paddle_customer_id),
+                 subscription_plan = COALESCE($5::text, subscription_plan),
+                 current_period_end = COALESCE($6::timestamp, current_period_end),
+                 next_billing_date = COALESCE($7::timestamp, next_billing_date),
+                 paddle_environment = $8,
+                 last_paddle_event_at = CASE
+                   WHEN $9::timestamptz IS NULL THEN last_paddle_event_at
+                   ELSE GREATEST(COALESCE(last_paddle_event_at, $9::timestamptz), $9::timestamptz)
+                 END,
+                 updated_at = NOW()
+             WHERE id = $1
+               AND (
+                 (paddle_subscription_id IS NULL AND $3::text IS NULL)
+                 OR paddle_subscription_id = $3::text
+               )
+               AND ($4::text IS NULL OR paddle_customer_id IS NULL OR paddle_customer_id = $4::text)
+               AND COALESCE(NULLIF(LOWER(paddle_environment), ''), $8) = $8
+               AND (
+                 last_paddle_event_at IS NULL
+                 OR ($9::timestamptz IS NOT NULL AND $9::timestamptz >= last_paddle_event_at)
+               )`,
+            [
+              user.id,
+              nextStatus || 'payment_failed',
+              getTransactionSubscriptionId(payload),
+              getPaddleCustomerId(payload),
+              getStoredSubscriptionPlan(payload, paddle),
+              payload?.data?.billing_period?.ends_at || payload?.data?.current_billing_period?.ends_at || null,
+              payload?.data?.billing_period?.ends_at || payload?.data?.next_billed_at || null,
+              paddle.environment,
+              providerEventAt,
+            ],
+          )
+          failedStatusApplied = failedUpdateResult.rowCount > 0
+          if (!failedStatusApplied) subscriptionProjection = null
+        }
+
         if (failedStatusApplied || !shouldApplyFailure) {
-          await recordFailedPaymentAttempt(payload, null, paddle.environment)
+          await recordFailedPaymentAttempt(payload, null, paddle.environment, db)
         }
-      } catch (error) {
-        const transactionId = payload?.data?.id || payload?.transaction_id || payload?.id || null
-        const failedSubscriptionId = getTransactionSubscriptionId(payload)
-        const context = {
-          eventType,
-          transactionId,
-          customerId: getPaddleCustomerId(payload),
-          userId: user?.id || null,
-          subscriptionId: failedSubscriptionId,
-          error: getSafeErrorContext(error),
+
+        if (subscriptionProjection) {
+          await upsertSubscriptionProjection(subscriptionProjection, db)
         }
-        console.error('[Paddle webhook] payment.failure.record_failed', context)
-        await logErrorToDatabase('payment.failure.record_failed', error, context)
-      }
+      })
+      subscriptionProjection = null
 
       postProcessingTasks.push(() => trackEvent({
         userId: user?.id || null,
@@ -1230,6 +1355,9 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment, storedEv
             payload,
             environment: paddle.environment,
           }, recovery)
+          if (preservePaidPlan) {
+            planChangeRestoration = { user, metadata: recovery.metadata }
+          }
         }
 
         if (!preservePaidPlan && user?.id) {
@@ -1280,7 +1408,18 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment, storedEv
     }
 
     if (subscriptionProjection) {
-      await upsertSubscriptionProjection(subscriptionProjection)
+      if (planChangeRestoration) {
+        await withWebhookTransaction(async (db) => {
+          await restorePlanChangeEntitlement(
+            planChangeRestoration.user,
+            planChangeRestoration.metadata,
+            db,
+          )
+          await upsertSubscriptionProjection(subscriptionProjection, db)
+        })
+      } else {
+        await upsertSubscriptionProjection(subscriptionProjection)
+      }
     }
 
     // Integration notification selection and delivery logging must finish before
