@@ -137,13 +137,13 @@ export async function verifyPaddleWebhookInboxSchema(db) {
       SELECT
         to_regclass('public.paddle_webhook_events') IS NOT NULL AS table_exists,
         COALESCE((
-          SELECT ARRAY_AGG(column_name ORDER BY column_name)
+          SELECT ARRAY_AGG(column_name::text ORDER BY column_name::text)
           FROM information_schema.columns
           WHERE table_schema = 'public'
             AND table_name = 'paddle_webhook_events'
         ), ARRAY[]::text[]) AS column_names,
         COALESCE((
-          SELECT ARRAY_AGG(indexname ORDER BY indexname)
+          SELECT ARRAY_AGG(indexname::text ORDER BY indexname::text)
           FROM pg_indexes
           WHERE schemaname = 'public'
             AND tablename = 'paddle_webhook_events'
