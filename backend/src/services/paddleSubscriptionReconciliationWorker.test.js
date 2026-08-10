@@ -84,6 +84,9 @@ test('automatic reconciliation is bounded, sequential, environment-scoped, and f
     },
   })
 
+  const attemptQuery = mock.calls.find(({ sql }) => /SET last_paddle_reconciliation_attempt_at/.test(sql))
+  assert.match(attemptQuery.sql, /date_trunc\('milliseconds', clock_timestamp\(\)\)/)
+
   assert.equal(active.maximum, 1)
   assert.deepEqual(loaded, [
     { id: 1, environment: 'sandbox' },

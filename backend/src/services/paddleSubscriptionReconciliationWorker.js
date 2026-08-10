@@ -109,7 +109,7 @@ export async function fetchPaddleSubscriptionForReconciliation({
 async function markAttempt(lockClient, user) {
   const result = await lockClient.query(
     `UPDATE users
-     SET last_paddle_reconciliation_attempt_at = NOW()
+     SET last_paddle_reconciliation_attempt_at = date_trunc('milliseconds', clock_timestamp())
      WHERE id = $1
        AND paddle_subscription_id = $2
        AND paddle_customer_id = $3
