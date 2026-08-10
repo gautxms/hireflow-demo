@@ -511,6 +511,28 @@ test('checkout ownership protection follows durable webhook verification backfil
   )
 })
 
+test('automatic Paddle reconciliation cadence migration follows ownership protection', async () => {
+  const source = await readRunnerSource()
+  assert.match(source, /'054-add-paddle-reconciliation-cadence'/)
+  assert.ok(
+    source.indexOf("'053-protect-paddle-checkout-ownership'") <
+      source.indexOf("'054-add-paddle-reconciliation-cadence'"),
+  )
+
+  const queries = []
+  const { up } = await import('./054-add-paddle-reconciliation-cadence.js')
+  await up({ async query(sql) { queries.push(String(sql)); return { rows: [] } } })
+
+  assert.equal(queries.length, 2)
+  assert.match(queries[0], /ADD COLUMN IF NOT EXISTS last_paddle_reconciliation_attempt_at TIMESTAMPTZ/)
+  assert.match(queries[0], /ADD COLUMN IF NOT EXISTS last_paddle_reconciled_at TIMESTAMPTZ/)
+  assert.match(queries[1], /CREATE INDEX IF NOT EXISTS idx_users_paddle_reconciliation_candidates/)
+  assert.match(queries[1], /last_paddle_reconciliation_attempt_at ASC NULLS FIRST/)
+  assert.match(queries[1], /paddle_subscription_id/)
+  assert.match(queries[1], /paddle_customer_id/)
+  assert.match(queries[1], /deleted_at IS NULL/)
+})
+
 test('recovery billing adjustment migration is additive, durable, and uniquely idempotent', async () => {
   const queries = []
   const { up } = await import('./049-add-recovery-billing-adjustments.js')

@@ -4,6 +4,7 @@ import { runMigrations } from './db/migrate.js'
 import { initializeDatabase, ensurePasswordResetTables, ensurePaymentTrackingTables, pool } from './db/client.js'
 import { runRecoveryBillingAdjustments } from './services/recoveryBillingAdjustment.js'
 import { startPaddleWebhookRetryWorker } from './services/paddleWebhookRetryWorker.js'
+import { startAutomaticPaddleSubscriptionReconciliation } from './services/paddleSubscriptionReconciliationWorker.js'
 import { startAnalyticsCron } from './services/analytics.js'
 import { logEmailConfigStatus } from './services/emailService.js'
 import { initializeJobQueue } from './services/jobQueue.js'
@@ -115,6 +116,7 @@ async function start() {
       db: pool,
       onStateChange: setPaddleWebhookWorkerState,
     })
+    await startAutomaticPaddleSubscriptionReconciliation(process.env, { db: pool })
     startRecoveryBillingAdjustmentCron()
     startAnalyticsCron()
     startChunkUploadCleanupCron()
