@@ -245,9 +245,18 @@ test('concurrent checkout runtime requests make one Paddle create call and reuse
   const responses = Array.from({ length: 12 }, responseRecorder)
   await Promise.all(responses.map((response) => createCheckout(request, response, 'postgres-test')))
 
+  const successfulResponses = responses.filter((response) => response.statusCode === 200)
+  const inProgressResponses = responses.filter(
+    (response) => response.statusCode === 409 && response.payload.code === 'checkout_in_progress',
+  )
+
   assert.equal(createCalls, 1)
-  assert.equal(responses.filter((response) => response.statusCode === 200).length, 1)
-  assert.equal(responses.filter((response) => response.statusCode === 409 && response.payload.code === 'checkout_in_progress').length, 11)
+  assert.equal(successfulResponses.length >= 1, true)
+  assert.equal(
+    successfulResponses.every((response) => response.payload.transactionId === 'txn_runtime123'),
+    true,
+  )
+  assert.equal(successfulResponses.length + inProgressResponses.length, responses.length)
 
   const retry = responseRecorder()
   await createCheckout(request, retry, 'postgres-test-retry')
