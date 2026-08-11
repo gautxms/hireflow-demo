@@ -115,11 +115,16 @@ test('payment_failed metadata matches past_due compact payment rows', () => {
 })
 
 test('monthly billing users see annual upgrade as the self-serve plan action', () => {
-  const action = getBillingPlanAction('monthly')
+  const action = getBillingPlanAction('monthly', { isActive: true })
 
   assert.equal(action.label, 'Upgrade to annual')
   assert.equal(action.targetPlan, 'annual')
   assert.equal(action.isSelfServe, true)
+})
+
+test('trialing and paused monthly users do not see annual upgrade', () => {
+  assert.equal(getBillingPlanAction('monthly', { isActive: false, isTrialing: true }), null)
+  assert.equal(getBillingPlanAction('monthly', { isActive: false, isPaused: true }), null)
 })
 
 test('annual billing users do not see a self-serve monthly downgrade action', () => {
@@ -355,6 +360,7 @@ test('BillingPage offers state-specific keep, payment update, and subscribe-agai
   assert.match(source, /Subscribe again/)
   assert.match(source, /reason=subscribe_again/)
   assert.match(source, /const canShowStandardBillingActions = !subscriptionState\.hasCancellationSignal[\s\S]*!hasScheduledCancellation[\s\S]*!isFinalCancellation[\s\S]*!subscriptionState\.isPastDue/)
+  assert.match(source, /!subscriptionState\.isPastDue[\s\S]*&& subscriptionState\.isActive/)
   assert.match(source, /\{canShowStandardBillingActions \? \([\s\S]*Change payment method/)
   assert.match(source, /\{canShowStandardBillingActions && planAction\?\.isSelfServe \? \(/)
   assert.match(source, /isFinalCancellation \? 'Previous plan' : 'Current plan'/)

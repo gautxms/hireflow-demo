@@ -20,7 +20,7 @@ export function shouldPollRecoveryAdjustment(recoveryPending, subscription) {
 }
 
 export function getBillingPlanAction(plan, subscriptionState = null) {
-  if (isPastDueBillingState(subscriptionState)) return null
+  if (isPastDueBillingState(subscriptionState) || subscriptionState?.isActive !== true) return null
 
   if (plan === 'monthly') {
     return {

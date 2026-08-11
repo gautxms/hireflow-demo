@@ -59,6 +59,7 @@ const ERROR_RESPONSES = {
   CANCELLATION_NOT_ALLOWED_PAUSED: { status: 409, message: 'Paused subscriptions cannot be scheduled to cancel from HireFlow. Contact support for help with this subscription.' },
   CANCELLATION_NOT_AVAILABLE: { status: 409, message: 'Cancellation is not available for the current subscription state. Reload Billing or contact support.' },
   CANCELLATION_PROVIDER_STATE_UNVERIFIED: { status: 502, message: 'HireFlow could not verify the current subscription state with Paddle. Reload Billing before trying again.' },
+  PAYMENT_METHOD_NOT_ALLOWED: { status: 409, message: 'Payment method updates are available only for active or past-due subscriptions.' },
   PLAN_ALREADY_ACTIVE: { status: 400, message: 'You are already on that plan.' },
   PLAN_CHANGE_NOT_ALLOWED: { status: 403, message: 'This plan change is not available for your subscription. Please contact support.' },
   UNSUPPORTED_BILLING_ITEMS: { status: 409, message: 'Your subscription has recurring add-ons that need support-assisted plan changes. Please contact support so we can update your plan safely.' },
@@ -1208,7 +1209,7 @@ async function loadPlanChangeContext(userId, targetPlan, options = {}) {
   }
 
   const userResult = await pool.query(
-    `SELECT id, email, subscription_status, subscription_plan, paddle_subscription_id, current_period_end,
+    `SELECT id, email, subscription_status, subscription_plan, paddle_customer_id, paddle_subscription_id, current_period_end,
             next_billing_date, subscription_renewal_date, paddle_environment
      FROM users
      WHERE id = $1`,
@@ -1221,8 +1222,8 @@ async function loadPlanChangeContext(userId, targetPlan, options = {}) {
     throw new BillingError('PLAN_CHANGE_NOT_ALLOWED', { reason: 'user_not_found' })
   }
 
-  if (user.subscription_status === 'cancelled') {
-    throw new BillingError('PLAN_CHANGE_NOT_ALLOWED', { reason: 'cancelled_subscription' })
+  if (normalizeStatus(user.subscription_status) !== 'active') {
+    throw new BillingError('PLAN_CHANGE_NOT_ALLOWED', { reason: 'local_subscription_not_active' })
   }
 
   const currentPlan = user.subscription_plan || 'monthly'
@@ -1231,7 +1232,7 @@ async function loadPlanChangeContext(userId, targetPlan, options = {}) {
     throw new BillingError('PLAN_ALREADY_ACTIVE')
   }
 
-  if (!user.paddle_subscription_id) {
+  if (!user.paddle_customer_id || !user.paddle_subscription_id) {
     throw new BillingError('BILLING_PROVIDER_MISSING')
   }
 
@@ -1243,10 +1244,41 @@ async function loadPlanChangeContext(userId, targetPlan, options = {}) {
   }
 
   const subscriptionPayload = await paddleRequest(`/subscriptions/${user.paddle_subscription_id}`, {}, paddle)
-  const subscriptionStatus = subscriptionPayload?.data?.status || subscriptionPayload?.status || null
+  const providerState = inspectContinuationProviderState(user, subscriptionPayload)
+  const subscriptionStatus = providerState.providerStatus
+
+  if (!providerState.identityMatches) {
+    throw new BillingError('PLAN_CHANGE_NOT_ALLOWED', { reason: 'provider_subscription_ownership_mismatch' })
+  }
 
   if (subscriptionStatus === 'past_due') {
     throw new BillingError('PAYMENT_FAILED_OR_ACTION_REQUIRED', { reason: 'paddle_subscription_past_due' })
+  }
+
+  if (subscriptionStatus !== 'active') {
+    throw new BillingError('PLAN_CHANGE_NOT_ALLOWED', { reason: 'provider_subscription_not_active' })
+  }
+
+  if (providerState.scheduledAction) {
+    throw new BillingError('PLAN_CHANGE_NOT_ALLOWED', {
+      reason: 'provider_subscription_change_scheduled',
+      scheduledAction: providerState.scheduledAction,
+    })
+  }
+
+  const providerPlan = inferPlanFromPaddlePayload(subscriptionPayload, paddle)
+  const providerBasePlanItemIndex = findBasePlanItemIndex(
+    getSubscriptionItems(subscriptionPayload),
+    currentPlan,
+    targetPlan,
+    { userId, paddleSubscriptionId: user.paddle_subscription_id },
+    paddle,
+  )
+  if (providerPlan && providerPlan !== currentPlan) {
+    throw new BillingError('PLAN_CHANGE_NOT_ALLOWED', { reason: 'provider_subscription_plan_mismatch' })
+  }
+  if (providerBasePlanItemIndex < 0) {
+    throw new BillingError('PLAN_CHANGE_NOT_ALLOWED', { reason: 'provider_subscription_plan_unverified' })
   }
 
   const items = buildPlanChangeItems(getSubscriptionItems(subscriptionPayload), targetPriceId, targetPlan, currentPlan, {
@@ -1985,7 +2017,7 @@ router.post('/payment-method', requireAuth, async (req, res) => {
 
   try {
     const userResult = await pool.query(
-      `SELECT id, subscription_status, paddle_subscription_id, paddle_environment
+      `SELECT id, subscription_status, paddle_customer_id, paddle_subscription_id, paddle_environment
        FROM users
        WHERE id = $1`,
       [req.userId],
@@ -1993,9 +2025,34 @@ router.post('/payment-method', requireAuth, async (req, res) => {
     const user = userResult.rows[0]
 
     if (!user) return res.status(404).json({ error: 'User not found' })
-    if (!user.paddle_subscription_id) return res.status(409).json({ error: BILLING_PROVIDER_MISSING_ERROR })
+    if (!user.paddle_customer_id || !user.paddle_subscription_id) {
+      return res.status(409).json({ error: BILLING_PROVIDER_MISSING_ERROR })
+    }
+    if (!['active', 'past_due', 'payment_failed'].includes(normalizeStatus(user.subscription_status))) {
+      throw new BillingError('PAYMENT_METHOD_NOT_ALLOWED', { reason: 'local_subscription_not_eligible' })
+    }
 
     const paddle = resolvePaddleConfigForUser(user)
+    const subscriptionPayload = await paddleRequest(`/subscriptions/${user.paddle_subscription_id}`, {}, paddle)
+    const providerState = inspectContinuationProviderState(user, subscriptionPayload)
+    const providerSubscription = subscriptionPayload?.data || subscriptionPayload || {}
+
+    if (!providerState.identityMatches) {
+      throw new BillingError('PAYMENT_METHOD_NOT_ALLOWED', { reason: 'provider_subscription_ownership_mismatch' })
+    }
+    if (!['active', 'past_due'].includes(providerState.providerStatus)) {
+      throw new BillingError('PAYMENT_METHOD_NOT_ALLOWED', { reason: 'provider_subscription_not_eligible' })
+    }
+    if (providerState.scheduledAction) {
+      throw new BillingError('PAYMENT_METHOD_NOT_ALLOWED', {
+        reason: 'provider_subscription_change_scheduled',
+        scheduledAction: providerState.scheduledAction,
+      })
+    }
+    if (providerSubscription.collection_mode !== 'automatic') {
+      throw new BillingError('PAYMENT_METHOD_NOT_ALLOWED', { reason: 'provider_collection_mode_not_automatic' })
+    }
+
     const payload = await paddleRequest(
       `/subscriptions/${user.paddle_subscription_id}/update-payment-method-transaction`,
       {},
@@ -2004,6 +2061,13 @@ router.post('/payment-method', requireAuth, async (req, res) => {
     const transaction = payload?.data || payload || {}
     const transactionId = transaction?.id || null
     const checkoutUrl = transaction?.checkout?.url || transaction?.checkout_url || null
+
+    if (
+      transaction?.subscription_id !== user.paddle_subscription_id
+      || transaction?.customer_id !== user.paddle_customer_id
+    ) {
+      throw new BillingError('PAYMENT_METHOD_NOT_ALLOWED', { reason: 'provider_transaction_ownership_mismatch' })
+    }
 
     if (!transactionId) {
       throw new BillingError('PADDLE_SUBSCRIPTION_UPDATE_FAILED', { reason: 'missing_payment_method_transaction_id' })

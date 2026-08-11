@@ -67,7 +67,9 @@ function activeMonthlyUser() {
     email: 'user@example.com',
     subscription_status: 'active',
     subscription_plan: 'monthly',
+    paddle_customer_id: 'ctm_123',
     paddle_subscription_id: 'sub_123',
+    paddle_environment: 'production',
     current_period_end: '2026-07-01T00:00:00.000Z',
   }
 }
@@ -156,6 +158,11 @@ async function invokeRoute(path, body = {}) {
 function installDbMock(user, { failOn } = {}) {
   const calls = []
   const connectCalls = []
+  const storedUser = user ? {
+    paddle_customer_id: user.paddle_subscription_id ? 'ctm_123' : null,
+    paddle_environment: 'production',
+    ...user,
+  } : null
 
   pool.connect = async () => {
     connectCalls.push({ unexpected: true })
@@ -170,7 +177,7 @@ function installDbMock(user, { failOn } = {}) {
     }
 
     if (String(sql).includes('FROM users')) {
-      return { rows: user ? [user] : [] }
+      return { rows: storedUser ? [storedUser] : [] }
     }
 
     if (String(sql).includes('WITH updated_user AS')) {
@@ -286,7 +293,25 @@ function mockPaddleSequence(responses) {
       ok: response.ok ?? true,
       status: response.status ?? 200,
       headers: { get: (name) => response.headers?.[name] || null },
-      json: async () => response.payload ?? { data: { id: 'sub_123' } },
+      json: async () => {
+        const payload = response.payload ?? { data: { id: 'sub_123' } }
+        const isSubscriptionRead = !options?.method
+          && /\/subscriptions\/sub_123$/.test(String(url))
+          && payload?.data
+          && !Array.isArray(payload.data)
+          && Array.isArray(payload.data.items)
+        if (!isSubscriptionRead) return payload
+
+        return {
+          ...payload,
+          data: {
+            customer_id: 'ctm_123',
+            status: 'active',
+            scheduled_change: null,
+            ...payload.data,
+          },
+        }
+      },
     }
   }
   return calls
@@ -2452,6 +2477,102 @@ test('POST /api/subscriptions/change-plan-preview blocks past_due Paddle subscri
   assert.equal(res.statusCode, 402)
   assert.equal(res.payload.code, 'PAYMENT_FAILED_OR_ACTION_REQUIRED')
   assert.equal(paddleCalls.length, 1)
+  assert.equal(mutationCalls(calls).length, 0)
+  assert.equal(connectCalls.length, 0)
+})
+
+test('plan-change endpoints reject locally ineligible states before Paddle', async () => {
+  resetPaddleEnv()
+
+  for (const subscriptionStatus of ['trialing', 'past_due', 'payment_failed', 'paused', 'cancelled', 'cancel_scheduled', 'mystery']) {
+    const { calls, connectCalls } = installDbMock({
+      ...activeMonthlyUser(),
+      subscription_status: subscriptionStatus,
+    })
+    const paddleCalls = mockPaddleResponse()
+
+    for (const path of ['/change-plan-preview', '/change-plan']) {
+      const res = await invokeRoute(path, { targetPlan: 'annual' })
+      assert.equal(res.statusCode, 403, `${path}: ${subscriptionStatus}`)
+      assert.equal(res.payload.code, 'PLAN_CHANGE_NOT_ALLOWED', `${path}: ${subscriptionStatus}`)
+    }
+
+    assert.equal(paddleCalls.length, 0, subscriptionStatus)
+    assert.equal(mutationCalls(calls).length, 0, subscriptionStatus)
+    assert.equal(connectCalls.length, 0, subscriptionStatus)
+  }
+})
+
+test('plan-change preview rejects provider ownership, state, schedule, and plan conflicts before Paddle mutation', async () => {
+  resetPaddleEnv()
+  const scenarios = [
+    { name: 'foreign subscription', provider: { id: 'sub_other' } },
+    { name: 'foreign customer', provider: { customer_id: 'ctm_other' } },
+    { name: 'trialing', provider: { status: 'trialing' } },
+    { name: 'paused', provider: { status: 'paused' } },
+    { name: 'cancelled', provider: { status: 'canceled' } },
+    { name: 'unknown', provider: { status: 'mystery' } },
+    { name: 'scheduled cancellation', provider: { scheduled_change: { action: 'cancel' } } },
+    { name: 'provider annual while local monthly', provider: { items: [{ price: { id: 'pri_annual', billing_cycle: { interval: 'year' } }, quantity: 1 }] } },
+  ]
+
+  for (const scenario of scenarios) {
+    const { calls, connectCalls } = installDbMock(activeMonthlyUser())
+    const paddleCalls = mockPaddleSequence([{ payload: { data: {
+      id: 'sub_123',
+      customer_id: 'ctm_123',
+      status: 'active',
+      scheduled_change: null,
+      items: [{ price: { id: 'pri_monthly', billing_cycle: { interval: 'month' } }, quantity: 1 }],
+      ...scenario.provider,
+    } } }])
+
+    const res = await invokeRoute('/change-plan-preview', { targetPlan: 'annual' })
+
+    assert.equal(res.statusCode, 403, scenario.name)
+    assert.equal(res.payload.code, 'PLAN_CHANGE_NOT_ALLOWED', scenario.name)
+    assert.equal(paddleCalls.length, 1, scenario.name)
+    assert.match(paddleCalls[0].url, /\/subscriptions\/sub_123$/)
+    assert.equal(mutationCalls(calls).length, 0, scenario.name)
+    assert.equal(connectCalls.length, 0, scenario.name)
+  }
+})
+
+test('plan-change preview rejects an already-active target plan without Paddle', async () => {
+  resetPaddleEnv()
+  const { calls, connectCalls } = installDbMock(activeAnnualUser())
+  const paddleCalls = mockPaddleResponse()
+
+  const res = await invokeRoute('/change-plan-preview', { targetPlan: 'annual' })
+
+  assert.equal(res.statusCode, 400)
+  assert.equal(res.payload.code, 'PLAN_ALREADY_ACTIVE')
+  assert.equal(paddleCalls.length, 0)
+  assert.equal(mutationCalls(calls).length, 0)
+  assert.equal(connectCalls.length, 0)
+})
+
+test('plan-change preview uses only the linked Paddle environment', async () => {
+  resetPaddleEnv()
+  process.env.PADDLE_SANDBOX_API_KEY = 'sandbox-key'
+  process.env.PADDLE_SANDBOX_ANNUAL_PRICE_ID = 'pri_sandbox_annual'
+  const { calls, connectCalls } = installDbMock({
+    ...activeMonthlyUser(),
+    paddle_subscription_id: 'sub_sandbox_missing',
+    paddle_environment: 'sandbox',
+  })
+  const paddleCalls = mockPaddleResponse({
+    ok: false,
+    status: 404,
+    payload: { error: { code: 'not_found' } },
+  })
+
+  const res = await invokeRoute('/change-plan-preview', { targetPlan: 'annual' })
+
+  assert.equal(res.statusCode, 502)
+  assert.equal(paddleCalls.length, 1)
+  assert.match(paddleCalls[0].url, /^https:\/\/sandbox-api\.paddle\.com\/subscriptions\/sub_sandbox_missing$/)
+  assert.equal(paddleCalls[0].options.headers.Authorization, 'Bearer sandbox-key')
   assert.equal(mutationCalls(calls).length, 0)
   assert.equal(connectCalls.length, 0)
 })

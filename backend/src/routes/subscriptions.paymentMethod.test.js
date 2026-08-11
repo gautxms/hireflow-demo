@@ -102,7 +102,7 @@ test('POST /api/subscriptions/payment-method safely rejects raw card payloads wi
   }
 })
 
-test('POST /api/subscriptions/payment-method returns a Paddle-hosted update transaction', async () => {
+test('POST /api/subscriptions/payment-method allows active updates and past-due recovery through Paddle', async () => {
   const originalQuery = pool.query
   const originalFetch = globalThis.fetch
   const originalApiKey = process.env.PADDLE_API_KEY
@@ -112,34 +112,58 @@ test('POST /api/subscriptions/payment-method returns a Paddle-hosted update tran
   process.env.PADDLE_ENVIRONMENT = 'production'
   process.env.PADDLE_API_KEY = 'paddle-api-key'
   process.env.PADDLE_CLIENT_TOKEN = 'paddle-client-token'
-  pool.query = async (sql) => {
-    if (String(sql).includes('FROM users')) {
-      return { rows: [{ id: 123, subscription_status: 'past_due', paddle_subscription_id: 'sub_123', paddle_environment: 'production' }] }
-    }
-    return { rows: [], rowCount: 1 }
-  }
-  globalThis.fetch = async (url, options) => {
-    assert.match(String(url), /\/subscriptions\/sub_123\/update-payment-method-transaction$/)
-    assert.equal(options.headers.Authorization, 'Bearer paddle-api-key')
-    return {
-      ok: true,
-      status: 200,
-      headers: { get: () => null },
-      json: async () => ({ data: { id: 'txn_update_123', checkout: { url: 'https://checkout.paddle.test/update' } } }),
-    }
-  }
 
   try {
-    const res = await invokePaymentMethodRoute({})
-    assert.equal(res.statusCode, 200)
-    assert.deepEqual(res.payload, {
-      status: 'ok',
-      transactionId: 'txn_update_123',
-      checkoutUrl: 'https://checkout.paddle.test/update',
-      clientToken: 'paddle-client-token',
-      paddleEnvironment: 'production',
-      action: 'pay_overdue',
-    })
+    for (const scenario of [
+      { status: 'active', action: 'update_payment_method' },
+      { status: 'past_due', action: 'pay_overdue' },
+    ]) {
+      pool.query = async (sql) => {
+        if (String(sql).includes('FROM users')) {
+          return { rows: [{ id: 123, subscription_status: scenario.status, paddle_customer_id: 'ctm_123', paddle_subscription_id: 'sub_123', paddle_environment: 'production' }] }
+        }
+        return { rows: [], rowCount: 1 }
+      }
+      let paddleCallCount = 0
+      globalThis.fetch = async (url, options) => {
+        paddleCallCount += 1
+        assert.equal(options.headers.Authorization, 'Bearer paddle-api-key')
+        if (paddleCallCount === 1) {
+          assert.match(String(url), /\/subscriptions\/sub_123$/)
+          return {
+            ok: true,
+            status: 200,
+            headers: { get: () => null },
+            json: async () => ({ data: {
+              id: 'sub_123',
+              customer_id: 'ctm_123',
+              status: scenario.status,
+              collection_mode: 'automatic',
+            } }),
+          }
+        }
+
+        assert.match(String(url), /\/subscriptions\/sub_123\/update-payment-method-transaction$/)
+        return {
+          ok: true,
+          status: 200,
+          headers: { get: () => null },
+          json: async () => ({ data: {
+            id: 'txn_update_123',
+            customer_id: 'ctm_123',
+            subscription_id: 'sub_123',
+            checkout: { url: 'https://checkout.paddle.test/update' },
+          } }),
+        }
+      }
+
+      const res = await invokePaymentMethodRoute({})
+      assert.equal(res.statusCode, 200, scenario.status)
+      assert.equal(res.payload.action, scenario.action)
+      assert.equal(res.payload.transactionId, 'txn_update_123')
+      assert.equal(res.payload.paddleEnvironment, 'production')
+      assert.equal(paddleCallCount, 2, scenario.status)
+    }
   } finally {
     pool.query = originalQuery
     globalThis.fetch = originalFetch
@@ -149,6 +173,255 @@ test('POST /api/subscriptions/payment-method returns a Paddle-hosted update tran
     else process.env.PADDLE_CLIENT_TOKEN = originalClientToken
     if (originalEnvironment === undefined) delete process.env.PADDLE_ENVIRONMENT
     else process.env.PADDLE_ENVIRONMENT = originalEnvironment
+  }
+})
+
+test('POST /api/subscriptions/payment-method rejects locally ineligible states before Paddle', async () => {
+  const originalQuery = pool.query
+  const originalFetch = globalThis.fetch
+
+  try {
+    for (const subscriptionStatus of ['trialing', 'paused', 'cancelled', 'inactive', 'mystery']) {
+      let paddleCalls = 0
+      pool.query = async (sql) => {
+        if (String(sql).includes('FROM users')) {
+          return { rows: [{
+            id: 123,
+            subscription_status: subscriptionStatus,
+            paddle_customer_id: 'ctm_123',
+            paddle_subscription_id: 'sub_123',
+            paddle_environment: 'production',
+          }] }
+        }
+        return { rows: [], rowCount: 1 }
+      }
+      globalThis.fetch = async () => {
+        paddleCalls += 1
+        throw new Error('Paddle must not be called')
+      }
+
+      const res = await invokePaymentMethodRoute({})
+
+      assert.equal(res.statusCode, 409, subscriptionStatus)
+      assert.equal(res.payload.code, 'PAYMENT_METHOD_NOT_ALLOWED', subscriptionStatus)
+      assert.equal(paddleCalls, 0, subscriptionStatus)
+    }
+  } finally {
+    pool.query = originalQuery
+    globalThis.fetch = originalFetch
+  }
+})
+
+test('POST /api/subscriptions/payment-method rejects missing provider identifiers before Paddle', async () => {
+  const originalQuery = pool.query
+  const originalFetch = globalThis.fetch
+
+  try {
+    for (const providerIds of [
+      { paddle_customer_id: null, paddle_subscription_id: 'sub_123' },
+      { paddle_customer_id: 'ctm_123', paddle_subscription_id: null },
+    ]) {
+      let paddleCalls = 0
+      pool.query = async (sql) => {
+        if (String(sql).includes('FROM users')) {
+          return { rows: [{
+            id: 123,
+            subscription_status: 'active',
+            paddle_environment: 'production',
+            ...providerIds,
+          }] }
+        }
+        return { rows: [], rowCount: 1 }
+      }
+      globalThis.fetch = async () => {
+        paddleCalls += 1
+        throw new Error('Paddle must not be called')
+      }
+
+      const res = await invokePaymentMethodRoute({})
+
+      assert.equal(res.statusCode, 409)
+      assert.match(res.payload.error, /billing provider subscription is missing/i)
+      assert.equal(paddleCalls, 0)
+    }
+  } finally {
+    pool.query = originalQuery
+    globalThis.fetch = originalFetch
+  }
+})
+
+test('POST /api/subscriptions/payment-method rejects unowned or provider-ineligible subscriptions before creating a transaction', async () => {
+  const originalQuery = pool.query
+  const originalFetch = globalThis.fetch
+  const originalApiKey = process.env.PADDLE_API_KEY
+  const originalEnvironment = process.env.PADDLE_ENVIRONMENT
+
+  process.env.PADDLE_ENVIRONMENT = 'production'
+  process.env.PADDLE_API_KEY = 'paddle-api-key'
+
+  const scenarios = [
+    { name: 'foreign subscription', provider: { id: 'sub_other' } },
+    { name: 'foreign customer', provider: { customer_id: 'ctm_other' } },
+    { name: 'trialing', provider: { status: 'trialing' } },
+    { name: 'paused', provider: { status: 'paused' } },
+    { name: 'cancelled', provider: { status: 'canceled' } },
+    { name: 'unknown', provider: { status: 'mystery' } },
+    { name: 'scheduled cancellation', provider: { scheduled_change: { action: 'cancel' } } },
+    { name: 'missing collection mode', provider: { collection_mode: undefined } },
+    { name: 'null collection mode', provider: { collection_mode: null } },
+    { name: 'manual collection', provider: { collection_mode: 'manual' } },
+  ]
+
+  try {
+    for (const scenario of scenarios) {
+      pool.query = async (sql) => {
+        if (String(sql).includes('FROM users')) {
+          return { rows: [{
+            id: 123,
+            subscription_status: 'active',
+            paddle_customer_id: 'ctm_123',
+            paddle_subscription_id: 'sub_123',
+            paddle_environment: 'production',
+          }] }
+        }
+        return { rows: [], rowCount: 1 }
+      }
+      const paddleCalls = []
+      globalThis.fetch = async (url) => {
+        paddleCalls.push(String(url))
+        assert.equal(paddleCalls.length, 1, `${scenario.name} must stop before transaction creation`)
+        return {
+          ok: true,
+          status: 200,
+          headers: { get: () => null },
+          json: async () => ({ data: {
+            id: 'sub_123',
+            customer_id: 'ctm_123',
+            status: 'active',
+            collection_mode: 'automatic',
+            scheduled_change: null,
+            ...scenario.provider,
+          } }),
+        }
+      }
+
+      const res = await invokePaymentMethodRoute({})
+
+      assert.equal(res.statusCode, 409, scenario.name)
+      assert.equal(res.payload.code, 'PAYMENT_METHOD_NOT_ALLOWED', scenario.name)
+      assert.equal(paddleCalls.length, 1, scenario.name)
+      assert.match(paddleCalls[0], /\/subscriptions\/sub_123$/)
+    }
+  } finally {
+    pool.query = originalQuery
+    globalThis.fetch = originalFetch
+    if (originalApiKey === undefined) delete process.env.PADDLE_API_KEY
+    else process.env.PADDLE_API_KEY = originalApiKey
+    if (originalEnvironment === undefined) delete process.env.PADDLE_ENVIRONMENT
+    else process.env.PADDLE_ENVIRONMENT = originalEnvironment
+  }
+})
+
+test('POST /api/subscriptions/payment-method uses the linked environment and rejects a missing subscription without cross-environment fallback', async () => {
+  const originalQuery = pool.query
+  const originalFetch = globalThis.fetch
+  const originalEnvironment = process.env.PADDLE_ENVIRONMENT
+  const originalSandboxApiKey = process.env.PADDLE_SANDBOX_API_KEY
+
+  process.env.PADDLE_ENVIRONMENT = 'production'
+  process.env.PADDLE_SANDBOX_API_KEY = 'sandbox-api-key'
+  pool.query = async (sql) => {
+    if (String(sql).includes('FROM users')) {
+      return { rows: [{
+        id: 123,
+        subscription_status: 'active',
+        paddle_customer_id: 'ctm_123',
+        paddle_subscription_id: 'sub_sandbox_missing',
+        paddle_environment: 'sandbox',
+      }] }
+    }
+    return { rows: [], rowCount: 1 }
+  }
+  const paddleCalls = []
+  globalThis.fetch = async (url, options) => {
+    paddleCalls.push(String(url))
+    assert.equal(options.headers.Authorization, 'Bearer sandbox-api-key')
+    return {
+      ok: false,
+      status: 404,
+      headers: { get: () => null },
+      json: async () => ({ error: { code: 'not_found' } }),
+    }
+  }
+
+  try {
+    const res = await invokePaymentMethodRoute({})
+
+    assert.equal(res.statusCode, 502)
+    assert.equal(paddleCalls.length, 1)
+    assert.match(paddleCalls[0], /^https:\/\/sandbox-api\.paddle\.com\/subscriptions\/sub_sandbox_missing$/)
+  } finally {
+    pool.query = originalQuery
+    globalThis.fetch = originalFetch
+    if (originalEnvironment === undefined) delete process.env.PADDLE_ENVIRONMENT
+    else process.env.PADDLE_ENVIRONMENT = originalEnvironment
+    if (originalSandboxApiKey === undefined) delete process.env.PADDLE_SANDBOX_API_KEY
+    else process.env.PADDLE_SANDBOX_API_KEY = originalSandboxApiKey
+  }
+})
+
+test('POST /api/subscriptions/payment-method rejects a transaction owned by another billing identity', async () => {
+  const originalQuery = pool.query
+  const originalFetch = globalThis.fetch
+  const originalApiKey = process.env.PADDLE_API_KEY
+
+  process.env.PADDLE_API_KEY = 'paddle-api-key'
+  pool.query = async (sql) => {
+    if (String(sql).includes('FROM users')) {
+      return { rows: [{
+        id: 123,
+        subscription_status: 'active',
+        paddle_customer_id: 'ctm_123',
+        paddle_subscription_id: 'sub_123',
+        paddle_environment: 'production',
+      }] }
+    }
+    return { rows: [], rowCount: 1 }
+  }
+  let paddleCalls = 0
+  globalThis.fetch = async () => {
+    paddleCalls += 1
+    return {
+      ok: true,
+      status: 200,
+      headers: { get: () => null },
+      json: async () => ({ data: paddleCalls === 1
+        ? {
+            id: 'sub_123',
+            customer_id: 'ctm_123',
+            status: 'active',
+            collection_mode: 'automatic',
+          }
+        : {
+            id: 'txn_update_123',
+            customer_id: 'ctm_other',
+            subscription_id: 'sub_123',
+            checkout: { url: 'https://checkout.paddle.test/update' },
+          } }),
+    }
+  }
+
+  try {
+    const res = await invokePaymentMethodRoute({})
+
+    assert.equal(res.statusCode, 409)
+    assert.equal(res.payload.code, 'PAYMENT_METHOD_NOT_ALLOWED')
+    assert.equal(paddleCalls, 2)
+  } finally {
+    pool.query = originalQuery
+    globalThis.fetch = originalFetch
+    if (originalApiKey === undefined) delete process.env.PADDLE_API_KEY
+    else process.env.PADDLE_API_KEY = originalApiKey
   }
 })
 
