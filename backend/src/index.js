@@ -14,7 +14,12 @@ import { ensureWebhookTables } from './services/webhookService.js'
 import { ensureNotificationTables } from './services/notificationService.js'
 import { validateAiProviderModelConfiguration } from './services/aiProviderConfigService.js'
 import { alignAdminAiUserReferenceColumns, verifyAdminAiUserReferenceCompatibility } from './services/adminAiSchemaCompatibility.js'
-import { verifyYearsExperienceDecimalSchema, verifyShortlistBatchAddSchema } from './db/schemaPrerequisites.js'
+import {
+  verifyResumeQuotaReservationSchema,
+  verifyYearsExperienceDecimalSchema,
+  verifyShortlistBatchAddSchema,
+} from './db/schemaPrerequisites.js'
+import { isResumeQuotaReservationsEnabled } from './services/resumeQuotaReservations.js'
 import {
   assertPaddleBillingPrerequisites,
   setPaddleWebhookWorkerState,
@@ -90,6 +95,17 @@ async function start() {
       )
     }
     console.log('[Startup] Migration prerequisite confirmed: shortlist_candidates batch-add metadata columns')
+    if (isResumeQuotaReservationsEnabled()) {
+      const resumeQuotaSchema = await verifyResumeQuotaReservationSchema()
+      if (!resumeQuotaSchema.ok) {
+        throw new Error(
+          `[Startup] Missing migration prerequisite: atomic resume quota schema invalid: ${JSON.stringify(resumeQuotaSchema)}`,
+        )
+      }
+      console.log('[Startup] Migration prerequisite confirmed: atomic resume quota reservations')
+    } else {
+      console.log('[Startup] Atomic resume quota reservations are disabled for this non-Paddle local/test runtime')
+    }
     const paddleBillingReadiness = await assertPaddleBillingPrerequisites({ db: pool })
     if (paddleBillingReadiness.enabled) {
       console.log('[Startup] Paddle durable webhook configuration and schema confirmed', {

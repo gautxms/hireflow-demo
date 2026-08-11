@@ -6,20 +6,17 @@ HireFlow paid subscriptions include 800 resume analyses in each monthly quota
 period. This allowance is monthly for both monthly and annual subscriptions; an
 annual subscription does not receive 9,600 units up front.
 
-PR 1 introduces the billing-period contract, a stable anchor, and shadow
-comparison only. Calendar-month enforcement remains authoritative until the
-reservation and accounting phases are implemented and verified.
+The quota foundation introduced a stable billing anchor, an atomic reservation
+ledger, and provider-start accounting in phases. PR 9 makes that ledger
+authoritative whenever Paddle billing is configured; a false or missing local
+rollout flag cannot return a Paddle-backed runtime to the legacy
+read-then-write path.
 
-PR 2 adds an atomic reservation ledger behind
-`RESUME_QUOTA_RESERVATIONS_ENABLED=false` by default. When enabled for
-controlled verification, classic multipart uploads reserve their full batch in
-one transaction. Chunked uploads call a batch preflight endpoint before any
-session is initialized and allocate one reserved unit per new session.
-
-PR 3 completes provider-start accounting behind that same disabled-by-default
-flag. On the flagged path, billing-anniversary periods are authoritative,
-reserved files receive idempotent allocation records, and usage is consumed
-immediately before the first external AI-provider attempt.
+Classic multipart uploads reserve their full batch in one transaction. Chunked
+uploads call a batch preflight endpoint before any session is initialized and
+allocate one reserved unit per new session. Reserved files receive idempotent
+allocation records, and usage is consumed immediately before the first
+external AI-provider attempt.
 
 ## Period contract
 
@@ -80,8 +77,9 @@ The target accounting contract for the reservation and enforcement phases is:
   has started.
 - Admin overrides remain supported and must be auditable.
 
-The legacy path continues to record accepted uploads before scanning. It remains
-the immediate rollback path while `RESUME_QUOTA_RESERVATIONS_ENABLED=false`.
+The legacy path continues to record accepted uploads before scanning, but it is
+limited to isolated non-Paddle local/test runtimes. Paddle-configured Sandbox
+and Production runtimes cannot select that fallback.
 
 ### Customer-facing availability contract
 
@@ -118,9 +116,10 @@ unmounts. Shared stores and in-flight requests are scoped to the current auth
 token, and the previous identity's store is discarded when its final consumer
 unmounts. This revalidation changes no reservation or accounting semantics.
 
-## PR 2 reservation behavior
+## Atomic reservation behavior
 
-- Reservation rollout is disabled by default.
+- Paddle-configured runtimes always use atomic reservations. Isolated non-Paddle
+  local/test runtimes may opt in with `RESUME_QUOTA_RESERVATIONS_ENABLED=true`.
 - Availability is serialized per user with a PostgreSQL transaction advisory
   lock.
 - `used + unexpired reserved + requested` must be less than or equal to the
@@ -143,18 +142,21 @@ unmounts. This revalidation changes no reservation or accounting semantics.
   carrying a different reservation releases only the newly supplied unit.
 - If quota allocation fails after the upload session is created, its reserved
   unit remains attached so the stable file identity can retry idempotently.
-- While the rollout flag is off, the current calendar-month limit and
-  pre-provider counting semantics remain authoritative.
+- While an isolated non-Paddle runtime leaves the local flag off, the current
+  calendar-month limit and pre-provider counting semantics remain authoritative.
 
-## PR 3 provider-start behavior
+## Provider-start behavior
 
-- The rollout remains disabled by default and uses
-  `RESUME_QUOTA_RESERVATIONS_ENABLED` as the kill switch.
+- The local/test flag cannot disable provider-start accounting in a
+  Paddle-configured runtime.
 - Paid monthly and annual users with a trustworthy billing anchor are enforced
   against monthly anniversary periods. Trials and legacy accounts without an
   anchor retain the UTC calendar fallback.
 - Each accepted file has one durable allocation shared by worker retries and
   provider fallbacks.
+- The reachable candidate reanalysis API reserves its complete provider-backed
+  batch and allocates/consumes one unit per stored resume before its first AI
+  provider attempt.
 - Validation, malware scanning, abandoned upload sessions, enqueue failures,
   invalid job-description references, analysis deletion/cancellation, and
   terminal local extraction failures release an unconsumed allocation.
@@ -174,8 +176,9 @@ unmounts. This revalidation changes no reservation or accounting semantics.
   period. The recovery commit shares the reservation ledger's per-user lock,
   and outstanding allocations from older reservation periods reserve capacity
   in the new period without changing their identities.
-- If the kill switch is turned off mid-period, calendar-month enforcement still
-  includes allocation-backed usage written during the flagged rollout.
+- If an isolated non-Paddle runtime turns its local flag off mid-period,
+  calendar-month enforcement still includes allocation-backed usage written
+  during the atomic rollout.
 
 ## PR 1 shadow-mode behavior
 
@@ -188,8 +191,9 @@ unmounts. This revalidation changes no reservation or accounting semantics.
 - Shadow query failures are logged and never block an upload.
 - Set `RESUME_QUOTA_BILLING_PERIOD_SHADOW_MODE=false` to disable comparison
   immediately without reverting the migration or period resolver.
-- Set `RESUME_QUOTA_RESERVATIONS_ENABLED=false` to bypass the reservation
-  ledger and return immediately to the legacy quota path.
+- `RESUME_QUOTA_RESERVATIONS_ENABLED=false` bypasses the reservation ledger only
+  in isolated non-Paddle local/test runtimes. It is ignored once any Paddle
+  environment is configured.
 
 ## Rollback
 

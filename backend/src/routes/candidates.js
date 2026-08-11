@@ -2,7 +2,11 @@ import { Router } from 'express'
 import { GetObjectCommand, S3Client } from '@aws-sdk/client-s3'
 import { Buffer } from 'node:buffer'
 import { requireAuth } from '../middleware/authMiddleware.js'
-import { requireActiveSubscription } from '../middleware/subscriptionCheck.js'
+import {
+  enforceUploadLimit,
+  requireActiveSubscription,
+  trackUploadUsage,
+} from '../middleware/subscriptionCheck.js'
 import { canUsePaidMutation } from '../utils/subscriptionAccess.js'
 import { matchCandidatesToJob } from '../services/matchingService.js'
 import { pool } from '../db/client.js'
@@ -14,6 +18,12 @@ import { resolveCandidateResumeUuid, resolveCanonicalCandidateIdentity } from '.
 import { normalizeCandidateDirectoryQuery } from '../../../src/schemas/candidateDirectoryQuerySchema.js'
 import { getDisplayFilename } from '../utils/resumeFileMetadata.js'
 import { resolveCandidateDirectoryScore } from '../utils/candidateDirectoryScore.js'
+import {
+  allocateResumeQuotaUnit,
+  consumeResumeQuotaAllocation,
+  releaseResumeQuotaAllocation,
+  releaseResumeQuotaReservation,
+} from '../services/resumeQuotaReservations.js'
 
 const router = Router()
 
@@ -609,23 +619,7 @@ function resolveResumeTextForReanalysis(row) {
   return normalizedTextBlocks.length > 0 ? normalizedTextBlocks.join('\n\n') : null
 }
 
-router.post('/reanalyse', requireAuth, requireActiveSubscription, async (req, res) => {
-  const jobDescription = String(req.body?.jobDescription || '').trim()
-  if (!jobDescription) {
-    return res.status(400).json({ error: 'jobDescription is required' })
-  }
-
-  const jobDescriptionContext = {
-    hasContext: true,
-    source: 'manual_text',
-    title: null,
-    description: jobDescription,
-    requirements: jobDescription,
-    skills: [],
-    fileText: jobDescription,
-    fileTextAvailable: true,
-  }
-
+async function prepareCandidateReanalysisQuota(req, res, next) {
   try {
     const resumeResult = await pool.query(
       `SELECT id, filename, raw_text, parse_result
@@ -640,10 +634,52 @@ router.post('/reanalyse', requireAuth, requireActiveSubscription, async (req, re
       return res.status(404).json({ error: 'No parsed resumes found for this user' })
     }
 
+    req.candidateReanalysisRows = resumeResult.rows.map((row) => ({
+      row,
+      resumeText: resolveResumeTextForReanalysis(row),
+    }))
+    req.quotaRequestedUploads = req.candidateReanalysisRows
+      .filter(({ resumeText }) => Boolean(resumeText))
+      .length
+    return next()
+  } catch (error) {
+    console.error('[Candidates] Failed to prepare candidate reanalysis:', error)
+    return res.status(500).json({ error: 'Unable to prepare candidate reanalysis' })
+  }
+}
+
+function enforceCandidateReanalysisQuota(req, res, next) {
+  if (req.quotaRequestedUploads === 0) return next()
+  return enforceUploadLimit(req, res, next)
+}
+
+function validateCandidateReanalysisRequest(req, res, next) {
+  const jobDescription = String(req.body?.jobDescription || '').trim()
+  if (!jobDescription) {
+    return res.status(400).json({ error: 'jobDescription is required' })
+  }
+  req.candidateReanalysisJobDescription = jobDescription
+  return next()
+}
+
+async function handleCandidateReanalysis(req, res) {
+  const jobDescription = req.candidateReanalysisJobDescription
+  const jobDescriptionContext = {
+    hasContext: true,
+    source: 'manual_text',
+    title: null,
+    description: jobDescription,
+    requirements: jobDescription,
+    skills: [],
+    fileText: jobDescription,
+    fileTextAvailable: true,
+  }
+
+  const quotaReservationId = req.usageContext?.quotaReservation?.id || null
+  try {
     const updatedCandidates = []
 
-    for (const row of resumeResult.rows) {
-      const resumeText = resolveResumeTextForReanalysis(row)
+    for (const { row, resumeText } of req.candidateReanalysisRows) {
       if (!resumeText) {
         const previousCandidates = Array.isArray(row.parse_result?.candidates) ? row.parse_result.candidates : []
         const rescoredPrevious = applyJobDescriptionScoringMode(previousCandidates, jobDescriptionContext)
@@ -652,12 +688,48 @@ router.post('/reanalyse', requireAuth, requireActiveSubscription, async (req, re
         continue
       }
 
-      const aiResponse = await analyzeResumeWithConfiguredFallback(
-        Buffer.from(resumeText, 'utf8').toString('base64'),
-        'text/plain',
-        row.filename || `resume-${row.id}.txt`,
-        { jobDescriptionContext },
-      )
+      let quotaAllocationId = null
+      if (quotaReservationId) {
+        const allocationResult = await allocateResumeQuotaUnit({
+          userId: req.userId,
+          reservationId: quotaReservationId,
+          allocationKey: `reanalyse:${quotaReservationId}:${row.id}`,
+          resumeId: row.id,
+        })
+        quotaAllocationId = allocationResult.allocation.id
+      }
+
+      let aiResponse
+      try {
+        aiResponse = await analyzeResumeWithConfiguredFallback(
+          Buffer.from(resumeText, 'utf8').toString('base64'),
+          'text/plain',
+          row.filename || `resume-${row.id}.txt`,
+          {
+            jobDescriptionContext,
+            onProviderAttemptStart: quotaAllocationId
+              ? ({ provider, model }) => consumeResumeQuotaAllocation({
+                userId: req.userId,
+                allocationId: quotaAllocationId,
+                ipAddress: req.usageContext?.ipAddress,
+                provider,
+                model,
+              })
+              : undefined,
+          },
+        )
+      } catch (error) {
+        if (quotaAllocationId) {
+          await releaseResumeQuotaAllocation({
+            userId: req.userId,
+            allocationId: quotaAllocationId,
+            reason: 'candidate_reanalysis_pre_provider_failure',
+          }).catch((releaseError) => {
+            console.error('[Candidates] Failed to release reanalysis quota allocation:', releaseError)
+          })
+        }
+        throw error
+      }
 
       const analyzedCandidates = Array.isArray(aiResponse?.result?.candidates) ? aiResponse.result.candidates : []
       const normalizedCandidates = analyzedCandidates.map((candidate) => normalizeCandidateFromAnalysis(candidate, row.id, row.filename))
@@ -711,14 +783,35 @@ router.post('/reanalyse', requireAuth, requireActiveSubscription, async (req, re
 
     return res.json({
       ok: true,
-      updatedCount: resumeResult.rows.length,
+      updatedCount: req.candidateReanalysisRows.length,
       candidateCount: updatedCandidates.length,
     })
   } catch (error) {
     console.error('[Candidates] Failed to reanalyse candidates:', error)
     return res.status(500).json({ error: 'Unable to reanalyse candidates' })
+  } finally {
+    if (quotaReservationId) {
+      await releaseResumeQuotaReservation({
+        userId: req.userId,
+        reservationId: quotaReservationId,
+        units: Number.MAX_SAFE_INTEGER,
+      }).catch((releaseError) => {
+        console.error('[Candidates] Failed to release unused reanalysis quota:', releaseError)
+      })
+    }
   }
-})
+}
+
+router.post(
+  '/reanalyse',
+  requireAuth,
+  requireActiveSubscription,
+  validateCandidateReanalysisRequest,
+  prepareCandidateReanalysisQuota,
+  enforceCandidateReanalysisQuota,
+  trackUploadUsage,
+  handleCandidateReanalysis,
+)
 
 router.get('/profiles', requireAuth, async (req, res) => {
   try {
