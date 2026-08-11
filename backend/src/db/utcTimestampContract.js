@@ -26,6 +26,10 @@ export function installUtcTimestampParser(types = pg.types) {
   types.setTypeParser(TIMESTAMP_WITHOUT_TIME_ZONE_OID, parseTimestampWithoutTimeZoneAsUtc)
 }
 
+export function installUtcDateSerialization(defaults = pg.defaults) {
+  defaults.parseInputDatesAsUTC = true
+}
+
 export function buildUtcPostgresOptions(existingOptions = process.env.PGOPTIONS) {
   const options = String(existingOptions || '').trim()
   return [options, '-c timezone=UTC'].filter(Boolean).join(' ')
@@ -44,6 +48,7 @@ export async function verifyUtcTimestampContract(db) {
       && !Number.isNaN(timestampProbe.getTime())
       && timestampProbe.toISOString() === UTC_TIMESTAMP_PROBE
     const sessionUsesUtc = sessionTimezone.toUpperCase() === 'UTC'
+    const dateSerializationUsesUtc = pg.defaults.parseInputDatesAsUTC === true
     const errors = []
 
     if (!sessionUsesUtc) {
@@ -58,11 +63,18 @@ export async function verifyUtcTimestampContract(db) {
         message: 'Paddle billing requires timestamp without time zone values to be parsed as UTC.',
       })
     }
+    if (!dateSerializationUsesUtc) {
+      errors.push({
+        code: 'PADDLE_DATE_SERIALIZATION_NOT_UTC',
+        message: 'Paddle billing requires JavaScript Date values to be serialized as UTC.',
+      })
+    }
 
     return {
       ready: errors.length === 0,
       sessionTimezone: sessionTimezone || null,
       parserUsesUtc,
+      dateSerializationUsesUtc,
       errors,
     }
   } catch {
@@ -70,6 +82,7 @@ export async function verifyUtcTimestampContract(db) {
       ready: false,
       sessionTimezone: null,
       parserUsesUtc: false,
+      dateSerializationUsesUtc: pg.defaults.parseInputDatesAsUTC === true,
       errors: [{
         code: 'PADDLE_UTC_TIMESTAMP_CONTRACT_CHECK_FAILED',
         message: 'The Paddle billing UTC timestamp contract could not be verified.',
@@ -78,4 +91,5 @@ export async function verifyUtcTimestampContract(db) {
   }
 }
 
+installUtcDateSerialization()
 installUtcTimestampParser()

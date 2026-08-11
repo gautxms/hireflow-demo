@@ -45,16 +45,26 @@ test('PostgreSQL billing readiness fails without the inbox schema and passes aft
       CREATE TEMP TABLE paddle_utc_contract_dates (
         cancellation_effective_at TIMESTAMP,
         monthly_quota_anchor_at TIMESTAMP,
-        annual_quota_anchor_at TIMESTAMP
+        annual_quota_anchor_at TIMESTAMP,
+        bound_date_expires_at TIMESTAMP
       )
     `)
     const normalizedInstant = normalizePaddleTimestamp('2026-02-01T05:00:00+05:30')
-    await client.query(
-      `INSERT INTO paddle_utc_contract_dates (
-         cancellation_effective_at, monthly_quota_anchor_at, annual_quota_anchor_at
-       ) VALUES ($1::timestamp, $2::timestamp, $3::timestamp)`,
-      [normalizedInstant, normalizedInstant, normalizedInstant],
-    )
+    const originalTimezone = process.env.TZ
+    try {
+      process.env.TZ = 'America/New_York'
+      const boundDate = new Date('2026-01-31T23:30:00.000Z')
+      await client.query(
+        `INSERT INTO paddle_utc_contract_dates (
+           cancellation_effective_at, monthly_quota_anchor_at, annual_quota_anchor_at,
+           bound_date_expires_at
+         ) VALUES ($1::timestamp, $2::timestamp, $3::timestamp, $4)`,
+        [normalizedInstant, normalizedInstant, normalizedInstant, boundDate],
+      )
+    } finally {
+      if (originalTimezone === undefined) delete process.env.TZ
+      else process.env.TZ = originalTimezone
+    }
     const row = (await client.query(`
       SELECT *,
              cancellation_effective_at > '2026-01-31T23:29:59.999Z'::timestamptz AS active_before_boundary,
@@ -63,6 +73,7 @@ test('PostgreSQL billing readiness fails without the inbox schema and passes aft
     `)).rows[0]
 
     assert.equal(row.cancellation_effective_at.toISOString(), '2026-01-31T23:30:00.000Z')
+    assert.equal(row.bound_date_expires_at.toISOString(), '2026-01-31T23:30:00.000Z')
     assert.equal(row.active_before_boundary, true)
     assert.equal(row.ended_at_boundary, true)
 

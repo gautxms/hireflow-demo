@@ -1,7 +1,9 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import pg from 'pg'
 import {
   buildUtcPostgresOptions,
+  installUtcDateSerialization,
   parseTimestampWithoutTimeZoneAsUtc,
 } from './utcTimestampContract.js'
 
@@ -26,4 +28,11 @@ test('PostgreSQL connection options preserve existing settings and force UTC las
     buildUtcPostgresOptions('-c statement_timeout=5000'),
     '-c statement_timeout=5000 -c timezone=UTC',
   )
+})
+
+test('JavaScript Date parameters are configured for UTC serialization', () => {
+  const defaults = { parseInputDatesAsUTC: false }
+  installUtcDateSerialization(defaults)
+  assert.equal(defaults.parseInputDatesAsUTC, true)
+  assert.equal(pg.defaults.parseInputDatesAsUTC, true)
 })

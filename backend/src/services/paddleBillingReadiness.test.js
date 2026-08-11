@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
+import pg from 'pg'
 import {
   REQUIRED_PADDLE_WEBHOOK_INBOX_COLUMNS,
   REQUIRED_PADDLE_WEBHOOK_INBOX_INDEXES,
@@ -169,11 +170,12 @@ test('schema query failure is sanitized and prevents billing readiness', async (
   assert.equal(JSON.stringify(schema).includes('secret'), false)
 })
 
-test('Paddle UTC timestamp contract requires both a UTC session and UTC timestamp parsing', async () => {
+test('Paddle UTC timestamp contract requires UTC session, parsing, and Date serialization', async () => {
   const ready = await verifyUtcTimestampContract(readyDb())
   assert.equal(ready.ready, true)
   assert.equal(ready.sessionTimezone, 'UTC')
   assert.equal(ready.parserUsesUtc, true)
+  assert.equal(ready.dateSerializationUsesUtc, true)
 
   const wrongSession = await verifyUtcTimestampContract({
     async query() {
@@ -204,6 +206,18 @@ test('Paddle UTC timestamp contract requires both a UTC session and UTC timestam
   assert.deepEqual(wrongParser.errors.map((error) => error.code), [
     'PADDLE_TIMESTAMP_PARSER_NOT_UTC',
   ])
+
+  const originalDateSerialization = pg.defaults.parseInputDatesAsUTC
+  try {
+    pg.defaults.parseInputDatesAsUTC = false
+    const wrongDateSerialization = await verifyUtcTimestampContract(readyDb())
+    assert.equal(wrongDateSerialization.ready, false)
+    assert.deepEqual(wrongDateSerialization.errors.map((error) => error.code), [
+      'PADDLE_DATE_SERIALIZATION_NOT_UTC',
+    ])
+  } finally {
+    pg.defaults.parseInputDatesAsUTC = originalDateSerialization
+  }
 })
 
 test('startup prerequisites fail before billing traffic when required schema is missing', async () => {
