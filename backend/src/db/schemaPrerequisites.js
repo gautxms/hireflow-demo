@@ -72,3 +72,80 @@ export async function verifyShortlistBatchAddSchema(db = pool) {
 
   return { ok: issues.length === 0, issues }
 }
+
+const REQUIRED_RESUME_QUOTA_COLUMNS = new Map([
+  ['users', ['quota_anchor_at']],
+  ['resume_quota_reservations', [
+    'id',
+    'user_id',
+    'idempotency_key',
+    'period_start',
+    'period_end',
+    'requested_units',
+    'consumed_units',
+    'released_units',
+    'status',
+    'expires_at',
+  ]],
+  ['resume_quota_allocations', [
+    'id',
+    'reservation_id',
+    'user_id',
+    'allocation_key',
+    'upload_id',
+    'resume_id',
+    'parse_job_id',
+    'status',
+  ]],
+  ['upload_chunks', ['quota_reservation_id', 'quota_allocation_id', 'quota_recorded', 'file_identity']],
+  ['parse_jobs', ['quota_allocation_id']],
+  ['usage_log', ['quota_allocation_id']],
+])
+
+const REQUIRED_RESUME_QUOTA_INDEXES = [
+  'resume_quota_reservations_user_id_idempotency_key_key',
+  'idx_resume_quota_reservations_availability',
+  'resume_quota_allocations_user_id_allocation_key_key',
+  'idx_resume_quota_allocations_reservation_status',
+  'idx_resume_quota_allocations_upload',
+  'idx_resume_quota_allocations_parse_job',
+  'idx_usage_log_quota_allocation',
+]
+
+export async function verifyResumeQuotaReservationSchema(db = pool) {
+  const tableNames = [...REQUIRED_RESUME_QUOTA_COLUMNS.keys()]
+  const [columnResult, indexResult] = await Promise.all([
+    db.query(
+      `SELECT table_name::text, column_name::text
+       FROM information_schema.columns
+       WHERE table_schema = 'public'
+         AND table_name = ANY($1::text[])`,
+      [tableNames],
+    ),
+    db.query(
+      `SELECT indexname::text
+       FROM pg_indexes
+       WHERE schemaname = 'public'
+         AND indexname = ANY($1::text[])`,
+      [REQUIRED_RESUME_QUOTA_INDEXES],
+    ),
+  ])
+
+  const columns = new Set(columnResult.rows.map((row) => `${row.table_name}.${row.column_name}`))
+  const indexes = new Set(indexResult.rows.map((row) => row.indexname))
+  const missingColumns = []
+  for (const [tableName, requiredColumns] of REQUIRED_RESUME_QUOTA_COLUMNS) {
+    for (const columnName of requiredColumns) {
+      if (!columns.has(`${tableName}.${columnName}`)) {
+        missingColumns.push(`${tableName}.${columnName}`)
+      }
+    }
+  }
+  const missingIndexes = REQUIRED_RESUME_QUOTA_INDEXES.filter((indexName) => !indexes.has(indexName))
+
+  return {
+    ok: missingColumns.length === 0 && missingIndexes.length === 0,
+    missingColumns,
+    missingIndexes,
+  }
+}

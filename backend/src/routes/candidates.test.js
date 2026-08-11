@@ -731,10 +731,66 @@ test('async parse completion still upserts candidate profiles after completing a
 
 test('reanalysis path continues to sync profiles after mutating completed parse results', () => {
   const source = fs.readFileSync(new URL('./candidates.js', import.meta.url), 'utf8')
-  const reanalyseRoute = source.slice(source.indexOf("router.post('/reanalyse'"), source.indexOf("router.get('/profiles'"))
+  const reanalyseRoute = source.slice(source.indexOf('async function handleCandidateReanalysis'), source.indexOf("router.get('/profiles'"))
 
+  assert.match(reanalyseRoute, /prepareCandidateReanalysisQuota/)
+  assert.match(reanalyseRoute, /enforceCandidateReanalysisQuota/)
+  assert.match(reanalyseRoute, /allocateResumeQuotaUnit/)
+  assert.match(reanalyseRoute, /onProviderAttemptStart/)
+  assert.match(reanalyseRoute, /consumeResumeQuotaAllocation/)
+  assert.match(reanalyseRoute, /releaseResumeQuotaReservation/)
   assert.match(reanalyseRoute, /UPDATE parse_jobs[\s\S]*SET result = \$2::jsonb/)
   assert.match(reanalyseRoute, /await syncCandidateProfilesForUser\(req\.userId\)/)
+})
+
+test('direct candidate reanalysis is rejected at quota before AI or persistence starts', async (t) => {
+  const previousFlag = process.env.RESUME_QUOTA_RESERVATIONS_ENABLED
+  process.env.RESUME_QUOTA_RESERVATIONS_ENABLED = 'true'
+  t.after(() => {
+    if (previousFlag === undefined) delete process.env.RESUME_QUOTA_RESERVATIONS_ENABLED
+    else process.env.RESUME_QUOTA_RESERVATIONS_ENABLED = previousFlag
+  })
+
+  const queries = []
+  t.mock.method(pool, 'query', async (sql, params) => {
+    const text = String(sql)
+    queries.push({ sql: text, params })
+    if (/FROM users/.test(text)) {
+      return {
+        rows: [{
+          id: 42,
+          subscription_status: 'active',
+          subscription_plan: 'monthly',
+          quota_anchor_at: '2026-01-20T08:30:00.000Z',
+          current_period_end: '2026-09-20T08:30:00.000Z',
+          cancellation_effective_at: null,
+        }],
+      }
+    }
+    if (/SELECT id, filename, raw_text, parse_result[\s\S]*FROM resumes/.test(text)) {
+      return {
+        rows: [{
+          id: '11111111-1111-4111-8111-111111111111',
+          filename: 'candidate.pdf',
+          raw_text: 'Experienced recruiter with SaaS hiring experience.',
+          parse_result: { candidates: [] },
+        }],
+      }
+    }
+    if (/FROM usage_overrides/.test(text)) return { rows: [] }
+    if (/FROM usage_log/.test(text)) return { rows: [{ usage_count: 800 }] }
+    throw new Error(`Quota rejection test reached an unexpected query: ${text}`)
+  })
+
+  const response = await requestJson(createCandidateDirectoryApp(), '/candidates/reanalyse', {
+    method: 'POST',
+    body: { jobDescription: 'Senior recruiter role' },
+  })
+
+  assert.equal(response.status, 429)
+  assert.equal(response.body.code, 'RESUME_ANALYSIS_QUOTA_EXCEEDED')
+  assert.equal(queries.some(({ sql }) => /UPDATE resumes|UPDATE parse_jobs/.test(sql)), false)
+  assert.equal(queries.some(({ sql }) => /INSERT INTO resume_quota_reservations/.test(sql)), false)
 })
 
 test('backend docs include candidate profile recovery runbook without making sync-on-read normal operation', () => {

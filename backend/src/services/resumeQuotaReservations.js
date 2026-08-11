@@ -1,4 +1,5 @@
 import { pool } from '../db/client.js'
+import { getConfiguredPaddleEnvironments } from './paddleBillingReadiness.js'
 
 const RESERVATION_TTL_MINUTES = 120
 const ADVISORY_LOCK_NAMESPACE = 8002026
@@ -290,7 +291,14 @@ export async function getResumeQuotaUsageAvailabilitySnapshot({
 }
 
 export function isResumeQuotaReservationsEnabled(env = process.env) {
-  return String(env.RESUME_QUOTA_RESERVATIONS_ENABLED || 'false').trim().toLowerCase() === 'true'
+  const explicitlyEnabled = String(env.RESUME_QUOTA_RESERVATIONS_ENABLED || '')
+    .trim()
+    .toLowerCase() === 'true'
+
+  // Paddle-backed runtimes must never fall back to the legacy read-then-write
+  // counter. The flag remains useful for isolated local/test environments, but
+  // it cannot disable atomic enforcement once billing is configured.
+  return explicitlyEnabled || getConfiguredPaddleEnvironments(env).length > 0
 }
 
 async function withTransaction(callback) {

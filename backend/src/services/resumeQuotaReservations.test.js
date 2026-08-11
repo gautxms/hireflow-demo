@@ -70,10 +70,18 @@ function mockReservationDatabase(t, { used = 0 } = {}) {
   return { calls, reservations }
 }
 
-test('reservation rollout remains disabled unless explicitly enabled', () => {
+test('atomic reservations are mandatory for Paddle runtimes and opt-in elsewhere', () => {
   assert.equal(isResumeQuotaReservationsEnabled({}), false)
   assert.equal(isResumeQuotaReservationsEnabled({ RESUME_QUOTA_RESERVATIONS_ENABLED: 'true' }), true)
   assert.equal(isResumeQuotaReservationsEnabled({ RESUME_QUOTA_RESERVATIONS_ENABLED: 'false' }), false)
+  assert.equal(isResumeQuotaReservationsEnabled({
+    RESUME_QUOTA_RESERVATIONS_ENABLED: 'false',
+    PADDLE_ENVIRONMENT: 'sandbox',
+    PADDLE_SANDBOX_API_KEY: 'sandbox-key',
+  }), true)
+  assert.equal(isResumeQuotaReservationsEnabled({
+    PADDLE_PRODUCTION_WEBHOOK_SECRET: 'production-secret',
+  }), true)
 })
 
 test('next availability change exposes only an expiry that can release unallocated units', async () => {
