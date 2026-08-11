@@ -267,6 +267,8 @@ test('POST /api/subscriptions/payment-method rejects unowned or provider-ineligi
     { name: 'cancelled', provider: { status: 'canceled' } },
     { name: 'unknown', provider: { status: 'mystery' } },
     { name: 'scheduled cancellation', provider: { scheduled_change: { action: 'cancel' } } },
+    { name: 'missing collection mode', provider: { collection_mode: undefined } },
+    { name: 'null collection mode', provider: { collection_mode: null } },
     { name: 'manual collection', provider: { collection_mode: 'manual' } },
   ]
 
