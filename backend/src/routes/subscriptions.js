@@ -2049,7 +2049,7 @@ router.post('/payment-method', requireAuth, async (req, res) => {
         scheduledAction: providerState.scheduledAction,
       })
     }
-    if (providerSubscription.collection_mode && providerSubscription.collection_mode !== 'automatic') {
+    if (providerSubscription.collection_mode !== 'automatic') {
       throw new BillingError('PAYMENT_METHOD_NOT_ALLOWED', { reason: 'provider_collection_mode_not_automatic' })
     }
 
