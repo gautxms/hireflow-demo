@@ -8,15 +8,82 @@ import {
   assertPaddleBillingPrerequisites,
   verifyPaddleWebhookInboxSchema,
 } from './paddleBillingReadiness.js'
+import {
+  buildUtcPostgresOptions,
+  verifyUtcTimestampContract,
+} from '../db/utcTimestampContract.js'
+import { normalizePaddleTimestamp } from '../utils/paddleTimestamps.js'
+import { resolveResumeQuotaPeriod } from '../utils/resumeQuotaPeriod.js'
 
 const connectionString = process.env.BILLING_READINESS_POSTGRES_TEST_DATABASE_URL
 
 test('PostgreSQL billing readiness fails without the inbox schema and passes after migrations 050-052', {
   skip: !connectionString,
 }, async (t) => {
-  const db = new pg.Pool({ connectionString, max: 2 })
+  const db = new pg.Pool({
+    connectionString,
+    max: 2,
+    options: buildUtcPostgresOptions(),
+  })
   t.after(async () => db.end())
   await db.query('DROP TABLE IF EXISTS paddle_webhook_events CASCADE')
+
+  const utcContract = await verifyUtcTimestampContract(db)
+  assert.equal(utcContract.ready, true, JSON.stringify(utcContract))
+
+  const nonUtcClient = new pg.Client({ connectionString })
+  await nonUtcClient.connect()
+  await nonUtcClient.query("SET TIME ZONE 'Asia/Kolkata'")
+  const nonUtcContract = await verifyUtcTimestampContract(nonUtcClient)
+  assert.equal(nonUtcContract.ready, false)
+  assert.ok(nonUtcContract.errors.some((error) => error.code === 'PADDLE_DATABASE_TIMEZONE_NOT_UTC'))
+  await nonUtcClient.end()
+
+  const client = await db.connect()
+  try {
+    await client.query(`
+      CREATE TEMP TABLE paddle_utc_contract_dates (
+        cancellation_effective_at TIMESTAMP,
+        monthly_quota_anchor_at TIMESTAMP,
+        annual_quota_anchor_at TIMESTAMP
+      )
+    `)
+    const normalizedInstant = normalizePaddleTimestamp('2026-02-01T05:00:00+05:30')
+    await client.query(
+      `INSERT INTO paddle_utc_contract_dates (
+         cancellation_effective_at, monthly_quota_anchor_at, annual_quota_anchor_at
+       ) VALUES ($1::timestamp, $2::timestamp, $3::timestamp)`,
+      [normalizedInstant, normalizedInstant, normalizedInstant],
+    )
+    const row = (await client.query(`
+      SELECT *,
+             cancellation_effective_at > '2026-01-31T23:29:59.999Z'::timestamptz AS active_before_boundary,
+             cancellation_effective_at <= '2026-01-31T23:30:00.000Z'::timestamptz AS ended_at_boundary
+      FROM paddle_utc_contract_dates
+    `)).rows[0]
+
+    assert.equal(row.cancellation_effective_at.toISOString(), '2026-01-31T23:30:00.000Z')
+    assert.equal(row.active_before_boundary, true)
+    assert.equal(row.ended_at_boundary, true)
+
+    const monthlyPeriod = resolveResumeQuotaPeriod({
+      subscriptionStatus: 'active',
+      quotaAnchorAt: row.monthly_quota_anchor_at,
+      referenceDate: '2026-02-28T23:30:00.000Z',
+    })
+    assert.equal(monthlyPeriod.start.toISOString(), '2026-02-28T23:30:00.000Z')
+    assert.equal(monthlyPeriod.end.toISOString(), '2026-03-31T23:30:00.000Z')
+
+    const annualSubscriberMonthlyPeriod = resolveResumeQuotaPeriod({
+      subscriptionStatus: 'active',
+      quotaAnchorAt: row.annual_quota_anchor_at,
+      referenceDate: '2026-07-31T23:30:00.000Z',
+    })
+    assert.equal(annualSubscriberMonthlyPeriod.start.toISOString(), '2026-07-31T23:30:00.000Z')
+    assert.equal(annualSubscriberMonthlyPeriod.end.toISOString(), '2026-08-31T23:30:00.000Z')
+  } finally {
+    client.release()
+  }
 
   const missing = await verifyPaddleWebhookInboxSchema(db)
   assert.equal(missing.ready, false)
@@ -42,6 +109,7 @@ test('PostgreSQL billing readiness fails without the inbox schema and passes aft
     db,
   })
   assert.equal(readiness.ready, true)
+  assert.equal(readiness.utcTimestampContract.ready, true)
 
   await db.query('DROP INDEX idx_paddle_webhook_events_scheduled_retry')
   const missingIndex = await verifyPaddleWebhookInboxSchema(db)

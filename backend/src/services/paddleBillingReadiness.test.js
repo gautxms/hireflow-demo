@@ -11,6 +11,7 @@ import {
   setPaddleWebhookWorkerState,
   verifyPaddleWebhookInboxSchema,
 } from './paddleBillingReadiness.js'
+import { verifyUtcTimestampContract } from '../db/utcTimestampContract.js'
 
 const mandatoryFlags = {
   PADDLE_DURABLE_WEBHOOK_INBOX_ENABLED: 'true',
@@ -28,7 +29,15 @@ function readySchemaRow(overrides = {}) {
 
 function readyDb(overrides = {}) {
   return {
-    async query() {
+    async query(sql) {
+      if (String(sql).includes("current_setting('TimeZone')")) {
+        return {
+          rows: [{
+            session_timezone: 'UTC',
+            timestamp_probe: new Date('2000-01-01T00:00:00.000Z'),
+          }],
+        }
+      }
       return { rows: [readySchemaRow(overrides)] }
     },
   }
@@ -158,6 +167,43 @@ test('schema query failure is sanitized and prevents billing readiness', async (
   assert.equal(schema.ready, false)
   assert.equal(schema.errors[0].code, 'PADDLE_WEBHOOK_INBOX_SCHEMA_CHECK_FAILED')
   assert.equal(JSON.stringify(schema).includes('secret'), false)
+})
+
+test('Paddle UTC timestamp contract requires both a UTC session and UTC timestamp parsing', async () => {
+  const ready = await verifyUtcTimestampContract(readyDb())
+  assert.equal(ready.ready, true)
+  assert.equal(ready.sessionTimezone, 'UTC')
+  assert.equal(ready.parserUsesUtc, true)
+
+  const wrongSession = await verifyUtcTimestampContract({
+    async query() {
+      return {
+        rows: [{
+          session_timezone: 'Asia/Kolkata',
+          timestamp_probe: new Date('2000-01-01T00:00:00.000Z'),
+        }],
+      }
+    },
+  })
+  assert.equal(wrongSession.ready, false)
+  assert.deepEqual(wrongSession.errors.map((error) => error.code), [
+    'PADDLE_DATABASE_TIMEZONE_NOT_UTC',
+  ])
+
+  const wrongParser = await verifyUtcTimestampContract({
+    async query() {
+      return {
+        rows: [{
+          session_timezone: 'UTC',
+          timestamp_probe: new Date('1999-12-31T18:30:00.000Z'),
+        }],
+      }
+    },
+  })
+  assert.equal(wrongParser.ready, false)
+  assert.deepEqual(wrongParser.errors.map((error) => error.code), [
+    'PADDLE_TIMESTAMP_PARSER_NOT_UTC',
+  ])
 })
 
 test('startup prerequisites fail before billing traffic when required schema is missing', async () => {

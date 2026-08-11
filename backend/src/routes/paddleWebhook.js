@@ -31,6 +31,10 @@ import {
 import { markCheckoutReservationCompleted } from '../services/paddleCheckoutReservations.js'
 import { applyPaddleSubscriptionLifecycle } from '../services/paddleSubscriptionLifecycle.js'
 import { isDurableWebhookInboxEnabled } from '../services/paddleBillingReadiness.js'
+import {
+  firstNormalizedPaddleTimestamp,
+  normalizePaddleTimestamp,
+} from '../utils/paddleTimestamps.js'
 
 const router = express.Router()
 const WEBHOOK_PROCESSING_LEASE_SECONDS = 120
@@ -1170,10 +1174,10 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment, storedEv
               transactionSubscriptionId,
               getPaddleCustomerId(payload),
               getStoredSubscriptionPlan(payload, paddle),
-              payload?.data?.billing_period?.ends_at || null,
-              payload?.data?.billing_period?.ends_at || null,
+              normalizePaddleTimestamp(payload?.data?.billing_period?.ends_at),
+              normalizePaddleTimestamp(payload?.data?.billing_period?.ends_at),
               paddle.environment,
-              payload?.data?.billing_period?.starts_at || null,
+              normalizePaddleTimestamp(payload?.data?.billing_period?.starts_at),
               providerEventAt,
             ],
           )
@@ -1294,8 +1298,14 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment, storedEv
               getTransactionSubscriptionId(payload),
               getPaddleCustomerId(payload),
               getStoredSubscriptionPlan(payload, paddle),
-              payload?.data?.billing_period?.ends_at || payload?.data?.current_billing_period?.ends_at || null,
-              payload?.data?.billing_period?.ends_at || payload?.data?.next_billed_at || null,
+              firstNormalizedPaddleTimestamp(
+                payload?.data?.billing_period?.ends_at,
+                payload?.data?.current_billing_period?.ends_at,
+              ),
+              firstNormalizedPaddleTimestamp(
+                payload?.data?.billing_period?.ends_at,
+                payload?.data?.next_billed_at,
+              ),
               paddle.environment,
               providerEventAt,
             ],

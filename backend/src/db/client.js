@@ -1,9 +1,11 @@
 import pkg from 'pg'
+import { buildUtcPostgresOptions } from './utcTimestampContract.js'
 
 const { Pool } = pkg
 
 export const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
+  options: buildUtcPostgresOptions(),
 })
 
 export async function initializeDatabase() {

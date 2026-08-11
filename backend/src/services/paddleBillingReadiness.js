@@ -1,4 +1,5 @@
 import { normalizePaddleEnvironment, resolvePaddleConfig } from '../config/paddle.js'
+import { verifyUtcTimestampContract } from '../db/utcTimestampContract.js'
 
 const DURABLE_WEBHOOK_INBOX_FLAG = 'PADDLE_DURABLE_WEBHOOK_INBOX_ENABLED'
 const RETRY_WORKER_FLAG = 'PADDLE_WEBHOOK_RETRY_WORKER_ENABLED'
@@ -224,20 +225,30 @@ export async function checkPaddleBillingReadiness({
       ready: true,
       environments: [],
       durableInbox: { configured: false, schemaReady: null },
+      utcTimestampContract: { required: false, ready: null },
       worker: { required: false, ready: null, status: 'not_required' },
       errors: [],
     }
   }
 
-  const schema = db
-    ? await verifyPaddleWebhookInboxSchema(db)
-    : {
+  const [schema, utcTimestampContract] = db
+    ? await Promise.all([
+        verifyPaddleWebhookInboxSchema(db),
+        verifyUtcTimestampContract(db),
+      ])
+    : [{
         ready: false,
         errors: [{
           code: 'PADDLE_WEBHOOK_INBOX_DATABASE_UNAVAILABLE',
           message: 'The durable Paddle webhook inbox database connection is unavailable.',
         }],
-      }
+      }, {
+        ready: false,
+        errors: [{
+          code: 'PADDLE_UTC_TIMESTAMP_CONTRACT_DATABASE_UNAVAILABLE',
+          message: 'The Paddle billing UTC timestamp contract cannot be verified without a database connection.',
+        }],
+      }]
   const currentWorkerState = getPaddleWebhookWorkerState()
   const runtimeErrors = requireWorkerRuntime && !currentWorkerState.ready
     ? [{
@@ -245,7 +256,12 @@ export async function checkPaddleBillingReadiness({
         message: 'The durable Paddle webhook retry worker is not ready.',
       }]
     : []
-  const errors = [...configuration.errors, ...schema.errors, ...runtimeErrors]
+  const errors = [
+    ...configuration.errors,
+    ...schema.errors,
+    ...utcTimestampContract.errors,
+    ...runtimeErrors,
+  ]
 
   return {
     enabled: true,
@@ -254,6 +270,12 @@ export async function checkPaddleBillingReadiness({
     durableInbox: {
       configured: configuration.durableInboxEnabled,
       schemaReady: schema.ready,
+    },
+    utcTimestampContract: {
+      required: true,
+      ready: utcTimestampContract.ready,
+      sessionTimezone: utcTimestampContract.sessionTimezone || null,
+      parserUsesUtc: utcTimestampContract.parserUsesUtc === true,
     },
     worker: {
       required: true,

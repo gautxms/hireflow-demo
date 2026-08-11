@@ -1,6 +1,7 @@
 import { pool } from '../db/client.js'
 import { resolvePaddleEnvironmentForUser } from '../config/paddle.js'
 import { inferPlanFromPaddlePayload } from './paddlePlanChangeRecovery.js'
+import { normalizePaddleTimestamp } from '../utils/paddleTimestamps.js'
 
 const SUPPORTED_PROVIDER_STATUSES = new Set([
   'active',
@@ -23,9 +24,7 @@ function dataFromPayload(payload = {}) {
 }
 
 function validIsoOrNull(value) {
-  if (!value) return null
-  const date = new Date(value)
-  return Number.isNaN(date.getTime()) ? null : date.toISOString()
+  return normalizePaddleTimestamp(value)
 }
 
 function sameInstant(left, right) {
