@@ -6,7 +6,7 @@ Use this runbook when Paddle and HireFlow disagree about a customer's subscripti
 
 | Question | Safe evidence |
 | --- | --- |
-| Which account is affected? | HireFlow user ID, Paddle environment, customer ID, and subscription ID in Admin Subscriptions or the `users` row |
+| Which account is affected? | Use Admin Subscriptions to identify the account, then use the authorized read-only `users` lookup below for the HireFlow user ID, Paddle environment, customer ID, and subscription ID |
 | Which webhook was involved? | `[Paddle webhook]` logs and `paddle_webhook_events.event_id` / `event_type` |
 | Did webhook persistence or processing fail? | Inbox `status`, `attempt_count`, `scheduler_attempt_count`, `last_error_code`, and `next_retry_at` |
 | What did Paddle report? | The linked subscription in the matching Paddle environment; compare status, items/plan, billing period, next billing date, scheduled change, customer ID, and `updated_at` |
@@ -18,8 +18,8 @@ Application logs use provider IDs rather than email, card, or customer-name data
 
 ## Triage
 
-1. Identify the HireFlow user ID through the existing Admin Subscriptions view.
-2. Record the user's configured `paddle_environment`, `paddle_customer_id`, and `paddle_subscription_id`. Production and Sandbox must be investigated separately.
+1. Identify the affected account in the existing Admin Subscriptions view and verify its exact account email. The view does not expose every internal/provider identifier required for this procedure.
+2. Use the authorized, parameterized, read-only `users` lookup below to record the HireFlow user ID, `paddle_environment`, `paddle_customer_id`, and `paddle_subscription_id`. Stop if it does not return exactly one row. Do not copy the account email into logs or support notes. Production and Sandbox must be investigated separately.
 3. Search Railway application logs using the user ID, subscription ID, transaction ID, or event ID. Relevant patterns are listed below.
 4. Inspect the authoritative subscription in the matching Paddle environment. Verify that its customer ID and subscription ID match HireFlow before considering reconciliation.
 5. Compare Paddle and HireFlow:
@@ -31,7 +31,7 @@ Application logs use provider IDs rather than email, card, or customer-name data
    - the relevant inbox or payment-attempt record.
 6. If IDs or environments conflict, stop. Treat this as an ownership investigation, not a state-repair request.
 
-Read-only database inspection may use the following shapes with explicit, validated identifiers:
+Read-only database inspection may use the following shapes with explicit, validated identifiers. The first query uses the exact account email verified in Admin Subscriptions only to resolve the internal/provider IDs; keep that email out of logs and incident notes.
 
 ```sql
 SELECT id, subscription_status, subscription_plan, current_period_end,
@@ -39,7 +39,8 @@ SELECT id, subscription_status, subscription_plan, current_period_end,
        paddle_customer_id, paddle_subscription_id, last_paddle_event_at,
        last_paddle_reconciliation_attempt_at, last_paddle_reconciled_at
 FROM users
-WHERE id = $1;
+WHERE LOWER(email) = LOWER($1)
+LIMIT 2;
 
 SELECT user_id, status, latest_event_type, paddle_environment, updated_at
 FROM subscriptions
