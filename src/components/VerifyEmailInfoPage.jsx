@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import './AuthPage.css'
 import API_BASE from '../config/api'
 import { normalizePendingVerificationEmail } from '../utils/pendingEmailVerification'
@@ -19,7 +19,7 @@ export default function VerifyEmailInfoPage({ onBackToLogin, email = '' }) {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [cooldownSeconds, setCooldownSeconds] = useState(0)
 
-  useMemo(() => {
+  useEffect(() => {
     if (cooldownSeconds <= 0) {
       return undefined
     }
