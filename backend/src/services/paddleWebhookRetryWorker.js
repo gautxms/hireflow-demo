@@ -44,10 +44,23 @@ export async function runPaddleWebhookRetryWorker(dependencies = {}) {
            status = 'processing'
            AND (last_attempt_at IS NULL OR last_attempt_at <= NOW() - INTERVAL '120 seconds')
          )
-       )`,
+       )
+     RETURNING event_id, event_type, paddle_environment, attempt_count,
+               scheduler_attempt_count, last_error_code`,
     [PADDLE_WEBHOOK_SCHEDULER_MAX_ATTEMPTS],
   )
   summary.terminal_failed += exhausted.rowCount
+  for (const event of exhausted.rows || []) {
+    console.error('[Paddle webhook retry] event reached terminal failure', {
+      eventId: event.event_id,
+      eventType: event.event_type,
+      environment: event.paddle_environment,
+      attemptNumber: event.attempt_count,
+      schedulerAttemptNumber: event.scheduler_attempt_count,
+      result: 'terminal_failed',
+      errorCode: event.last_error_code,
+    })
+  }
 
   const candidates = await db.query(
     `SELECT event_id, event_type, payload_hash, payload, paddle_environment, verified_at,

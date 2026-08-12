@@ -100,6 +100,12 @@ function isFinalCancellationUser(user = {}, now = new Date()) {
   return Number.isNaN(effectiveAt.getTime()) || effectiveAt <= now
 }
 
+function hasFutureCancellation(value, now = new Date()) {
+  if (!value) return false
+  const effectiveAt = new Date(value)
+  return !Number.isNaN(effectiveAt.getTime()) && effectiveAt > now
+}
+
 async function resolveUserFromPayload(payload, paddleEnvironment, strictEnvironment = false) {
   const explicitUserId = payload?.data?.custom_data?.userId || payload?.custom_data?.userId || null
   const providerCustomerId = getPaddleCustomerId(payload)
@@ -294,7 +300,19 @@ async function recoverFailedPlanChangeFromWebhook(user, payload, paddle) {
 function getSafeErrorContext(error) {
   return {
     code: error?.code || error?.name || 'UNKNOWN_ERROR',
-    message: error?.message || String(error),
+    message: String(error?.message || error || 'Unknown error').slice(0, 180),
+  }
+}
+
+function getWebhookDiagnosticIdentifiers(payload, eventType = null) {
+  const normalizedEventType = String(eventType || '').toLowerCase()
+  return {
+    userId: payload?.data?.custom_data?.userId || payload?.custom_data?.userId || null,
+    customerId: getPaddleCustomerId(payload),
+    subscriptionId: getSubscriptionId(payload, eventType),
+    transactionId: normalizedEventType.startsWith('transaction.')
+      ? (payload?.data?.id || payload?.transaction_id || payload?.id || null)
+      : null,
   }
 }
 
@@ -734,7 +752,12 @@ export function createWebhookInboxLease({
       if (result.rowCount === 0) ownershipLost = true
     } catch (error) {
       ownershipLost = true
-      console.error('[Paddle webhook] inbox lease renewal failed', getSafeErrorContext(error))
+      console.error('[Paddle webhook] inbox lease renewal failed', {
+        eventId,
+        environment,
+        attemptNumber: attemptCount,
+        ...getSafeErrorContext(error),
+      })
     } finally {
       renewal = null
       if (ownershipLost) stopTimer()
@@ -898,15 +921,16 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment, storedEv
   }
 
   const eventType = getWebhookEventType(payload)
-  console.info('[Paddle webhook] received event', {
-    environment: paddle.environment,
-    eventType,
-    hasWebhookSecret: Boolean(secret),
-  })
-
   const dedupeEventId = storedEvent?.eventId || getEventDeduplicationId(payload, rawBody)
   const payloadHash = storedEvent?.payloadHash || crypto.createHash('sha256').update(rawBody || '', 'utf8').digest('hex')
   const durableInboxEnabled = isDurableWebhookInboxEnabled()
+
+  console.info('[Paddle webhook] received event', {
+    eventId: dedupeEventId,
+    eventType,
+    environment: paddle.environment,
+    ...getWebhookDiagnosticIdentifiers(payload, eventType),
+  })
 
   if (!storedEvent) {
     if (!eventType) {
@@ -917,6 +941,13 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment, storedEv
       || payload?.custom_data?.paddleEnvironment
       || null
     if (payloadEnvironment && payloadEnvironment !== paddle.environment) {
+      console.warn('[Paddle webhook] rejected event due to environment mismatch', {
+        eventId: dedupeEventId,
+        eventType,
+        configuredEnvironment: paddle.environment,
+        payloadEnvironment,
+        ...getWebhookDiagnosticIdentifiers(payload, eventType),
+      })
       return res.status(400).json({ error: 'Webhook environment mismatch' })
     }
 
@@ -951,7 +982,13 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment, storedEv
         ...(persisted.duplicate ? { duplicate: true } : {}),
       })
     } catch (error) {
-      console.error('[Paddle webhook] failed to durably persist verified event', getSafeErrorContext(error))
+      console.error('[Paddle webhook] failed to durably persist verified event', {
+        eventId: dedupeEventId,
+        eventType,
+        environment: paddle.environment,
+        ...getWebhookDiagnosticIdentifiers(payload, eventType),
+        ...getSafeErrorContext(error),
+      })
       return res.status(500).json({ error: 'Webhook persistence failed' })
     }
   }
@@ -1228,6 +1265,21 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment, storedEv
           }, { requireDurableLog: true }))
         }
       }
+
+      console.info('[Paddle payment] completed transaction processed', {
+        eventId: dedupeEventId,
+        eventType,
+        environment: paddle.environment,
+        userId,
+        customerId: getPaddleCustomerId(payload),
+        subscriptionId: transactionSubscriptionId,
+        transactionId,
+        previousStatus: user?.subscription_status || null,
+        ...(activationApplied ? { resultingStatus: 'active' } : {}),
+        result: hasEnvironmentMismatch
+          ? 'environment_mismatch_rejected'
+          : (activationApplied ? 'entitlement_activated' : (isRecoveredPlanChange ? 'plan_change_recovered' : 'payment_confirmed')),
+      })
     }
 
     if (eventType === 'transaction.failed' || eventType === 'transaction.payment_failed') {
@@ -1247,6 +1299,7 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment, storedEv
       }
 
       let failedStatusApplied = false
+      let failedPaymentAttemptRecorded = false
       const shouldApplyFailure = !hasEnvironmentMismatch
         && !preservePaidPlan
         && shouldApplyFailedPaymentToUser(user, payload, eventType)
@@ -1316,6 +1369,7 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment, storedEv
 
         if (failedStatusApplied || !shouldApplyFailure) {
           await recordFailedPaymentAttempt(payload, null, paddle.environment, db)
+          failedPaymentAttemptRecorded = true
         }
 
         if (subscriptionProjection) {
@@ -1323,6 +1377,25 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment, storedEv
         }
       })
       subscriptionProjection = null
+
+      console.warn('[Paddle payment] failed transaction processed', {
+        eventId: dedupeEventId,
+        eventType,
+        environment: paddle.environment,
+        userId: user?.id || null,
+        customerId: getPaddleCustomerId(payload),
+        subscriptionId: getTransactionSubscriptionId(payload),
+        transactionId: failedTransactionId,
+        previousStatus: user?.subscription_status || null,
+        ...(failedStatusApplied ? { resultingStatus: nextStatus || 'payment_failed' } : {}),
+        result: hasEnvironmentMismatch
+          ? 'environment_mismatch_rejected'
+          : (failedStatusApplied
+              ? 'entitlement_restricted'
+              : (preservePaidPlan
+                  ? 'paid_plan_preserved'
+                  : (failedPaymentAttemptRecorded ? 'recorded_without_entitlement_change' : 'entitlement_update_rejected'))),
+      })
 
       postProcessingTasks.push(() => trackEvent({
         userId: user?.id || null,
@@ -1394,11 +1467,17 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment, storedEv
           }
 
           console.info('[Paddle webhook] subscription lifecycle projection', {
+            eventId: dedupeEventId,
             eventType: lifecycleEventType,
             environment: paddle.environment,
             userId: user.id,
+            customerId: getPaddleCustomerId(payload),
             subscriptionId: subscriptionFromEvent,
-            status: lifecycleStatus,
+            previousStatus: user.subscription_status || null,
+            providerStatus: getSubscriptionStatus(payload),
+            ...(lifecycleResult.applied ? { resultingStatus: lifecycleStatus } : {}),
+            previousScheduledCancellation: hasFutureCancellation(user.cancellation_effective_at),
+            scheduledCancellation: Boolean(lifecycleResult.dates?.scheduledCancellationAt),
             applied: lifecycleResult.applied,
             reason: lifecycleResult.reason,
           })
@@ -1492,10 +1571,10 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment, storedEv
       })
     }
   } catch (error) {
-    console.error('[Paddle webhook] failed to update subscription state', error)
+    let processingResult = 'processing_failed'
     if (inboxClaimed) {
       try {
-        await inboxLease.finish(() => failWebhookInboxEvent(
+        processingResult = await inboxLease.finish(() => failWebhookInboxEvent(
           dedupeEventId,
           payloadHash,
           paddle.environment,
@@ -1505,14 +1584,35 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment, storedEv
           inboxSchedulerAttemptCount,
         ))
       } catch (inboxError) {
-        console.error('[Paddle webhook] failed to persist retryable inbox state', inboxError)
+        processingResult = 'retry_state_persistence_failed'
+        console.error('[Paddle webhook] failed to persist retryable inbox state', {
+          eventId: dedupeEventId,
+          eventType,
+          environment: paddle.environment,
+          attemptNumber: inboxAttemptCount,
+          ...getSafeErrorContext(inboxError),
+        })
       }
     }
+    console.error('[Paddle webhook] processing failed', {
+      eventId: dedupeEventId,
+      eventType,
+      environment: paddle.environment,
+      attemptNumber: inboxAttemptCount,
+      schedulerAttemptNumber: inboxSchedulerAttemptCount,
+      result: processingResult,
+      ...getWebhookDiagnosticIdentifiers(payload, eventType),
+      ...getSafeErrorContext(error),
+    })
     try {
       await logErrorToDatabase('paddle.webhook.processing_failed', error, {
         eventType,
         eventId: dedupeEventId,
         environment: paddle.environment,
+        attemptNumber: inboxAttemptCount,
+        schedulerAttemptNumber: inboxSchedulerAttemptCount,
+        result: processingResult,
+        ...getWebhookDiagnosticIdentifiers(payload, eventType),
       })
     } catch (logError) {
       console.error('[Paddle webhook] failed to persist processing error', logError)

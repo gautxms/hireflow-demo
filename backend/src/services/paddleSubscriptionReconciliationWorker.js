@@ -41,6 +41,7 @@ function candidateLogContext(user, extra = {}) {
     environment: user?.paddle_environment || null,
     providerCustomerId: safeProviderId(user?.paddle_customer_id),
     providerSubscriptionId: safeProviderId(user?.paddle_subscription_id),
+    localStatus: user?.subscription_status || null,
     ...extra,
   }
 }
@@ -238,6 +239,13 @@ export async function runAutomaticPaddleSubscriptionReconciliation(dependencies 
         if (result.reason === 'updated' || result.reason === 'already_current') {
           await markSuccess(lockClient, user, attemptAt)
           summary[result.reason] += 1
+          if (result.reason === 'already_current') {
+            console.info('[Paddle subscription reconciliation] automatic candidate already current', candidateLogContext(user, {
+              providerStatus: result.snapshot?.providerStatus || null,
+              result: result.reason,
+              stateChanged: false,
+            }))
+          }
           continue
         }
 
@@ -249,7 +257,8 @@ export async function runAutomaticPaddleSubscriptionReconciliation(dependencies 
         summary.failed += 1
         console.warn('[Paddle subscription reconciliation] automatic candidate was not applied', candidateLogContext(user, {
           providerStatus: result.snapshot?.providerStatus || null,
-          reason: result.reason,
+          result: result.reason,
+          stateChanged: false,
         }))
       } catch (error) {
         summary.failed += 1

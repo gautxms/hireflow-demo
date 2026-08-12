@@ -76,6 +76,42 @@ test('recordFailedPaymentAttempt stores the webhook-selected sandbox environment
   assert.match(calls[0].sql, /paddle_environment/)
 })
 
+test('missing transaction diagnostics use identifiers without storing the full Paddle payload', async (t) => {
+  const calls = []
+  t.mock.method(pool, 'query', async (sql, params) => {
+    calls.push({ sql: String(sql), params })
+    return { rowCount: 1, rows: [] }
+  })
+
+  const result = await recordFailedPaymentAttempt({
+    event_type: 'transaction.payment_failed',
+    data: {
+      customer_id: 'ctm_safe_diagnostic',
+      subscription_id: 'sub_safe_diagnostic',
+      custom_data: {
+        userId: 40,
+        paddleEnvironment: 'sandbox',
+        email: 'must-not-be-logged@example.com',
+      },
+      card: { last4: '4242' },
+    },
+  })
+
+  assert.equal(result, null)
+  const errorInsert = calls.find(({ sql }) => /INSERT INTO error_logs/.test(sql))
+  assert.ok(errorInsert)
+  const context = JSON.parse(errorInsert.params[3])
+  assert.deepEqual(context, {
+    eventType: 'transaction.payment_failed',
+    userId: 40,
+    environment: 'sandbox',
+    customerId: 'ctm_safe_diagnostic',
+    subscriptionId: 'sub_safe_diagnostic',
+    result: 'rejected_missing_transaction_id',
+  })
+  assert.doesNotMatch(errorInsert.params[3], /must-not-be-logged|4242|payload/i)
+})
+
 test('production startup and payment bookkeeping contain no local charge worker', () => {
   const paymentRetrySource = readFileSync(new URL('./paymentRetry.js', import.meta.url), 'utf8')
   const startupSource = readFileSync(new URL('../index.js', import.meta.url), 'utf8')

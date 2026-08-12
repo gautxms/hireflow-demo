@@ -141,16 +141,30 @@ test('worker initialization failure is surfaced and no timer is scheduled', asyn
   assert.deepEqual(states, [{ ready: false, status: 'failed', errorCode: 'ECONNREFUSED' }])
 })
 
-test('an expired capped processing attempt is terminalized without starting processing', async () => {
+test('an expired capped processing attempt is terminalized without starting processing', async (t) => {
   const calls = []
+  const errors = []
   let processingCalls = 0
   const db = {
     async query(sql, params) {
       calls.push({ sql: String(sql), params })
-      if (calls.length === 1) return { rowCount: 1, rows: [] }
+      if (calls.length === 1) {
+        return {
+          rowCount: 1,
+          rows: [{
+            event_id: 'evt_exhausted',
+            event_type: 'subscription.updated',
+            paddle_environment: 'sandbox',
+            attempt_count: 6,
+            scheduler_attempt_count: 6,
+            last_error_code: 'SCHEDULER_ATTEMPTS_EXHAUSTED',
+          }],
+        }
+      }
       return { rowCount: 0, rows: [] }
     },
   }
+  t.mock.method(console, 'error', (...args) => errors.push(args))
   const summary = await runPaddleWebhookRetryWorker({
     db,
     env: enabled,
@@ -159,7 +173,6 @@ test('an expired capped processing attempt is terminalized without starting proc
       return { outcome: 'completed' }
     },
   })
-
   assert.equal(processingCalls, 0)
   assert.equal(summary.terminal_failed, 1)
   assert.equal(summary.scanned, 0)
@@ -170,4 +183,17 @@ test('an expired capped processing attempt is terminalized without starting proc
     calls[0].sql,
     /status = 'processing'[\s\S]+last_attempt_at <= NOW\(\) - INTERVAL '120 seconds'/,
   )
+  assert.match(calls[0].sql, /RETURNING event_id, event_type, paddle_environment/)
+  assert.deepEqual(errors, [[
+    '[Paddle webhook retry] event reached terminal failure',
+    {
+      eventId: 'evt_exhausted',
+      eventType: 'subscription.updated',
+      environment: 'sandbox',
+      attemptNumber: 6,
+      schedulerAttemptNumber: 6,
+      result: 'terminal_failed',
+      errorCode: 'SCHEDULER_ATTEMPTS_EXHAUSTED',
+    },
+  ]])
 })
