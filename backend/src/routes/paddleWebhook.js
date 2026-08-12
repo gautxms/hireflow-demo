@@ -100,6 +100,12 @@ function isFinalCancellationUser(user = {}, now = new Date()) {
   return Number.isNaN(effectiveAt.getTime()) || effectiveAt <= now
 }
 
+function hasFutureCancellation(value, now = new Date()) {
+  if (!value) return false
+  const effectiveAt = new Date(value)
+  return !Number.isNaN(effectiveAt.getTime()) && effectiveAt > now
+}
+
 async function resolveUserFromPayload(payload, paddleEnvironment, strictEnvironment = false) {
   const explicitUserId = payload?.data?.custom_data?.userId || payload?.custom_data?.userId || null
   const providerCustomerId = getPaddleCustomerId(payload)
@@ -1470,7 +1476,7 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment, storedEv
             previousStatus: user.subscription_status || null,
             providerStatus: getSubscriptionStatus(payload),
             ...(lifecycleResult.applied ? { resultingStatus: lifecycleStatus } : {}),
-            previousScheduledCancellation: Boolean(user.cancellation_effective_at),
+            previousScheduledCancellation: hasFutureCancellation(user.cancellation_effective_at),
             scheduledCancellation: Boolean(lifecycleResult.dates?.scheduledCancellationAt),
             applied: lifecycleResult.applied,
             reason: lifecycleResult.reason,

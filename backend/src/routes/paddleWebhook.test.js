@@ -3288,6 +3288,7 @@ test('POST /api/paddle/webhook prevents an old cancellation event from cancellin
   assert.match(cancellationUpdate.sql, /account\.paddle_subscription_id = \$2/)
   const lifecycleLog = infoLogs.find(([message]) => String(message).includes('[Paddle webhook] subscription lifecycle projection'))
   assert.equal(lifecycleLog?.[1]?.applied, false)
+  assert.equal(lifecycleLog?.[1]?.previousScheduledCancellation, false)
   assert.equal(Object.hasOwn(lifecycleLog?.[1] || {}, 'resultingStatus'), false)
 })
 

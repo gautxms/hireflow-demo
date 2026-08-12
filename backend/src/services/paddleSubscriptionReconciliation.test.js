@@ -364,14 +364,16 @@ test('reconciliation repairs scheduled cancellation and keeps next billing null'
   assert.ok(!mock.calls.some(({ sql }) => /UPDATE payment_attempts/.test(sql)))
 })
 
-test('reconciliation clears a removed cancellation schedule and repairs billing dates', async () => {
+test('reconciliation identifies a future cancellation as scheduled when clearing it', async (t) => {
   const mock = dbMock()
+  const infoLogs = []
+  t.mock.method(console, 'info', (...args) => infoLogs.push(args))
   const result = await reconcilePaddleSubscriptionState({
     user: user({
       current_period_end: '2026-08-20T00:00:00.000Z',
       subscription_renewal_date: '2026-08-20T00:00:00.000Z',
       next_billing_date: null,
-      cancellation_effective_at: '2026-08-20T00:00:00.000Z',
+      cancellation_effective_at: '2099-08-20T00:00:00.000Z',
     }),
     paddle: paddle(),
     paddlePayload: subscription({
@@ -391,6 +393,33 @@ test('reconciliation clears a removed cancellation schedule and repairs billing 
   assert.equal(result.user.current_period_end, '2026-08-23T00:00:00.000Z')
   assert.equal(result.user.next_billing_date, '2026-08-23T00:00:00.000Z')
   assert.equal(result.user.cancellation_effective_at, null)
+  const appliedLog = infoLogs.find(([message]) => String(message).includes('Applied verified provider state'))
+  assert.equal(appliedLog?.[1]?.previousScheduledCancellation, true)
+  assert.equal(appliedLog?.[1]?.scheduledCancellation, false)
+})
+
+test('reconciliation does not identify an already-effective cancellation as scheduled', async (t) => {
+  const mock = dbMock()
+  const infoLogs = []
+  t.mock.method(console, 'info', (...args) => infoLogs.push(args))
+  const result = await reconcilePaddleSubscriptionState({
+    user: user({ cancellation_effective_at: '2020-08-20T00:00:00.000Z' }),
+    paddle: paddle(),
+    paddlePayload: subscription({
+      status: 'canceled',
+      canceled_at: '2026-07-28T08:00:00.000Z',
+      current_billing_period: null,
+      next_billed_at: null,
+      items: [],
+    }),
+    db: mock.db,
+    source: 'test',
+  })
+
+  assert.equal(result.reconciled, true)
+  const appliedLog = infoLogs.find(([message]) => String(message).includes('Applied verified provider state'))
+  assert.equal(appliedLog?.[1]?.previousScheduledCancellation, false)
+  assert.equal(appliedLog?.[1]?.scheduledCancellation, false)
 })
 
 test('automatic reconciliation repairs Past Due and trialing drift without changing trial history', async (t) => {

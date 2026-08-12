@@ -431,7 +431,7 @@ export async function reconcilePaddleSubscriptionState({
       previousStatus: user.subscription_status || null,
       providerStatus: snapshot.providerStatus,
       resultingStatus: snapshot.storedStatus,
-      previousScheduledCancellation: Boolean(user.cancellation_effective_at),
+      previousScheduledCancellation: isFutureInstant(user.cancellation_effective_at),
       scheduledCancellation: Boolean(snapshot.scheduledCancellation),
       result: 'updated',
       stateChanged: true,
