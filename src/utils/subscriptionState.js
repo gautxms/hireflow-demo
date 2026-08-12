@@ -52,6 +52,14 @@ function getSubscriptionStatus(subscriptionStateOrSubscription) {
   return normalizeSubscriptionStatus(subscriptionStateOrSubscription?.rawStatus || subscriptionStateOrSubscription?.status || subscriptionStateOrSubscription?.subscription_status)
 }
 
+function hasProviderSubscriptionIdentity(subscriptionStateOrSubscription) {
+  return Boolean(
+    subscriptionStateOrSubscription?.hasProviderSubscription
+      || subscriptionStateOrSubscription?.paddleSubscriptionId
+      || subscriptionStateOrSubscription?.paddle_subscription_id,
+  )
+}
+
 export function hasExplicitScheduledCancellationSignal(subscriptionStateOrSubscription) {
   const status = getSubscriptionStatus(subscriptionStateOrSubscription)
   const latestRecordStatus = normalizeSignalStatus(subscriptionStateOrSubscription?.latestRecordStatus || subscriptionStateOrSubscription?.latest_record_status)
@@ -145,7 +153,7 @@ export function canUsePaidMutation(subscriptionStateOrSubscription, now = new Da
 }
 
 export function isReadOnlyWorkspace(subscriptionStateOrSubscription, { hasHistoricalData = false, now = new Date() } = {}) {
-  if (!subscriptionStateOrSubscription || !hasHistoricalData) {
+  if (!subscriptionStateOrSubscription) {
     return false
   }
 
@@ -154,8 +162,20 @@ export function isReadOnlyWorkspace(subscriptionStateOrSubscription, { hasHistor
   }
 
   const status = getSubscriptionStatus(subscriptionStateOrSubscription)
+
+  // A linked subscription interrupted by payment failure stays inside the
+  // existing read-only workspace even when the account has not created its
+  // first workspace record yet. Otherwise /dashboard is treated as a paid
+  // route and the pricing recovery guard immediately sends the user to Billing.
+  if (PAST_DUE_STATUSES.has(status)) {
+    return hasHistoricalData || hasProviderSubscriptionIdentity(subscriptionStateOrSubscription)
+  }
+
+  if (!hasHistoricalData) {
+    return false
+  }
+
   const readOnlyStatuses = new Set([
-    ...PAST_DUE_STATUSES,
     ...CANCELED_STATUSES,
     ...PAUSED_STATUSES,
     ...INACTIVE_STATUSES,
@@ -188,6 +208,7 @@ function buildSubscriptionAccessInput({ user = null, subscription = null, rawSta
     cancel_at_period_end: subscription?.cancel_at_period_end ?? user?.cancel_at_period_end ?? false,
     latestRecordStatus: subscription?.latestRecordStatus || user?.latestRecordStatus || null,
     latest_record_status: subscription?.latest_record_status || user?.latest_record_status || null,
+    hasProviderSubscription: Boolean(subscription?.paddleSubscriptionId || subscription?.paddle_subscription_id || user?.paddleSubscriptionId || user?.paddle_subscription_id),
   }
 }
 

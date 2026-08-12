@@ -171,13 +171,15 @@ test('recoverable payment failures route to billing instead of upgrade pricing',
       userProfile: {
         subscription_status: status,
         paddle_subscription_id: 'sub_recoverable',
-        hasHistoricalData: true,
+        hasHistoricalData: false,
       },
     })
 
     assert.equal(context.requiresBillingRecovery, true, `${status} requires billing recovery`)
     assert.equal(context.canViewUpgradePricing, false, `${status} hides upgrade pricing`)
-    assert.equal(context.canOpenWorkspaceDashboard, true, `${status} keeps historical access`)
+    assert.equal(context.profileBillingState.isReadOnlyWorkspace, true, `${status} keeps read-only workspace entry`)
+    assert.equal(context.profileBillingState.canUsePaidMutation, false, `${status} remains mutation-blocked`)
+    assert.equal(context.canOpenWorkspaceDashboard, true, `${status} can open the Dashboard without history`)
   }
 })
 
@@ -191,6 +193,8 @@ test('payment failures without a recoverable provider subscription remain upgrad
 
   assert.equal(context.requiresBillingRecovery, false)
   assert.equal(context.canViewUpgradePricing, true)
+  assert.equal(context.profileBillingState.isReadOnlyWorkspace, false)
+  assert.equal(context.canOpenWorkspaceDashboard, false)
 })
 
 test('authenticated resolved non-paid profiles with history can open the read-only Dashboard', () => {
@@ -211,7 +215,7 @@ test('authenticated resolved non-paid profiles with history can open the read-on
   }
 })
 
-test('history-free non-paid profiles remain outside the Dashboard', () => {
+test('history-free non-paid profiles remain outside the Dashboard without a recoverable subscription', () => {
   for (const status of READ_ONLY_STATUSES) {
     const historyFree = buildResolvedAccessContext({
       isAuthenticated: true,
