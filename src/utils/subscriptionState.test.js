@@ -344,15 +344,34 @@ test('read-only workspace helper requires historical data after cancellation acc
   assert.equal(isReadOnlyWorkspace(expired, { hasHistoricalData: true, now: NOW }), true)
 })
 
-test('read-only workspace helper requires historical data for billing failure states', () => {
-  for (const status of ['past_due', 'payment_failed', 'paused']) {
-    const resolved = state({ status })
+test('read-only workspace helper preserves dashboard entry for billing failures without history', () => {
+  for (const status of ['past_due', 'past due', 'payment_failed']) {
+    const resolved = state({ status, paddleSubscriptionId: 'sub_recoverable' })
 
     assert.equal(resolved.hasActivePaidAccess, false)
     assert.equal(resolved.canUsePaidMutation, false)
-    assert.equal(isReadOnlyWorkspace(resolved, { hasHistoricalData: false, now: NOW }), false)
+    assert.equal(isReadOnlyWorkspace(resolved, { hasHistoricalData: false, now: NOW }), true)
     assert.equal(isReadOnlyWorkspace(resolved, { hasHistoricalData: true, now: NOW }), true)
   }
+})
+
+test('history-free payment failure without a provider subscription stays outside the workspace', () => {
+  for (const status of ['past_due', 'past due', 'payment_failed']) {
+    const resolved = state({ status })
+
+    assert.equal(resolved.hasProviderSubscription, false)
+    assert.equal(resolved.canUsePaidMutation, false)
+    assert.equal(isReadOnlyWorkspace(resolved, { hasHistoricalData: false, now: NOW }), false)
+  }
+})
+
+test('read-only workspace helper still requires historical data for paused accounts', () => {
+  const resolved = state({ status: 'paused' })
+
+  assert.equal(resolved.hasActivePaidAccess, false)
+  assert.equal(resolved.canUsePaidMutation, false)
+  assert.equal(isReadOnlyWorkspace(resolved, { hasHistoricalData: false, now: NOW }), false)
+  assert.equal(isReadOnlyWorkspace(resolved, { hasHistoricalData: true, now: NOW }), true)
 })
 
 test('read-only workspace helper requires historical data for inactive and ended subscription states', () => {

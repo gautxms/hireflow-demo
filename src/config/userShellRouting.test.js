@@ -146,6 +146,21 @@ test('route policy helper honors resolved read-only subscription state booleans'
   assert.equal(canAccessRouteForSubscriptionState('/create-analysis', resolvedState), false)
 })
 
+test('history-free payment failures can enter read-only routes but not mutation routes', () => {
+  for (const status of ['past_due', 'past due', 'payment_failed']) {
+    const resolvedState = resolveSubscriptionState({
+      subscription: { status, paddleSubscriptionId: 'sub_recoverable', hasHistoricalData: false },
+    })
+
+    assert.equal(resolvedState.isReadOnlyWorkspace, true, `${status} should be read-only`)
+    assert.equal(resolvedState.canUsePaidMutation, false, `${status} should block mutations`)
+    assert.equal(canAccessRouteForSubscriptionState('/dashboard', resolvedState), true, `${status} should allow Dashboard`)
+    assert.equal(canAccessRouteForSubscriptionState('/analyses', resolvedState), true, `${status} should allow empty historical routes`)
+    assert.equal(canAccessRouteForSubscriptionState('/uploader', resolvedState), false, `${status} should block uploads`)
+    assert.equal(canAccessRouteForSubscriptionState('/create-analysis', resolvedState), false, `${status} should block analysis creation`)
+  }
+})
+
 test('route policy helper honors resolved paid mutation state booleans', () => {
   const resolvedState = resolveSubscriptionState({
     subscription: { status: 'active', hasHistoricalData: true },
