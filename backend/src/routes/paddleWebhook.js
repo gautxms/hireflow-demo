@@ -1293,6 +1293,7 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment, storedEv
       }
 
       let failedStatusApplied = false
+      let failedPaymentAttemptRecorded = false
       const shouldApplyFailure = !hasEnvironmentMismatch
         && !preservePaidPlan
         && shouldApplyFailedPaymentToUser(user, payload, eventType)
@@ -1362,6 +1363,7 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment, storedEv
 
         if (failedStatusApplied || !shouldApplyFailure) {
           await recordFailedPaymentAttempt(payload, null, paddle.environment, db)
+          failedPaymentAttemptRecorded = true
         }
 
         if (subscriptionProjection) {
@@ -1382,7 +1384,11 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment, storedEv
         resultingStatus: failedStatusApplied ? (nextStatus || 'payment_failed') : (user?.subscription_status || null),
         result: hasEnvironmentMismatch
           ? 'environment_mismatch_rejected'
-          : (failedStatusApplied ? 'entitlement_restricted' : (preservePaidPlan ? 'paid_plan_preserved' : 'recorded_without_entitlement_change')),
+          : (failedStatusApplied
+              ? 'entitlement_restricted'
+              : (preservePaidPlan
+                  ? 'paid_plan_preserved'
+                  : (failedPaymentAttemptRecorded ? 'recorded_without_entitlement_change' : 'entitlement_update_rejected'))),
       })
 
       postProcessingTasks.push(() => trackEvent({

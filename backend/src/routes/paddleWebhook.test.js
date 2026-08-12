@@ -2279,6 +2279,55 @@ test('POST /api/paddle/webhook allows failed payment for active user current sub
   assert.equal(calls.some(({ sql, params }) => /UPDATE users/.test(sql) && params?.[1] === 'payment_failed'), true)
 })
 
+test('POST /api/paddle/webhook reports a rejected failed-payment entitlement update without claiming attempt persistence', async (t) => {
+  const payload = {
+    event_id: 'evt_payment_failed_stale_current_subscription',
+    event_type: 'transaction.payment_failed',
+    occurred_at: '2026-07-20T10:00:02.000Z',
+    data: {
+      id: 'txn_failed_stale_current_subscription',
+      subscription_id: 'sub_current_123',
+      customer_id: 'ctm_test_123',
+      custom_data: { userId: 42, plan: 'monthly', paddleEnvironment: 'sandbox' },
+    },
+  }
+  const rawBody = JSON.stringify(payload)
+  const calls = []
+  const warnings = []
+
+  t.mock.method(console, 'warn', (...args) => warnings.push(args))
+  t.mock.method(pool, 'query', async (sql, params) => {
+    const query = String(sql)
+    calls.push({ sql: query, params })
+
+    if (query.includes('FROM paddle_webhook_events')) return { rowCount: 0, rows: [] }
+    if (query.includes('FROM users')) {
+      return {
+        rowCount: 1,
+        rows: [{
+          id: 42,
+          paddle_customer_id: 'ctm_test_123',
+          paddle_subscription_id: 'sub_current_123',
+          subscription_status: 'active',
+          last_paddle_event_at: '2026-07-20T10:00:05.000Z',
+        }],
+      }
+    }
+    if (/UPDATE users/.test(query) && params?.[1] === 'payment_failed') {
+      return { rowCount: 0, rows: [] }
+    }
+    return { rowCount: 1, rows: [] }
+  })
+
+  const { response } = await postWebhook({ body: rawBody, signature: signBody(rawBody) })
+
+  assert.equal(response.status, 200)
+  assert.equal(calls.some(({ sql }) => /INSERT INTO payment_attempts/.test(sql)), false)
+  const failureLog = warnings.find(([message]) => String(message).includes('[Paddle payment] failed transaction processed'))
+  assert.equal(failureLog?.[1]?.resultingStatus, 'active')
+  assert.equal(failureLog?.[1]?.result, 'entitlement_update_rejected')
+})
+
 test('POST /api/paddle/webhook orders a failed payment by Paddle occurred_at instead of users.updated_at', async (t) => {
   const occurredAt = '2026-07-20T10:00:02.000Z'
   const payload = {
