@@ -207,7 +207,7 @@ function shouldRenderWithinUserShell(pathname, isAuthenticated, subscriptionStat
   return isUserShellRoutePath(resolvedPathname)
 }
 
-function MainSite({ isAuthenticated, accessResolutionStatus, accessResolutionError, onRetryAccessResolution, onLogout, onRequireAuth, pathname, onAuthSuccess, onSignupSuccess, onUserProfileUpdate, authPrompt, subscriptionStatus, userProfile, pendingVerificationEmail, setPendingVerificationEmail }) {
+function MainSite({ isAuthenticated, accessResolutionStatus, accessResolutionError, onRetryAccessResolution, onLogout, onRequireAuth, pathname, onAuthSuccess, onSignupSuccess, onUserProfileUpdate, authPrompt, subscriptionStatus, userProfile, pendingVerificationEmail, onRememberPendingVerificationEmail }) {
   const [currentPage, setCurrentPage] = useState('landing')
   const [uploadedFiles, setUploadedFiles] = useState(null)
   const [resultsRecoveryAttempted, setResultsRecoveryAttempted] = useState(false)
@@ -944,7 +944,7 @@ function MainSite({ isAuthenticated, accessResolutionStatus, accessResolutionErr
 
     if (resolvedPathname === '/login') {
       return <LoginPage onAuthSuccess={onAuthSuccess} onGoToSignup={() => navigate('/signup')} onForgotPassword={() => navigate('/forgot-password')} promptMessage={authPrompt} onNavigateToVerifyEmail={(email) => {
-        rememberPendingVerificationEmail(email)
+        onRememberPendingVerificationEmail(email)
         navigate('/verify-email-info')
       }} />
     }
@@ -1746,7 +1746,7 @@ export default function App() {
           subscriptionStatus={subscriptionStatus}
           userProfile={userProfile}
           pendingVerificationEmail={pendingVerificationEmail}
-          setPendingVerificationEmail={setPendingVerificationEmail}
+          onRememberPendingVerificationEmail={rememberPendingVerificationEmail}
         />
       </CookieConsentProvider>
     </AdminAuthProvider>
