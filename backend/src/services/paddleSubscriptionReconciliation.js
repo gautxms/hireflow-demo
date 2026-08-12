@@ -241,9 +241,15 @@ export async function reconcilePaddleSubscriptionState({
       console.warn('[Paddle subscription reconciliation] Provider state was not applied', {
         userId: user?.id || null,
         environment: paddle?.environment || null,
+        localCustomerId: user?.paddle_customer_id || null,
+        localSubscriptionId: user?.paddle_subscription_id || null,
+        providerCustomerId: inspection.snapshot?.providerCustomerId || null,
         providerSubscriptionId: inspection.snapshot?.providerSubscriptionId || null,
+        previousStatus: user?.subscription_status || null,
         providerStatus: inspection.snapshot?.providerStatus || null,
-        reason: inspection.reason,
+        resultingStatus: user?.subscription_status || null,
+        result: inspection.reason,
+        stateChanged: false,
         source,
       })
     }
@@ -329,8 +335,13 @@ export async function reconcilePaddleSubscriptionState({
       console.warn('[Paddle subscription reconciliation] Concurrent local state change won reconciliation race', {
         userId: user.id,
         environment: paddle.environment,
+        providerCustomerId: snapshot.providerCustomerId,
         providerSubscriptionId: snapshot.providerSubscriptionId,
+        previousStatus: user.subscription_status || null,
         providerStatus: snapshot.providerStatus,
+        resultingStatus: user.subscription_status || null,
+        result: 'concurrent_state_change',
+        stateChanged: false,
         source,
       })
       return {
@@ -416,9 +427,15 @@ export async function reconcilePaddleSubscriptionState({
     console.info('[Paddle subscription reconciliation] Applied verified provider state', {
       userId: user.id,
       environment: paddle.environment,
+      providerCustomerId: snapshot.providerCustomerId,
       providerSubscriptionId: snapshot.providerSubscriptionId,
+      previousStatus: user.subscription_status || null,
       providerStatus: snapshot.providerStatus,
+      resultingStatus: snapshot.storedStatus,
+      previousScheduledCancellation: Boolean(user.cancellation_effective_at),
       scheduledCancellation: Boolean(snapshot.scheduledCancellation),
+      result: 'updated',
+      stateChanged: true,
       source,
     })
     return {

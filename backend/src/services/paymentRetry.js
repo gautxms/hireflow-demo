@@ -37,22 +37,35 @@ function getUserId(payload) {
   return payload?.data?.custom_data?.userId || payload?.custom_data?.userId || null
 }
 
+function getCustomerId(payload) {
+  return payload?.data?.customer_id || payload?.data?.customer?.id || payload?.customer_id || null
+}
+
+function getSubscriptionId(payload) {
+  return payload?.data?.subscription_id || payload?.subscription_id || null
+}
+
 export async function recordFailedPaymentAttempt(payload, errorMessage = null, paddleEnvironment = null, db = pool) {
   const transactionId = getTransactionId(payload)
-
-  if (!transactionId) {
-    await logErrorToDatabase('payment.failure.missing_transaction_id', new Error('Missing transaction id'), {
-      payload,
-    })
-    return null
-  }
-
-  const failureReason = errorMessage || getFailureReason(payload)
   const environment = normalizePaddleEnvironment(
     paddleEnvironment
       || payload?.data?.custom_data?.paddleEnvironment
       || payload?.custom_data?.paddleEnvironment,
   )
+
+  if (!transactionId) {
+    await logErrorToDatabase('payment.failure.missing_transaction_id', new Error('Missing transaction id'), {
+      eventType: payload?.event_type || payload?.eventType || null,
+      userId: getUserId(payload),
+      environment,
+      customerId: getCustomerId(payload),
+      subscriptionId: getSubscriptionId(payload),
+      result: 'rejected_missing_transaction_id',
+    })
+    return null
+  }
+
+  const failureReason = errorMessage || getFailureReason(payload)
 
   const result = await db.query(
     `INSERT INTO payment_attempts (

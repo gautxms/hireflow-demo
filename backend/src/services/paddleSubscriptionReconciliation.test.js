@@ -180,6 +180,40 @@ test('inspection fails closed on environment, ownership, plan, and ordering evid
   }
 })
 
+test('ownership rejection diagnostics correlate local and provider identity without payloads', async (t) => {
+  const warnings = []
+  t.mock.method(console, 'warn', (...args) => warnings.push(args))
+  const currentUser = user({ subscription_status: 'past_due' })
+
+  const result = await reconcilePaddleSubscriptionState({
+    user: currentUser,
+    paddle: paddle(),
+    paddlePayload: subscription({ customer_id: 'ctm_foreign' }),
+    source: 'automatic_scheduler',
+  })
+
+  assert.equal(result.reconciled, false)
+  assert.equal(result.reason, 'customer_ownership_mismatch')
+  assert.deepEqual(warnings, [[
+    '[Paddle subscription reconciliation] Provider state was not applied',
+    {
+      userId: 30,
+      environment: 'sandbox',
+      localCustomerId: 'ctm_current',
+      localSubscriptionId: 'sub_current',
+      providerCustomerId: 'ctm_foreign',
+      providerSubscriptionId: 'sub_current',
+      previousStatus: 'past_due',
+      providerStatus: 'active',
+      resultingStatus: 'past_due',
+      result: 'customer_ownership_mismatch',
+      stateChanged: false,
+      source: 'automatic_scheduler',
+    },
+  ]])
+  assert.doesNotMatch(JSON.stringify(warnings), /latest_event_payload|authorization|apiKey/i)
+})
+
 test('inspection preserves exact-transaction recovery confirmation for Past Due to Active', () => {
   const result = inspectPaddleSubscriptionForReconciliation({
     user: user({ subscription_status: 'past_due' }),
@@ -359,7 +393,9 @@ test('reconciliation clears a removed cancellation schedule and repairs billing 
   assert.equal(result.user.cancellation_effective_at, null)
 })
 
-test('automatic reconciliation repairs Past Due and trialing drift without changing trial history', async () => {
+test('automatic reconciliation repairs Past Due and trialing drift without changing trial history', async (t) => {
+  const infoLogs = []
+  t.mock.method(console, 'info', (...args) => infoLogs.push(args))
   for (const entry of [
     { localStatus: 'past_due', providerStatus: 'active' },
     { localStatus: 'trialing', providerStatus: 'active' },
@@ -384,6 +420,18 @@ test('automatic reconciliation repairs Past Due and trialing drift without chang
     assert.equal(result.user.trial_consumed_at, currentUser.trial_consumed_at)
     assert.ok(!mock.calls.some(({ sql }) => /trial_consumed_at\s*=/.test(sql)))
   }
+
+  const appliedLogs = infoLogs.filter(([message]) => String(message).includes('Applied verified provider state'))
+  assert.deepEqual(appliedLogs.map(([, context]) => ({
+    previousStatus: context.previousStatus,
+    providerStatus: context.providerStatus,
+    resultingStatus: context.resultingStatus,
+    result: context.result,
+    stateChanged: context.stateChanged,
+  })), [
+    { previousStatus: 'past_due', providerStatus: 'active', resultingStatus: 'active', result: 'updated', stateChanged: true },
+    { previousStatus: 'trialing', providerStatus: 'active', resultingStatus: 'active', result: 'updated', stateChanged: true },
+  ])
 })
 
 test('reconciliation persists a newer provider watermark for an already-current active snapshot', async () => {

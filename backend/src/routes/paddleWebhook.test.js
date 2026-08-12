@@ -601,6 +601,9 @@ test('POST /api/paddle/webhook returns retryable failure when durable persistenc
   const event = buildSubscriptionUpdatedPayload({ event_id: 'evt_persistence_failure' })
   const rawBody = JSON.stringify(event)
   let businessQueries = 0
+  const errors = []
+
+  t.mock.method(console, 'error', (...args) => errors.push(args))
 
   t.mock.method(pool, 'query', async (sql) => {
     const query = String(sql)
@@ -621,6 +624,19 @@ test('POST /api/paddle/webhook returns retryable failure when durable persistenc
   assert.equal(result.response.status, 500)
   assert.equal(result.payload.error, 'Webhook persistence failed')
   assert.equal(businessQueries, 0)
+  const persistenceLog = errors.find(([message]) => String(message).includes('failed to durably persist verified event'))
+  assert.deepEqual(persistenceLog?.[1], {
+    eventId: 'evt_persistence_failure',
+    eventType: 'subscription.updated',
+    environment: 'sandbox',
+    userId: 42,
+    customerId: 'ctm_test_123',
+    subscriptionId: 'sub_test_123',
+    transactionId: null,
+    code: 'ECONNRESET',
+    message: 'database unavailable',
+  })
+  assert.doesNotMatch(JSON.stringify(persistenceLog), /PADDLE_API_KEY|webhookSecret|authorization/i)
 })
 
 test('POST /api/paddle/webhook rejects missing event type and explicit environment mismatch before persistence', async (t) => {
@@ -2107,7 +2123,22 @@ test('failed-payment bookkeeping failure leaves the acknowledged event retryable
   assert.equal(calls.some(({ sql }) => /INSERT INTO paddle_webhook_events/.test(sql)), true)
   assert.equal(calls.some(({ sql }) => /status = 'retryable_failed'/.test(sql)), true)
   assert.equal(calls.some(({ sql }) => /status = 'completed'/.test(sql)), false)
-  assert.equal(errors.some(([message]) => String(message).includes('failed to update subscription state')), true)
+  const processingFailure = errors.find(([message]) => String(message).includes('[Paddle webhook] processing failed'))
+  assert.ok(processingFailure)
+  assert.deepEqual(processingFailure[1], {
+    eventId: 'evt_payment_failed_tracking_error',
+    eventType: 'transaction.payment_failed',
+    environment: 'sandbox',
+    attemptNumber: 1,
+    schedulerAttemptNumber: 0,
+    result: 'retryable_failed',
+    userId: 42,
+    customerId: 'ctm_test_123',
+    subscriptionId: 'sub_test_123',
+    transactionId: 'txn_failed_tracking_error',
+    code: '42703',
+    message: 'column "customer_email" of relation "payment_attempts" does not exist',
+  })
 })
 
 test('POST /api/paddle/webhook skips stale unrelated failed-payment status for active subscription', async (t) => {
@@ -2158,6 +2189,9 @@ test('POST /api/paddle/webhook lets inactive users become payment_failed for fai
   }
   const rawBody = JSON.stringify(payload)
   const calls = []
+  const warnings = []
+
+  t.mock.method(console, 'warn', (...args) => warnings.push(args))
 
   t.mock.method(pool, 'query', async (sql, params) => {
     calls.push({ sql: String(sql), params })
@@ -2174,6 +2208,13 @@ test('POST /api/paddle/webhook lets inactive users become payment_failed for fai
   assert.equal(response.status, 200)
   assert.equal(calls.some(({ sql, params }) => /UPDATE users/.test(sql) && params?.[1] === 'payment_failed'), true)
   assert.equal(calls.some(({ sql }) => /INSERT INTO payment_attempts/.test(sql)), true)
+  const failureLog = warnings.find(([message]) => String(message).includes('[Paddle payment] failed transaction processed'))
+  assert.equal(failureLog?.[1]?.eventId, 'evt_payment_failed_inactive_checkout')
+  assert.equal(failureLog?.[1]?.userId, 42)
+  assert.equal(failureLog?.[1]?.transactionId, 'txn_failed_inactive_checkout')
+  assert.equal(failureLog?.[1]?.previousStatus, 'inactive')
+  assert.equal(failureLog?.[1]?.resultingStatus, 'payment_failed')
+  assert.equal(failureLog?.[1]?.result, 'entitlement_restricted')
 })
 
 test('POST /api/paddle/webhook skips subscriptionless failed checkout for active user', async (t) => {
@@ -2978,6 +3019,9 @@ test('POST /api/paddle/webhook transaction.completed keeps setting user active',
   }
   const rawBody = JSON.stringify(payload)
   const calls = []
+  const infoLogs = []
+
+  t.mock.method(console, 'info', (...args) => infoLogs.push(args))
 
   t.mock.method(pool, 'query', async (sql, params) => {
     calls.push({ sql: String(sql), params })
@@ -2994,6 +3038,13 @@ test('POST /api/paddle/webhook transaction.completed keeps setting user active',
   const activeUpdate = calls.find(({ sql }) => /UPDATE users[\s\S]+subscription_status = 'active'/.test(sql))
   assert.match(activeUpdate.sql, /quota_anchor_at = COALESCE/)
   assert.equal(activeUpdate.params[7], '2026-07-24T00:00:00.000Z')
+  const recoveryLog = infoLogs.find(([message]) => String(message).includes('[Paddle payment] completed transaction processed'))
+  assert.equal(recoveryLog?.[1]?.eventId, 'evt_transaction_completed_sets_active')
+  assert.equal(recoveryLog?.[1]?.userId, 42)
+  assert.equal(recoveryLog?.[1]?.subscriptionId, 'sub_test_123')
+  assert.equal(recoveryLog?.[1]?.transactionId, 'txn_completed_sets_active')
+  assert.equal(recoveryLog?.[1]?.resultingStatus, 'active')
+  assert.equal(recoveryLog?.[1]?.result, 'entitlement_activated')
 })
 
 test('POST /api/paddle/webhook lets a completed new Monthly checkout replace a terminally cancelled Annual lifecycle', async (t) => {
