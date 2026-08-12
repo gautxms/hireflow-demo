@@ -1,9 +1,8 @@
 import { pool } from '../db/client.js'
+import { normalizePaddleTimestamp } from '../utils/paddleTimestamps.js'
 
 function validIsoOrNull(value) {
-  if (!value) return null
-  const parsed = new Date(value)
-  return Number.isNaN(parsed.getTime()) ? null : String(value)
+  return normalizePaddleTimestamp(value)
 }
 
 function subscriptionData(payload = {}) {

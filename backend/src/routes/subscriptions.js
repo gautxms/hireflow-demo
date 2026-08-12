@@ -21,6 +21,10 @@ import {
   inspectPaddleSubscriptionForReconciliation,
   reconcilePaddleSubscriptionState,
 } from '../services/paddleSubscriptionReconciliation.js'
+import {
+  firstNormalizedPaddleTimestamp,
+  normalizePaddleTimestamp,
+} from '../utils/paddleTimestamps.js'
 
 const router = Router()
 
@@ -473,8 +477,14 @@ async function processRecoveredTransactionImmediately(userId, transactionId, pad
 function extractBillingDates(paddlePayload = {}) {
   const data = paddlePayload.data || paddlePayload
   return {
-    currentPeriodEnd: data?.current_billing_period?.ends_at || data?.billing_period?.ends_at || null,
-    nextBillingDate: data?.next_billed_at || data?.current_billing_period?.ends_at || null,
+    currentPeriodEnd: firstNormalizedPaddleTimestamp(
+      data?.current_billing_period?.ends_at,
+      data?.billing_period?.ends_at,
+    ),
+    nextBillingDate: firstNormalizedPaddleTimestamp(
+      data?.next_billed_at,
+      data?.current_billing_period?.ends_at,
+    ),
     status: data?.status || null,
     providerSubscriptionId: data?.id || null,
   }
@@ -565,7 +575,11 @@ function previewDetails(payload = {}) {
   return {
     immediateAmountFormatted: immediate.isVerified ? immediate.amountFormatted : null,
     nextBillingAmountFormatted: next.isVerified ? next.amountFormatted : null,
-    nextBillingDate: next.billingPeriodStart || data.next_billed_at || data.nextBilledAt || null,
+    nextBillingDate: firstNormalizedPaddleTimestamp(
+      next.billingPeriodStart,
+      data.next_billed_at,
+      data.nextBilledAt,
+    ),
     previewCurrencyCode,
     hasVerifiedPreviewAmounts,
   }
@@ -680,10 +694,11 @@ function inspectContinuationProviderState(user, paddlePayload) {
   const providerSubscriptionId = data?.id || null
   const providerCustomerId = data?.customer_id || data?.customer?.id || null
   const scheduledAction = getScheduledAction(paddlePayload)
-  const currentPeriodEnd = dateOrNull(
-    data?.current_billing_period?.ends_at || data?.billing_period?.ends_at,
-  )
-  const nextBillingDate = dateOrNull(data?.next_billed_at)
+  const currentPeriodEnd = dateOrNull(firstNormalizedPaddleTimestamp(
+    data?.current_billing_period?.ends_at,
+    data?.billing_period?.ends_at,
+  ))
+  const nextBillingDate = dateOrNull(normalizePaddleTimestamp(data?.next_billed_at))
 
   const identityMatches = Boolean(
     user?.paddle_subscription_id
@@ -915,9 +930,11 @@ router.get('/current', requireAuth, async (req, res) => {
     const paddlePlan = inferPlanFromPaddlePayload(planCost.paddleSubscriptionPayload, paddle)
     const paddleStatus = normalizeStatus(paddleDates.status)
     const paddleSubscription = planCost.paddleSubscriptionPayload?.data || planCost.paddleSubscriptionPayload || {}
-    const paddleCurrentPeriodEnd = paddleSubscription?.current_billing_period?.ends_at || null
-    const paddleCurrentPeriodStart = paddleSubscription?.current_billing_period?.starts_at || null
-    const paddleNextBillingDate = paddleSubscription?.next_billed_at || null
+    const paddleCurrentPeriodEnd = paddleDates.currentPeriodEnd
+    const paddleCurrentPeriodStart = normalizePaddleTimestamp(
+      paddleSubscription?.current_billing_period?.starts_at,
+    )
+    const paddleNextBillingDate = paddleDates.nextBillingDate
     const isPastDueRecovery = ['past_due', 'payment_failed'].includes(normalizeStatus(user.subscription_status))
     const hasValidPaddleDates = [paddleCurrentPeriodStart, paddleCurrentPeriodEnd, paddleNextBillingDate]
       .every((value) => value && !Number.isNaN(new Date(value).getTime()))

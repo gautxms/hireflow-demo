@@ -308,10 +308,10 @@ test('persistVerifiedCheckoutSubscription replaces a cancelled Annual lifecycle 
       customer_id: 'ctm_123',
       items: [{ price: { id: 'pri_monthly_paid' } }],
       current_billing_period: {
-        starts_at: '2026-07-23T00:00:00.000Z',
-        ends_at: '2026-08-23T00:00:00.000Z',
+        starts_at: '2026-07-23T05:30:00.000+05:30',
+        ends_at: '2026-08-23T05:30:00.000+05:30',
       },
-      next_billed_at: '2026-08-23T00:00:00.000Z',
+      next_billed_at: '2026-08-23T05:30:00.000+05:30',
     },
     paddle: {
       environment: 'sandbox',
@@ -331,6 +331,9 @@ test('persistVerifiedCheckoutSubscription replaces a cancelled Annual lifecycle 
   const update = calls.find(({ sql }) => /UPDATE users/.test(sql))
   assert.equal(update.params[2], 'monthly')
   assert.equal(update.params[3], 'sub_new_monthly')
+  assert.equal(update.params[5], '2026-08-23T00:00:00.000Z')
+  assert.equal(update.params[6], '2026-08-23T00:00:00.000Z')
+  assert.equal(update.params[7], '2026-07-23T00:00:00.000Z')
   assert.match(update.sql, /cancellation_effective_at = NULL/)
   assert.match(update.sql, /cancellation_reason = NULL/)
   assert.equal(calls.some(({ sql }) => /INSERT INTO subscriptions/.test(sql)), true)

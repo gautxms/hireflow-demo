@@ -1650,7 +1650,7 @@ test('POST /api/paddle/webhook processes active subscription.created with null s
   assert.equal(updateCall.params[1], 'sub_01kx5pmebr2rska4ygrxz2zbeb')
   assert.equal(updateCall.params[2], 'active')
   assert.equal(updateCall.params[8], null)
-  assert.equal(updateCall.params[9], '2026-07-10T09:44:40.151545Z')
+  assert.equal(updateCall.params[9], '2026-07-10T09:44:40.151Z')
   assert.equal(calls.some(({ sql }) => /INSERT INTO paddle_webhook_events/.test(sql)), true)
 })
 

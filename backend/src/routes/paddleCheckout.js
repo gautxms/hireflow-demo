@@ -6,6 +6,7 @@ import { generalApiLimiterAuth } from '../middleware/rateLimiter.js'
 import { resolvePaddleConfigForUser, resolvePaddleEnvironmentForUser } from '../config/paddle.js'
 import { inferPlanFromPaddlePayload } from '../services/paddlePlanChangeRecovery.js'
 import { reconcilePaddleSubscriptionState } from '../services/paddleSubscriptionReconciliation.js'
+import { normalizePaddleTimestamp } from '../utils/paddleTimestamps.js'
 
 const router = Router()
 const TEST_MONTHLY_PLAN = 'test-monthly'
@@ -135,9 +136,9 @@ export async function persistVerifiedCheckoutSubscription({
   }
 
   const plan = inferPlanFromPaddlePayload(subscription, paddle)
-  const currentPeriodEnd = subscription?.current_billing_period?.ends_at || null
-  const currentPeriodStart = subscription?.current_billing_period?.starts_at || null
-  const nextBillingDate = subscription?.next_billed_at || currentPeriodEnd
+  const currentPeriodEnd = normalizePaddleTimestamp(subscription?.current_billing_period?.ends_at)
+  const currentPeriodStart = normalizePaddleTimestamp(subscription?.current_billing_period?.starts_at)
+  const nextBillingDate = normalizePaddleTimestamp(subscription?.next_billed_at) || currentPeriodEnd
   const sameLifecycle = user.paddle_subscription_id === subscription.id
   const canReplaceLifecycle = isTerminalCancellation(user, now)
 
