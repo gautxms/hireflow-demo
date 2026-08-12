@@ -2324,8 +2324,8 @@ test('POST /api/paddle/webhook reports a rejected failed-payment entitlement upd
   assert.equal(response.status, 200)
   assert.equal(calls.some(({ sql }) => /INSERT INTO payment_attempts/.test(sql)), false)
   const failureLog = warnings.find(([message]) => String(message).includes('[Paddle payment] failed transaction processed'))
-  assert.equal(failureLog?.[1]?.resultingStatus, 'active')
   assert.equal(failureLog?.[1]?.result, 'entitlement_update_rejected')
+  assert.equal(Object.hasOwn(failureLog?.[1] || {}, 'resultingStatus'), false)
 })
 
 test('POST /api/paddle/webhook orders a failed payment by Paddle occurred_at instead of users.updated_at', async (t) => {
@@ -3096,6 +3096,55 @@ test('POST /api/paddle/webhook transaction.completed keeps setting user active',
   assert.equal(recoveryLog?.[1]?.result, 'entitlement_activated')
 })
 
+test('POST /api/paddle/webhook does not report a stale resulting status when completed-payment activation loses the race', async (t) => {
+  const payload = {
+    event_id: 'evt_transaction_completed_activation_race',
+    event_type: 'transaction.completed',
+    occurred_at: '2026-07-24T10:00:00.000Z',
+    data: {
+      id: 'txn_completed_activation_race',
+      subscription_id: 'sub_test_123',
+      customer_id: 'ctm_test_123',
+      custom_data: { userId: 42, plan: 'monthly', paddleEnvironment: 'sandbox' },
+      billing_period: {
+        starts_at: '2026-07-24T00:00:00.000Z',
+        ends_at: '2026-08-24T00:00:00.000Z',
+      },
+    },
+  }
+  const rawBody = JSON.stringify(payload)
+  const infoLogs = []
+
+  t.mock.method(console, 'info', (...args) => infoLogs.push(args))
+  t.mock.method(pool, 'query', async (sql) => {
+    const query = String(sql)
+    if (query.includes('FROM paddle_webhook_events')) return { rowCount: 0, rows: [] }
+    if (query.includes('FROM users')) {
+      return {
+        rowCount: 1,
+        rows: [{
+          id: 42,
+          paddle_customer_id: 'ctm_test_123',
+          paddle_subscription_id: 'sub_test_123',
+          subscription_status: 'active',
+          last_paddle_event_at: '2026-07-24T10:00:05.000Z',
+        }],
+      }
+    }
+    if (/UPDATE users[\s\S]+subscription_status = 'active'/.test(query)) {
+      return { rowCount: 0, rows: [] }
+    }
+    return { rowCount: 1, rows: [] }
+  })
+
+  const { response } = await postWebhook({ body: rawBody, signature: signBody(rawBody) })
+
+  assert.equal(response.status, 200)
+  const completionLog = infoLogs.find(([message]) => String(message).includes('[Paddle payment] completed transaction processed'))
+  assert.equal(completionLog?.[1]?.result, 'payment_confirmed')
+  assert.equal(Object.hasOwn(completionLog?.[1] || {}, 'resultingStatus'), false)
+})
+
 test('POST /api/paddle/webhook lets a completed new Monthly checkout replace a terminally cancelled Annual lifecycle', async (t) => {
   const payload = {
     event_id: 'evt_returning_monthly_completed',
@@ -3207,6 +3256,9 @@ test('POST /api/paddle/webhook prevents an old cancellation event from cancellin
   }
   const rawBody = JSON.stringify(payload)
   const calls = []
+  const infoLogs = []
+
+  t.mock.method(console, 'info', (...args) => infoLogs.push(args))
 
   t.mock.method(pool, 'query', async (sql, params) => {
     calls.push({ sql: String(sql), params })
@@ -3234,6 +3286,9 @@ test('POST /api/paddle/webhook prevents an old cancellation event from cancellin
   const cancellationUpdate = calls.find(({ sql, params }) => /UPDATE users/.test(sql) && params?.[2] === 'cancelled')
   assert.equal(cancellationUpdate.params[1], 'sub_old_annual')
   assert.match(cancellationUpdate.sql, /account\.paddle_subscription_id = \$2/)
+  const lifecycleLog = infoLogs.find(([message]) => String(message).includes('[Paddle webhook] subscription lifecycle projection'))
+  assert.equal(lifecycleLog?.[1]?.applied, false)
+  assert.equal(Object.hasOwn(lifecycleLog?.[1] || {}, 'resultingStatus'), false)
 })
 
 test('POST /api/paddle/webhook prevents a delayed active update from reviving the same finally cancelled lifecycle', async (t) => {

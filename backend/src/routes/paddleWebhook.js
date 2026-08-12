@@ -1269,7 +1269,7 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment, storedEv
         subscriptionId: transactionSubscriptionId,
         transactionId,
         previousStatus: user?.subscription_status || null,
-        resultingStatus: activationApplied ? 'active' : (user?.subscription_status || null),
+        ...(activationApplied ? { resultingStatus: 'active' } : {}),
         result: hasEnvironmentMismatch
           ? 'environment_mismatch_rejected'
           : (activationApplied ? 'entitlement_activated' : (isRecoveredPlanChange ? 'plan_change_recovered' : 'payment_confirmed')),
@@ -1381,7 +1381,7 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment, storedEv
         subscriptionId: getTransactionSubscriptionId(payload),
         transactionId: failedTransactionId,
         previousStatus: user?.subscription_status || null,
-        resultingStatus: failedStatusApplied ? (nextStatus || 'payment_failed') : (user?.subscription_status || null),
+        ...(failedStatusApplied ? { resultingStatus: nextStatus || 'payment_failed' } : {}),
         result: hasEnvironmentMismatch
           ? 'environment_mismatch_rejected'
           : (failedStatusApplied
@@ -1469,7 +1469,7 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment, storedEv
             subscriptionId: subscriptionFromEvent,
             previousStatus: user.subscription_status || null,
             providerStatus: getSubscriptionStatus(payload),
-            resultingStatus: lifecycleResult.applied ? lifecycleStatus : (user.subscription_status || null),
+            ...(lifecycleResult.applied ? { resultingStatus: lifecycleStatus } : {}),
             previousScheduledCancellation: Boolean(user.cancellation_effective_at),
             scheduledCancellation: Boolean(lifecycleResult.dates?.scheduledCancellationAt),
             applied: lifecycleResult.applied,
