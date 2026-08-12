@@ -460,8 +460,10 @@ test('reconciliation persists a newer provider watermark for an already-current 
   assert.equal(mock.released, true)
 })
 
-test('reconciliation does not overwrite a concurrent webhook state change', async () => {
+test('reconciliation does not overwrite or misreport a concurrent webhook state change', async (t) => {
   const mock = dbMock({ userUpdateRowCount: 0 })
+  const warnings = []
+  t.mock.method(console, 'warn', (...args) => warnings.push(args))
   const result = await reconcilePaddleSubscriptionState({
     user: user(),
     paddle: paddle(),
@@ -481,4 +483,9 @@ test('reconciliation does not overwrite a concurrent webhook state change', asyn
   assert.ok(!mock.calls.some(({ sql }) => /UPDATE payment_attempts/.test(sql)))
   assert.ok(!mock.calls.some(({ sql }) => /INSERT INTO subscriptions/.test(sql)))
   assert.equal(mock.released, true)
+  const raceLog = warnings.find(([message]) => String(message).includes('Concurrent local state change won reconciliation race'))
+  assert.equal(raceLog?.[1]?.previousStatus, 'active')
+  assert.equal(raceLog?.[1]?.providerStatus, 'canceled')
+  assert.equal(raceLog?.[1]?.result, 'concurrent_state_change')
+  assert.equal(Object.hasOwn(raceLog?.[1] || {}, 'resultingStatus'), false)
 })

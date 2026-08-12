@@ -339,7 +339,6 @@ export async function reconcilePaddleSubscriptionState({
         providerSubscriptionId: snapshot.providerSubscriptionId,
         previousStatus: user.subscription_status || null,
         providerStatus: snapshot.providerStatus,
-        resultingStatus: user.subscription_status || null,
         result: 'concurrent_state_change',
         stateChanged: false,
         source,

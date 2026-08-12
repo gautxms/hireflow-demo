@@ -100,7 +100,7 @@ Use Railway's existing application-log search; PR 11 adds no monitoring platform
 | `[Paddle subscription reconciliation] Applied verified provider state` | State changed; verify operational, projection, and API state |
 | `[Paddle subscription reconciliation] automatic run completed` | Review aggregate selected/updated/already-current/failed/skipped counts |
 
-For MVP, repeated worker failures, terminal webhook failures, ownership conflicts, and repeated reconciliation failures are noticed through these existing Railway logs and the existing Admin Errors view. Configure saved Railway searches if desired; do not add an external alerting service solely for billing.
+For MVP, repeated worker failures, terminal webhook failures, ownership conflicts, and repeated reconciliation failures are visible in the existing Railway application logs. These console-only worker and reconciliation failures are not persisted to the Admin Errors view. Configure saved Railway searches if desired; do not add an external alerting service solely for billing.
 
 ## Post-repair confirmation
 
