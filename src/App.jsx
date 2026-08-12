@@ -46,6 +46,7 @@ import PublicRouteChunkErrorBoundary from './components/PublicRouteChunkErrorBou
 import CookieConsentProvider from './components/privacy/CookieConsentProvider'
 import { loadPublicRouteChunk } from './utils/lazyRouteLoader'
 import API_BASE from './config/api'
+import { readPendingVerificationEmail, storePendingVerificationEmail } from './utils/pendingEmailVerification'
 import IntentLandingPage from './pages/seo/IntentLandingPage'
 import { INTENT_PAGE_ORDER } from './pages/seo/intentPages'
 import { PUBLIC_ROUTE_PATHS } from './config/publicRouteManifest'
@@ -206,7 +207,7 @@ function shouldRenderWithinUserShell(pathname, isAuthenticated, subscriptionStat
   return isUserShellRoutePath(resolvedPathname)
 }
 
-function MainSite({ isAuthenticated, accessResolutionStatus, accessResolutionError, onRetryAccessResolution, onLogout, onRequireAuth, pathname, onAuthSuccess, onSignupSuccess, onUserProfileUpdate, authPrompt, subscriptionStatus, userProfile, pendingVerificationEmail, setPendingVerificationEmail }) {
+function MainSite({ isAuthenticated, accessResolutionStatus, accessResolutionError, onRetryAccessResolution, onLogout, onRequireAuth, pathname, onAuthSuccess, onSignupSuccess, onUserProfileUpdate, authPrompt, subscriptionStatus, userProfile, pendingVerificationEmail, onRememberPendingVerificationEmail }) {
   const [currentPage, setCurrentPage] = useState('landing')
   const [uploadedFiles, setUploadedFiles] = useState(null)
   const [resultsRecoveryAttempted, setResultsRecoveryAttempted] = useState(false)
@@ -943,7 +944,7 @@ function MainSite({ isAuthenticated, accessResolutionStatus, accessResolutionErr
 
     if (resolvedPathname === '/login') {
       return <LoginPage onAuthSuccess={onAuthSuccess} onGoToSignup={() => navigate('/signup')} onForgotPassword={() => navigate('/forgot-password')} promptMessage={authPrompt} onNavigateToVerifyEmail={(email) => {
-        setPendingVerificationEmail(email)
+        onRememberPendingVerificationEmail(email)
         navigate('/verify-email-info')
       }} />
     }
@@ -1365,7 +1366,7 @@ export default function App() {
   const [authPrompt, setAuthPrompt] = useState('')
   const [subscriptionStatus, setSubscriptionStatus] = useState(getStoredSubscriptionStatus())
   const [userProfile, setUserProfile] = useState(getStoredUserProfile())
-  const [pendingVerificationEmail, setPendingVerificationEmail] = useState('')
+  const [pendingVerificationEmail, setPendingVerificationEmail] = useState(() => readPendingVerificationEmail())
   const [accessResolution, setAccessResolution] = useState(() => ({ status: getStoredToken() ? 'resolving' : 'resolved', error: '' }))
   const authSyncSequenceRef = useRef(0)
   const authSyncControllerRef = useRef(null)
@@ -1572,9 +1573,15 @@ export default function App() {
     navigate('/login')
   }
 
+  const rememberPendingVerificationEmail = useCallback((email = '') => {
+    const normalizedEmail = storePendingVerificationEmail(email)
+    setPendingVerificationEmail(normalizedEmail)
+    return normalizedEmail
+  }, [])
+
   const handleSignupSuccess = (email = '') => {
     setAuthPrompt('')
-    setPendingVerificationEmail(email)
+    rememberPendingVerificationEmail(email)
     navigate('/verify-email-info')
   }
 
@@ -1739,7 +1746,7 @@ export default function App() {
           subscriptionStatus={subscriptionStatus}
           userProfile={userProfile}
           pendingVerificationEmail={pendingVerificationEmail}
-          setPendingVerificationEmail={setPendingVerificationEmail}
+          onRememberPendingVerificationEmail={rememberPendingVerificationEmail}
         />
       </CookieConsentProvider>
     </AdminAuthProvider>

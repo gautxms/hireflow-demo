@@ -36,7 +36,7 @@
     "qa:shortlist-design-gate": "node scripts/check-shortlist-design-constitution.mjs",
     "check:seo-consistency": "node scripts/check-seo-consistency.mjs",
     "validate:prerender": "node scripts/validate-prerender-output.mjs",
-    "test:route-classification": "node --test src/config/routeClassification.test.js src/main.staticPublicHydration.test.js scripts/validate-prerender-output.test.mjs scripts/vercel-route-patterns.test.mjs"
+    "test:route-classification": "node --test src/config/routeClassification.test.js src/main.staticPublicHydration.test.js src/components/VerifyEmailInfoPage.test.js src/utils/pendingEmailVerification.test.js scripts/validate-prerender-output.test.mjs scripts/vercel-route-patterns.test.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.67.1",

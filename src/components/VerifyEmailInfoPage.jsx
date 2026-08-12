@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import './AuthPage.css'
 import API_BASE from '../config/api'
+import { normalizePendingVerificationEmail } from '../utils/pendingEmailVerification'
 
 function formatCountdown(totalSeconds) {
   const seconds = Math.max(0, totalSeconds)
@@ -11,15 +12,12 @@ function formatCountdown(totalSeconds) {
 }
 
 export default function VerifyEmailInfoPage({ onBackToLogin, email = '' }) {
-  const [resendEmail, setResendEmail] = useState(email)
+  const registeredEmail = normalizePendingVerificationEmail(email)
+  const hasRegisteredEmail = Boolean(registeredEmail)
   const [statusMessage, setStatusMessage] = useState('')
   const [error, setError] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [cooldownSeconds, setCooldownSeconds] = useState(0)
-
-  useEffect(() => {
-    setResendEmail(email)
-  }, [email])
 
   useEffect(() => {
     if (cooldownSeconds <= 0) {
@@ -41,10 +39,8 @@ export default function VerifyEmailInfoPage({ onBackToLogin, email = '' }) {
     setError('')
     setStatusMessage('')
 
-    const normalizedEmail = resendEmail.trim().toLowerCase()
-
-    if (!normalizedEmail) {
-      setError('Enter the email address you used when you signed up.')
+    if (!registeredEmail) {
+      setError('Return to log in so we can identify the account that needs verification.')
       return
     }
 
@@ -60,7 +56,7 @@ export default function VerifyEmailInfoPage({ onBackToLogin, email = '' }) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ email: normalizedEmail }),
+        body: JSON.stringify({ email: registeredEmail }),
       })
 
       const payload = await response.json().catch(() => null)
@@ -95,38 +91,46 @@ export default function VerifyEmailInfoPage({ onBackToLogin, email = '' }) {
       <section className="auth-panel">
         <p className="auth-brand">Hire<span>Flow</span></p>
         <h1 className="auth-title">Verify your email</h1>
-        <p className="auth-subtitle">Check your email to verify your account before logging in.</p>
+        <p className="auth-subtitle">
+          {hasRegisteredEmail
+            ? 'Check your email to verify your account before logging in.'
+            : 'Return to log in so we can identify the account that needs verification.'}
+        </p>
 
-        <div className="auth-form">
-          <label className="auth-label" htmlFor="resend-verification-email">Email</label>
-          <input
-            id="resend-verification-email"
-            className="auth-input"
-            type="email"
-            autoComplete="email"
-            value={resendEmail}
-            onChange={(event) => setResendEmail(event.target.value)}
-            placeholder="you@company.com"
-          />
+        {hasRegisteredEmail ? (
+          <div className="auth-form">
+            <label className="auth-label" htmlFor="resend-verification-email">Email</label>
+            <input
+              id="resend-verification-email"
+              className="auth-input"
+              type="email"
+              autoComplete="email"
+              value={registeredEmail}
+              readOnly
+              aria-readonly="true"
+            />
 
-          <button
-            className="auth-submit"
-            type="button"
-            onClick={handleResendVerification}
-            disabled={isSubmitting || cooldownSeconds > 0}
-          >
-            {isSubmitting
-              ? 'Sending…'
-              : cooldownSeconds > 0
-                ? `Resend available in ${countdownLabel}`
-                : 'Resend verification email'}
-          </button>
+            <button
+              className="auth-submit"
+              type="button"
+              onClick={handleResendVerification}
+              disabled={isSubmitting || cooldownSeconds > 0}
+            >
+              {isSubmitting
+                ? 'Sending…'
+                : cooldownSeconds > 0
+                  ? `Resend available in ${countdownLabel}`
+                  : 'Resend verification email'}
+            </button>
 
-          {statusMessage && <p className="auth-success">{statusMessage}</p>}
-          {error && <p className="auth-error">{error}</p>}
+            {statusMessage && <p className="auth-success" role="status">{statusMessage}</p>}
+            {error && <p className="auth-error" role="alert">{error}</p>}
 
-          <p className="auth-subtitle auth-help-text">If you do not see the email, check your spam folder.</p>
-        </div>
+            <p className="auth-subtitle auth-help-text">If you do not see the email, check your spam folder.</p>
+          </div>
+        ) : (
+          <p className="auth-error" role="alert">No pending verification email was found in this browser tab.</p>
+        )}
 
         <p className="auth-switch">
           <button className="auth-link" type="button" onClick={onBackToLogin}>Back to log in</button>
