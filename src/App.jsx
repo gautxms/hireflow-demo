@@ -1387,7 +1387,7 @@ export default function App() {
     navigate('/login')
   }, [])
 
-  const syncAuthenticatedUser = useCallback(async ({ redirectOnUnauthorized = true, showLoading = true, queueIfBusy = false } = {}) => {
+  const syncAuthenticatedUser = useCallback(async ({ redirectOnUnauthorized = true, showLoading = true, queueIfBusy = false, replaceIfBusy = false } = {}) => {
     const activeToken = getStoredToken()
 
     if (!activeToken) {
@@ -1404,7 +1404,7 @@ export default function App() {
       setAccessResolution({ status: 'resolving', error: '' })
     }
 
-    if (!showLoading && authSyncControllerRef.current) {
+    if (!showLoading && authSyncControllerRef.current && !replaceIfBusy) {
       if (queueIfBusy) {
         authSyncFollowUpRequestedRef.current = true
       }
@@ -1497,14 +1497,16 @@ export default function App() {
 
   useEffect(() => {
     const onPopState = () => setPathname(window.location.pathname)
-    const onAuthStateRefresh = () => {
+    const onAuthStateRefresh = (event) => {
       const nextToken = getStoredToken()
+      const showLoading = event?.detail?.showLoading !== false
+      const replaceIfBusy = event?.detail?.replaceIfBusy === true
       setToken(nextToken)
       setSubscriptionStatus(getStoredSubscriptionStatus())
       setUserProfile(getStoredUserProfile())
-      setAccessResolution({ status: nextToken && !isStandaloneOrdinaryUserAuthRoutePath(pathname) ? 'resolving' : 'resolved', error: '' })
+      setAccessResolution({ status: nextToken && showLoading && !isStandaloneOrdinaryUserAuthRoutePath(pathname) ? 'resolving' : 'resolved', error: '' })
       if (!isStandaloneOrdinaryUserAuthRoutePath(pathname)) {
-        void syncAuthenticatedUser()
+        void syncAuthenticatedUser({ showLoading, queueIfBusy: !showLoading && !replaceIfBusy, replaceIfBusy })
       }
     }
     const onStorage = (event) => {
