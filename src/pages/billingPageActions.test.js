@@ -361,6 +361,25 @@ test('BillingPage refreshes recovered access without restarting its recovery pol
   assert.match(source, /if \(!recoveryAccessConfirmedRef\.current && localStorage\.getItem\(TOKEN_STORAGE_KEY\) === token\) \{[\s\S]*persistRecoveredSubscriptionStatus\(nextSubscription\.status\)[\s\S]*replaceIfBusy: true/)
 })
 
+test('BillingPage recovery polling refreshes data without replacing the rendered page with the loading state', () => {
+  const source = readFileSync(new URL('./BillingPage.jsx', import.meta.url), 'utf8')
+
+  assert.match(source, /async function loadBilling\(\{ background = false \} = \{\}\)/)
+  assert.match(source, /if \(!background\) \{\s*setLoading\(true\)\s*setError\(''\)\s*\}/)
+  assert.match(source, /await loadBilling\(\{ background: true \}\)/)
+  assert.match(source, /setRecoveryPollCycle\(\(cycle\) => cycle \+ 1\)/)
+  assert.match(source, /\[recoveryPending, recoveryPollCycle, loading, subscription\?\.status, subscription\?\.recoveryAdjustmentStatus\]/)
+  assert.doesNotMatch(source, /setTimeout\(\(\) => \{ void loadBilling\(\) \}, 1500\)/)
+})
+
+test('BillingPage renders only the state-specific recovery feedback while adjustment is pending', () => {
+  const source = readFileSync(new URL('./BillingPage.jsx', import.meta.url), 'utf8')
+
+  assert.match(source, /const RECOVERY_ACCESS_CONFIRMED_MESSAGE = 'Payment confirmed\. Your subscription and workspace access are active\.'/)
+  assert.match(source, /const showActionFeedback = actionFeedback\.message[\s\S]*actionFeedback\.message === RECOVERY_ACCESS_CONFIRMED_MESSAGE[\s\S]*awaitingRecoveryAdjustment \|\| subscription\?\.recoveryAdjustmentStatus === 'manual_required'/)
+  assert.match(source, /\{showActionFeedback \? <p className=\{`billing-page__feedback billing-page__feedback--\$\{actionFeedback\.type\}`\}/)
+})
+
 test('BillingPage offers state-specific keep, payment update, and subscribe-again actions', () => {
   const source = readFileSync(new URL('./BillingPage.jsx', import.meta.url), 'utf8')
 
