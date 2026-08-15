@@ -13,6 +13,7 @@ const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 const USER_STORAGE_KEY = 'hireflow_user_profile'
 const RECOVERY_TRANSACTION_KEY = 'hireflow_payment_recovery_transaction'
 const RECOVERY_POLL_LIMIT = 8
+const RECOVERY_ACCESS_CONFIRMED_MESSAGE = 'Payment confirmed. Your subscription and workspace access are active.'
 
 function persistRecoveredSubscriptionStatus(status) {
   const normalizedStatus = String(status || '').trim().toLowerCase()
@@ -116,6 +117,7 @@ export default function BillingPage() {
   const recoveryPollRef = useRef(0)
   const recoveryTimerRef = useRef(null)
   const recoveryAccessConfirmedRef = useRef(false)
+  const [recoveryPollCycle, setRecoveryPollCycle] = useState(0)
 
   const upgradeTestKey = useMemo(() => {
     if (typeof window === 'undefined') return ''
@@ -126,7 +128,7 @@ export default function BillingPage() {
 
   const token = localStorage.getItem(TOKEN_STORAGE_KEY)
 
-  async function loadBilling() {
+  async function loadBilling({ background = false } = {}) {
     if (!token) {
       setError('Please login to manage billing.')
       setLoading(false)
@@ -134,8 +136,10 @@ export default function BillingPage() {
     }
 
     try {
-      setLoading(true)
-      setError('')
+      if (!background) {
+        setLoading(true)
+        setError('')
+      }
       try {
         const recoveryTransactionId = sessionStorage.getItem(RECOVERY_TRANSACTION_KEY)
         await syncCompletedCheckout({ apiBase: API_BASE, token, transactionId: recoveryTransactionId })
@@ -163,7 +167,7 @@ export default function BillingPage() {
         if (!recoveryAccessConfirmedRef.current && localStorage.getItem(TOKEN_STORAGE_KEY) === token) {
           recoveryAccessConfirmedRef.current = true
           persistRecoveredSubscriptionStatus(nextSubscription.status)
-          setActionFeedback({ type: 'success', message: 'Payment confirmed. Your subscription and workspace access are active.' })
+          setActionFeedback({ type: 'success', message: RECOVERY_ACCESS_CONFIRMED_MESSAGE })
           window.dispatchEvent(new CustomEvent('hireflow-auth-updated', {
             detail: { showLoading: false, replaceIfBusy: true },
           }))
@@ -197,9 +201,11 @@ export default function BillingPage() {
 
       setHistory(historyPayload.invoices || [])
     } catch {
-      setError('We could not open billing management right now. Please try again or contact support if this continues.')
+      if (!background) {
+        setError('We could not open billing management right now. Please try again or contact support if this continues.')
+      }
     } finally {
-      setLoading(false)
+      if (!background) setLoading(false)
     }
   }
 
@@ -216,10 +222,17 @@ export default function BillingPage() {
       || loading
       || recoveryPollRef.current >= RECOVERY_POLL_LIMIT) return
     recoveryPollRef.current += 1
-    recoveryTimerRef.current = window.setTimeout(() => { void loadBilling() }, 1500)
-    return () => window.clearTimeout(recoveryTimerRef.current)
+    let cancelled = false
+    recoveryTimerRef.current = window.setTimeout(async () => {
+      await loadBilling({ background: true })
+      if (!cancelled) setRecoveryPollCycle((cycle) => cycle + 1)
+    }, 1500)
+    return () => {
+      cancelled = true
+      window.clearTimeout(recoveryTimerRef.current)
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [recoveryPending, loading, subscription?.status, subscription?.recoveryAdjustmentStatus])
+  }, [recoveryPending, recoveryPollCycle, loading, subscription?.status, subscription?.recoveryAdjustmentStatus])
 
   const subscriptionState = resolveSubscriptionState({ subscription })
   const canShowBillingPage = canRenderBillingPage(subscriptionState)
@@ -239,6 +252,9 @@ export default function BillingPage() {
   )
   const pastDueBillingNotice = subscriptionState.isPastDue ? getPastDueBillingNotice() : ''
   const awaitingRecoveryAdjustment = shouldPollRecoveryAdjustment(recoveryPending, subscription)
+  const showActionFeedback = actionFeedback.message
+    && !(actionFeedback.message === RECOVERY_ACCESS_CONFIRMED_MESSAGE
+      && (awaitingRecoveryAdjustment || subscription?.recoveryAdjustmentStatus === 'manual_required'))
   const hasBillingHistory = shouldRenderBillingHistory(history)
   const hasScheduledCancellation = subscriptionState.isCancellationScheduled
   const isFinalCancellation = subscriptionState.isCanceled && !hasScheduledCancellation
@@ -479,7 +495,7 @@ export default function BillingPage() {
               {cancellationAccessMessage ? (
                 <p className="billing-page__renewal-note">{cancellationAccessMessage}</p>
               ) : null}
-              {actionFeedback.message ? <p className={`billing-page__feedback billing-page__feedback--${actionFeedback.type}`} role={actionFeedback.type === 'error' ? 'alert' : 'status'}>{actionFeedback.message}</p> : null}
+              {showActionFeedback ? <p className={`billing-page__feedback billing-page__feedback--${actionFeedback.type}`} role={actionFeedback.type === 'error' ? 'alert' : 'status'}>{actionFeedback.message}</p> : null}
 
               {subscriptionState.canManageBilling ? (
                 <div className="billing-page__actions">
