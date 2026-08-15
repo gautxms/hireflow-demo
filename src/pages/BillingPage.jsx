@@ -10,8 +10,28 @@ import '../styles/billing.css'
 import '../styles/checkout.css'
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
+const USER_STORAGE_KEY = 'hireflow_user_profile'
 const RECOVERY_TRANSACTION_KEY = 'hireflow_payment_recovery_transaction'
 const RECOVERY_POLL_LIMIT = 8
+
+function persistRecoveredSubscriptionStatus(status) {
+  const normalizedStatus = String(status || '').trim().toLowerCase()
+  if (!['active', 'trialing'].includes(normalizedStatus)) return
+
+  localStorage.setItem('subscription_status', normalizedStatus)
+
+  try {
+    const storedUserProfile = JSON.parse(localStorage.getItem(USER_STORAGE_KEY) || 'null')
+    if (storedUserProfile && typeof storedUserProfile === 'object') {
+      localStorage.setItem(USER_STORAGE_KEY, JSON.stringify({
+        ...storedUserProfile,
+        subscription_status: normalizedStatus,
+      }))
+    }
+  } catch {
+    // The status entry still gives App a safe authoritative access fallback.
+  }
+}
 
 function formatDate(value) {
   return value ? new Date(value).toLocaleDateString() : '—'
@@ -140,10 +160,13 @@ export default function BillingPage() {
       }
       if (shouldTrackRecovery && accessIsActive) {
         sessionStorage.removeItem(RECOVERY_TRANSACTION_KEY)
-        if (!recoveryAccessConfirmedRef.current) {
+        if (!recoveryAccessConfirmedRef.current && localStorage.getItem(TOKEN_STORAGE_KEY) === token) {
           recoveryAccessConfirmedRef.current = true
+          persistRecoveredSubscriptionStatus(nextSubscription.status)
           setActionFeedback({ type: 'success', message: 'Payment confirmed. Your subscription and workspace access are active.' })
-          window.dispatchEvent(new CustomEvent('hireflow-auth-updated'))
+          window.dispatchEvent(new CustomEvent('hireflow-auth-updated', {
+            detail: { showLoading: false, replaceIfBusy: true },
+          }))
         }
         if (adjustmentIsTerminal) {
           setRecoveryPending(false)

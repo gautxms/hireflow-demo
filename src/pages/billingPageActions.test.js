@@ -351,6 +351,16 @@ test('BillingPage keeps recovery state and polling until the adjustment is termi
   assert.match(source, /Check recovery status/)
 })
 
+test('BillingPage refreshes recovered access without restarting its recovery polling lifecycle', () => {
+  const source = readFileSync(new URL('./BillingPage.jsx', import.meta.url), 'utf8')
+
+  assert.match(source, /function persistRecoveredSubscriptionStatus\(status\)/)
+  assert.match(source, /localStorage\.setItem\('subscription_status', normalizedStatus\)/)
+  assert.match(source, /subscription_status: normalizedStatus/)
+  assert.match(source, /new CustomEvent\('hireflow-auth-updated', \{\s*detail: \{ showLoading: false, replaceIfBusy: true \},\s*\}\)/)
+  assert.match(source, /if \(!recoveryAccessConfirmedRef\.current && localStorage\.getItem\(TOKEN_STORAGE_KEY\) === token\) \{[\s\S]*persistRecoveredSubscriptionStatus\(nextSubscription\.status\)[\s\S]*replaceIfBusy: true/)
+})
+
 test('BillingPage offers state-specific keep, payment update, and subscribe-again actions', () => {
   const source = readFileSync(new URL('./BillingPage.jsx', import.meta.url), 'utf8')
 

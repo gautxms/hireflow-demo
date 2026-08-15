@@ -48,3 +48,16 @@ test('App stabilizes logout and profile update callbacks and syncs subscription 
   assert.match(source, /const handleUserProfileUpdate = useCallback\(\(nextUserProfile\) => \{/)
   assert.match(source, /if \(nextUserProfile\?\.subscription_status\) \{\s*localStorage\.setItem\('subscription_status', nextUserProfile\.subscription_status\)\s*setSubscriptionStatus\(nextUserProfile\.subscription_status\)/)
 })
+
+test('App supports background auth refreshes without reopening the route access gate', () => {
+  assert.match(source, /const showLoading = event\?\.detail\?\.showLoading !== false/)
+  assert.match(source, /const replaceIfBusy = event\?\.detail\?\.replaceIfBusy === true/)
+  assert.match(source, /nextToken && showLoading && !isStandaloneOrdinaryUserAuthRoutePath\(pathname\) \? 'resolving' : 'resolved'/)
+  assert.match(source, /syncAuthenticatedUser\(\{ showLoading, queueIfBusy: !showLoading && !replaceIfBusy, replaceIfBusy \}\)/)
+})
+
+test('App can replace an in-flight stale auth request during payment recovery', () => {
+  assert.match(source, /syncAuthenticatedUser = useCallback\(async \(\{[^}]*replaceIfBusy = false/)
+  assert.match(source, /if \(!showLoading && authSyncControllerRef\.current && !replaceIfBusy\)/)
+  assert.match(source, /authSyncControllerRef\.current\?\.abort\(\)[\s\S]*const controller = new AbortController\(\)/)
+})

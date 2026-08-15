@@ -118,12 +118,12 @@ test('silent refresh cannot interrupt an in-flight initial access gate', () => {
     appSource.indexOf('const syncAuthenticatedUser = useCallback'),
     appSource.indexOf('useEffect(() => {', appSource.indexOf('const syncAuthenticatedUser = useCallback')),
   )
-  const silentGuardIndex = syncBlock.indexOf('if (!showLoading && authSyncControllerRef.current)')
+  const silentGuardIndex = syncBlock.indexOf('if (!showLoading && authSyncControllerRef.current && !replaceIfBusy)')
   const abortIndex = syncBlock.indexOf('authSyncControllerRef.current?.abort()')
 
   assert.notEqual(silentGuardIndex, -1)
   assert.ok(silentGuardIndex < abortIndex)
-  assert.match(syncBlock, /if \(!showLoading && authSyncControllerRef\.current\) \{\s*if \(queueIfBusy\) \{\s*authSyncFollowUpRequestedRef\.current = true\s*\}\s*return null\s*\}/)
+  assert.match(syncBlock, /if \(!showLoading && authSyncControllerRef\.current && !replaceIfBusy\) \{\s*if \(queueIfBusy\) \{\s*authSyncFollowUpRequestedRef\.current = true\s*\}\s*return null\s*\}/)
 })
 
 test('explicit invalidation coalesces behind a busy sync without replaying passive refreshes', () => {
@@ -133,7 +133,7 @@ test('explicit invalidation coalesces behind a busy sync without replaying passi
   )
 
   assert.match(appSource, /authSyncFollowUpRequestedRef = useRef\(false\)/)
-  assert.match(syncBlock, /if \(!showLoading && authSyncControllerRef\.current\) \{\s*if \(queueIfBusy\) \{\s*authSyncFollowUpRequestedRef\.current = true\s*\}\s*return null\s*\}/)
+  assert.match(syncBlock, /if \(!showLoading && authSyncControllerRef\.current && !replaceIfBusy\) \{\s*if \(queueIfBusy\) \{\s*authSyncFollowUpRequestedRef\.current = true\s*\}\s*return null\s*\}/)
   assert.match(appSource, /syncAuthenticatedUser\(\{ showLoading: false, queueIfBusy: true \}\)/)
   assert.match(appSource, /const handleWindowFocus = \(\) => \{\s*refreshAccountAccessSilently\(\)\s*\}/)
 })
