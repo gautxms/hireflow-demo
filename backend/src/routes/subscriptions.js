@@ -391,17 +391,43 @@ export function selectExactRecoveredTransaction(transactions, transactionIds, us
 
 async function resolveExactRecoveredTransactionId(user, paddle, { pendingOnly = false } = {}) {
   const attempts = await pool.query(
-    `SELECT transaction_id
-     FROM payment_attempts
-     WHERE user_id=$1
-       AND COALESCE(NULLIF(LOWER(paddle_environment), ''), 'production')=$2
-       AND status IN ('pending', 'failed', 'retrying')
+    `SELECT attempt.transaction_id
+     FROM payment_attempts attempt
+     WHERE attempt.user_id=$1
+       AND COALESCE(NULLIF(LOWER(attempt.paddle_environment), ''), 'production')=$2
+       AND (
+         (NOT $4 AND attempt.status IN ('pending', 'failed', 'retrying'))
+         OR (
+           $4
+           AND (
+             (
+               attempt.status IN ('pending', 'failed', 'retrying')
+               AND attempt.metadata->>'resolved_by'='subscription_get_reconciliation_pending'
+             )
+             OR (
+               attempt.status='succeeded'
+               AND (
+                 attempt.metadata->>'resolved_by' IN ('webhook', 'automatic_retry', 'admin_retry')
+                 OR (
+                   attempt.metadata->>'resolved_by' IN ('authoritative_reconciliation', 'subscription_get_reconciliation')
+                   AND attempt.metadata->>'transaction_id'=attempt.transaction_id
+                 )
+               )
+             )
+           )
+         )
+       )
        AND COALESCE(
-         payload->'data'->>'subscription_id', payload->'data'->>'subscriptionId',
-         payload->>'subscription_id', payload->>'subscriptionId'
+         attempt.payload->'data'->>'subscription_id', attempt.payload->'data'->>'subscriptionId',
+         attempt.payload->>'subscription_id', attempt.payload->>'subscriptionId'
        )=$3
-       AND transaction_id IS NOT NULL
-       AND (NOT $4 OR metadata->>'resolved_by'='subscription_get_reconciliation_pending')`,
+       AND attempt.transaction_id IS NOT NULL
+       AND NOT EXISTS (
+         SELECT 1
+         FROM recovery_billing_adjustments adjustment
+         WHERE COALESCE(NULLIF(LOWER(adjustment.paddle_environment), ''), 'production')=$2
+           AND adjustment.recovery_transaction_id=attempt.transaction_id
+       )`,
     [user.id, paddle.environment, user.paddle_subscription_id, pendingOnly],
   )
   const transactionIds = attempts.rows.map((attempt) => attempt.transaction_id)
@@ -459,18 +485,31 @@ async function resolveHeldGetRecoveryAttempts(user, paddle) {
 }
 
 async function processRecoveredTransactionImmediately(userId, transactionId, paddle) {
-  if (!transactionId || !isRecoveryBillingAdjustmentEnabled(paddle.environment)) return
+  if (!transactionId || !isRecoveryBillingAdjustmentEnabled(paddle.environment)) return null
   try {
     await runRecoveryBillingAdjustments({
       candidateUserId: userId,
       candidateTransactionId: transactionId,
+      paddle,
     })
+    const state = await pool.query(
+      `SELECT status, id::text AS reference
+       FROM recovery_billing_adjustments
+       WHERE user_id=$1
+         AND COALESCE(NULLIF(LOWER(paddle_environment), ''), 'production')=$2
+         AND recovery_transaction_id=$3
+       ORDER BY updated_at DESC, created_at DESC
+       LIMIT 1`,
+      [userId, paddle.environment, transactionId],
+    )
+    return state.rows[0] || null
   } catch (error) {
     await logErrorToDatabase('recovery_billing_adjustment.immediate_failed', error, {
       userId,
       transactionId,
       environment: paddle.environment,
     })
+    return null
   }
 }
 
@@ -976,7 +1015,11 @@ router.get('/current', requireAuth, async (req, res) => {
       && !user.cancellation_effective_at
     ) {
       const heldRecoveryTransactionId = await resolveHeldGetRecoveryAttempts(user, paddle)
-      await processRecoveredTransactionImmediately(user.id, heldRecoveryTransactionId, paddle)
+      const recoveryState = await processRecoveredTransactionImmediately(user.id, heldRecoveryTransactionId, paddle)
+      if (recoveryState) {
+        user.recovery_adjustment_status = recoveryState.status
+        user.recovery_adjustment_reference = recoveryState.reference
+      }
     }
 
     if (
@@ -1098,7 +1141,11 @@ router.get('/current', requireAuth, async (req, res) => {
               ? `transaction:${exactRecoveryTransactionId}`
               : null
           }
-          await processRecoveredTransactionImmediately(user.id, exactRecoveryTransactionId, paddle)
+          const recoveryState = await processRecoveredTransactionImmediately(user.id, exactRecoveryTransactionId, paddle)
+          if (recoveryState) {
+            user.recovery_adjustment_status = recoveryState.status
+            user.recovery_adjustment_reference = recoveryState.reference
+          }
         }
       } else if (isPastDueRecovery) {
         const currentResult = await pool.query(
