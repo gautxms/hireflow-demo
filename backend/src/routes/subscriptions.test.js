@@ -922,7 +922,7 @@ test('GET /api/subscriptions/current records only the exact provider-confirmed r
   pool.connect = async () => { throw new Error('pool.connect should not be called') }
   pool.query = async (sql, params) => {
     dbCalls.push({ sql: String(sql), params })
-    if (/SELECT transaction_id\s+FROM payment_attempts/.test(String(sql))) {
+    if (/SELECT (?:attempt\.)?transaction_id\s+FROM payment_attempts/.test(String(sql))) {
       return { rows: [{ transaction_id: 'txn_old' }, { transaction_id: 'txn_recovered' }], rowCount: 2 }
     }
     if (String(sql).includes('WITH reconciled_user AS')) {
@@ -964,6 +964,59 @@ test('GET /api/subscriptions/current records only the exact provider-confirmed r
   const immediateClaim = dbCalls.find(({ sql }) => /WITH claimable AS/.test(sql))
   assert.deepEqual(immediateDiscovery.params, [['production'], true, 123, 'txn_recovered'])
   assert.deepEqual(immediateClaim.params, [['production'], true, 123, 'txn_recovered'])
+})
+
+test('GET /api/subscriptions/current finalizes a succeeded recovery attempt left pending by checkout reconciliation', async () => {
+  resetPaddleEnv()
+  process.env.PADDLE_PAST_DUE_RECOVERY_BILLING_ADJUSTMENT_ENVIRONMENTS = 'production'
+  const user = {
+    ...activeMonthlyUser(),
+    subscription_renewal_date: '2026-09-18T00:00:00.000Z',
+    next_billing_date: '2026-09-18T00:00:00.000Z',
+    recovery_adjustment_status: 'pending',
+    recovery_adjustment_reference: 'payment_attempt:42',
+  }
+  const calls = []
+  pool.connect = async () => { throw new Error('pool.connect should not be called') }
+  pool.query = async (sql, params) => {
+    const text = String(sql)
+    calls.push({ sql: text, params })
+    if (/SELECT attempt\.transaction_id\s+FROM payment_attempts attempt/.test(text)) {
+      return { rows: [{ transaction_id: 'txn_recovered' }], rowCount: 1 }
+    }
+    if (/SELECT status, id::text AS reference/.test(text)) {
+      return { rows: [{ status: 'already_satisfied', reference: 'adj_recovered' }], rowCount: 1 }
+    }
+    if (/FROM subscriptions/.test(text)) return { rows: [], rowCount: 0 }
+    if (/FROM users/.test(text)) return { rows: [user], rowCount: 1 }
+    return { rows: [], rowCount: 0 }
+  }
+  const recoveredTransaction = {
+    id: 'txn_recovered',
+    origin: 'subscription_recurring',
+    status: 'completed',
+    customer_id: 'ctm_123',
+    subscription_id: 'sub_123',
+    details: { totals: { grand_total: '9900' } },
+    payments: [{ status: 'captured', captured_at: '2026-08-18T00:00:00Z' }],
+    items: [{ quantity: 1, price: { id: 'pri_monthly', billing_cycle: { interval: 'month' } } }],
+  }
+  mockPaddleSequence([
+    { payload: authoritativeMonthlyRecovery() },
+    { payload: { data: [recoveredTransaction] } },
+  ])
+
+  const res = await invokeRoute('/current')
+
+  assert.equal(res.statusCode, 200)
+  assert.equal(res.payload.subscription.recoveryAdjustmentStatus, 'already_satisfied')
+  assert.equal(res.payload.subscription.recoveryAdjustmentReference, 'adj_recovered')
+  const pendingLookup = calls.find(({ sql }) => /SELECT attempt\.transaction_id/.test(sql))
+  assert.match(pendingLookup.sql, /attempt\.status='succeeded'/)
+  assert.match(pendingLookup.sql, /authoritative_reconciliation', 'subscription_get_reconciliation'/)
+  assert.match(pendingLookup.sql, /NOT EXISTS \([\s\S]*recovery_billing_adjustments adjustment/)
+  const immediateDiscovery = calls.find(({ sql }) => /SELECT pa\.\*/.test(sql))
+  assert.deepEqual(immediateDiscovery.params, [['production'], true, 123, 'txn_recovered'])
 })
 
 test('GET /api/subscriptions/current does not revive a cancellation committed during Paddle refresh', async () => {
