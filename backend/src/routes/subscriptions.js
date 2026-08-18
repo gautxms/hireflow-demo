@@ -391,7 +391,7 @@ export function selectExactRecoveredTransaction(transactions, transactionIds, us
 
 async function resolveExactRecoveredTransactionId(user, paddle, { pendingOnly = false } = {}) {
   const attempts = await pool.query(
-    `SELECT attempt.transaction_id
+    `SELECT attempt.transaction_id, MAX(attempt.updated_at) AS latest_updated_at
      FROM payment_attempts attempt
      WHERE attempt.user_id=$1
        AND COALESCE(NULLIF(LOWER(attempt.paddle_environment), ''), 'production')=$2
@@ -427,31 +427,33 @@ async function resolveExactRecoveredTransactionId(user, paddle, { pendingOnly = 
          FROM recovery_billing_adjustments adjustment
          WHERE COALESCE(NULLIF(LOWER(adjustment.paddle_environment), ''), 'production')=$2
            AND adjustment.recovery_transaction_id=attempt.transaction_id
-       )`,
+       )
+     GROUP BY attempt.transaction_id
+     ORDER BY latest_updated_at DESC, attempt.transaction_id DESC
+     LIMIT 30`,
     [user.id, paddle.environment, user.paddle_subscription_id, pendingOnly],
   )
   const transactionIds = attempts.rows.map((attempt) => attempt.transaction_id)
   if (transactionIds.length === 0) return null
-  try {
-    const payload = await paddleRequest(
-      `/transactions?subscription_id=${encodeURIComponent(user.paddle_subscription_id)}&customer_id=${encodeURIComponent(user.paddle_customer_id)}&per_page=30`,
-      {},
-      paddle,
-    )
-    return selectExactRecoveredTransaction(
-      Array.isArray(payload?.data) ? payload.data : [],
-      transactionIds,
-      user,
-      paddle,
-    )?.id || null
-  } catch (error) {
+
+  const lookups = await Promise.allSettled(transactionIds.map(async (transactionId) => {
+    const payload = await paddleRequest(`/transactions/${encodeURIComponent(transactionId)}`, {}, paddle)
+    return payload?.data || payload
+  }))
+  const transactions = lookups
+    .filter((lookup) => lookup.status === 'fulfilled')
+    .map((lookup) => lookup.value)
+  const failedLookup = lookups.find((lookup) => lookup.status === 'rejected')
+  if (failedLookup) {
     console.warn('[subscriptions.current] Exact recovery transaction lookup is not available yet', {
       userId: user.id,
       paddleSubscriptionId: user.paddle_subscription_id,
-      code: error.code || 'UNKNOWN',
+      failedLookupCount: lookups.filter((lookup) => lookup.status === 'rejected').length,
+      code: failedLookup.reason?.code || 'UNKNOWN',
     })
-    return null
   }
+
+  return selectExactRecoveredTransaction(transactions, transactionIds, user, paddle)?.id || null
 }
 
 async function resolveHeldGetRecoveryAttempts(user, paddle) {
