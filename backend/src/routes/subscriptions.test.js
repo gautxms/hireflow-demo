@@ -922,7 +922,7 @@ test('GET /api/subscriptions/current records only the exact provider-confirmed r
   pool.connect = async () => { throw new Error('pool.connect should not be called') }
   pool.query = async (sql, params) => {
     dbCalls.push({ sql: String(sql), params })
-    if (/SELECT (?:attempt\.)?transaction_id\s+FROM payment_attempts/.test(String(sql))) {
+    if (/SELECT attempt\.transaction_id/.test(String(sql))) {
       return { rows: [{ transaction_id: 'txn_old' }, { transaction_id: 'txn_recovered' }], rowCount: 2 }
     }
     if (String(sql).includes('WITH reconciled_user AS')) {
@@ -945,10 +945,8 @@ test('GET /api/subscriptions/current records only the exact provider-confirmed r
   })
   const paddleCalls = mockPaddleSequence([
     { payload: authoritativeMonthlyRecovery() },
-    { payload: { data: [
-      transaction('txn_old', '2026-06-27T00:00:00Z'),
-      transaction('txn_recovered', '2026-07-27T00:00:00Z'),
-    ] } },
+    { ok: false, status: 404, payload: { error: { code: 'transaction_not_found' } } },
+    { payload: { data: transaction('txn_recovered', '2026-07-27T00:00:00Z') } },
   ])
 
   const res = await invokeRoute('/current')
@@ -959,7 +957,10 @@ test('GET /api/subscriptions/current records only the exact provider-confirmed r
     resolved_by: 'subscription_get_reconciliation',
     transaction_id: 'txn_recovered',
   })
-  assert.match(paddleCalls[1].url, /transactions\?subscription_id=sub_123&customer_id=ctm_123&per_page=30/)
+  assert.match(paddleCalls[1].url, /\/transactions\/txn_old$/)
+  assert.match(paddleCalls[2].url, /\/transactions\/txn_recovered$/)
+  assert.match(dbCalls.find(({ sql }) => /SELECT attempt\.transaction_id/.test(sql)).sql, /ORDER BY latest_updated_at DESC/)
+  assert.match(dbCalls.find(({ sql }) => /SELECT attempt\.transaction_id/.test(sql)).sql, /LIMIT 30/)
   const immediateDiscovery = dbCalls.find(({ sql }) => /SELECT pa\.\*/.test(sql))
   const immediateClaim = dbCalls.find(({ sql }) => /WITH claimable AS/.test(sql))
   assert.deepEqual(immediateDiscovery.params, [['production'], true, 123, 'txn_recovered'])
@@ -981,7 +982,7 @@ test('GET /api/subscriptions/current finalizes a succeeded recovery attempt left
   pool.query = async (sql, params) => {
     const text = String(sql)
     calls.push({ sql: text, params })
-    if (/SELECT attempt\.transaction_id\s+FROM payment_attempts attempt/.test(text)) {
+    if (/SELECT attempt\.transaction_id/.test(text)) {
       return { rows: [{ transaction_id: 'txn_recovered' }], rowCount: 1 }
     }
     if (/SELECT status, id::text AS reference/.test(text)) {
@@ -1003,7 +1004,7 @@ test('GET /api/subscriptions/current finalizes a succeeded recovery attempt left
   }
   mockPaddleSequence([
     { payload: authoritativeMonthlyRecovery() },
-    { payload: { data: [recoveredTransaction] } },
+    { payload: { data: recoveredTransaction } },
   ])
 
   const res = await invokeRoute('/current')
