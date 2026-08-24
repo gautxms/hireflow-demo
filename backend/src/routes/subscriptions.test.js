@@ -2145,6 +2145,42 @@ test('POST /api/subscriptions/cancel uses one checked-out client after Paddle ca
   assert.equal(clientCalls[4].sql, 'RELEASE')
 })
 
+test('POST /api/subscriptions/cancel works after a later upgrade transaction event watermark', async () => {
+  resetPaddleEnv()
+  const transactionEventWatermark = '2026-07-28T10:05:00.000Z'
+  const annualItems = [{ price: { id: 'pri_annual', billing_cycle: { interval: 'year' } }, quantity: 1 }]
+  const { calls } = installDbMock({
+    ...activeCancellationUser({
+      subscription_plan: 'annual',
+      last_paddle_event_at: transactionEventWatermark,
+    }),
+    paddle_environment: 'production',
+  })
+  const paddleCalls = mockPaddleSequence([
+    { payload: { data: paddleMonthlySubscription({ items: annualItems }) } },
+    { payload: { data: scheduledCancellationSubscription({ items: annualItems }) } },
+  ])
+  const { clientCalls, connectCalls } = installClientMock()
+
+  const res = await invokeRoute('/cancel', { reason: 'too expensive' })
+
+  assert.equal(res.statusCode, 200)
+  assert.equal(res.payload.status, 'ok')
+  assert.equal(res.payload.effectiveAt, '2027-08-28T00:00:00.000Z')
+  assert.equal(paddleCalls.length, 2)
+  assert.match(paddleCalls[1].url, /\/subscriptions\/sub_123\/cancel$/)
+  assert.equal(connectCalls.length, 1)
+
+  const reconciliationUpdate = clientCalls.find(({ sql }) => /UPDATE users/.test(sql))
+  assert.ok(reconciliationUpdate)
+  assert.equal(reconciliationUpdate.params[13], transactionEventWatermark)
+  assert.equal(reconciliationUpdate.params[14], true)
+  assert.match(reconciliationUpdate.sql, /last_paddle_event_at = GREATEST/)
+
+  const auditCall = calls.find(({ sql }) => String(sql).includes('WITH updated_user AS'))
+  assert.ok(auditCall)
+})
+
 test('POST /api/subscriptions/cancel allows cancellation during a pending annual-to-monthly downgrade', async () => {
   resetPaddleEnv()
   const user = activeCancellationUser({

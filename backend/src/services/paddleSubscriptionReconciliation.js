@@ -31,6 +31,14 @@ function sameInstant(left, right) {
   return validIsoOrNull(left) === validIsoOrNull(right)
 }
 
+function latestInstant(left, right) {
+  const leftIso = validIsoOrNull(left)
+  const rightIso = validIsoOrNull(right)
+  if (!leftIso) return rightIso
+  if (!rightIso) return leftIso
+  return new Date(leftIso).getTime() >= new Date(rightIso).getTime() ? leftIso : rightIso
+}
+
 function isFutureInstant(value, now = new Date()) {
   const iso = validIsoOrNull(value)
   return Boolean(iso && new Date(iso).getTime() > now.getTime())
@@ -82,6 +90,7 @@ export function inspectPaddleSubscriptionForReconciliation({
   paddle,
   pendingProviderPlan = null,
   allowProviderConfirmedRecovery = false,
+  allowCommandSnapshotBeforeEventWatermark = false,
 }) {
   const subscription = dataFromPayload(paddlePayload)
   const providerStatus = normalizeStatus(subscription?.status)
@@ -143,7 +152,8 @@ export function inspectPaddleSubscriptionForReconciliation({
 
   const lastPaddleEventAt = validIsoOrNull(user?.last_paddle_event_at)
   if (
-    lastPaddleEventAt
+    !allowCommandSnapshotBeforeEventWatermark
+    && lastPaddleEventAt
     && new Date(observedAt).getTime() < new Date(lastPaddleEventAt).getTime()
   ) {
     return { ok: false, reason: 'stale_provider_snapshot', snapshot }
@@ -215,7 +225,7 @@ function reconciledUserProjection(user, snapshot) {
     next_billing_date: snapshot.nextBillingDate,
     cancellation_effective_at: snapshot.cancellationEffectiveAt,
     next_payment_retry_at: snapshot.isTerminal ? null : user.next_payment_retry_at,
-    last_paddle_event_at: snapshot.observedAt,
+    last_paddle_event_at: latestInstant(user.last_paddle_event_at, snapshot.observedAt),
   }
 }
 
@@ -225,6 +235,7 @@ export async function reconcilePaddleSubscriptionState({
   paddle,
   pendingProviderPlan = null,
   allowProviderConfirmedRecovery = false,
+  allowCommandSnapshotBeforeEventWatermark = false,
   db = pool,
   source = 'subscription_get',
 }) {
@@ -234,6 +245,7 @@ export async function reconcilePaddleSubscriptionState({
     paddle,
     pendingProviderPlan,
     allowProviderConfirmedRecovery,
+    allowCommandSnapshotBeforeEventWatermark,
   })
 
   if (!inspection.ok) {
@@ -308,7 +320,8 @@ export async function reconcilePaddleSubscriptionState({
          AND cancellation_effective_at IS NOT DISTINCT FROM $13::timestamp
          AND last_paddle_event_at IS NOT DISTINCT FROM $14::timestamptz
          AND (
-           last_paddle_event_at IS NULL
+           $15::boolean
+           OR last_paddle_event_at IS NULL
            OR $8::timestamptz >= last_paddle_event_at
          )
        RETURNING id`,
@@ -327,6 +340,7 @@ export async function reconcilePaddleSubscriptionState({
         user.subscription_status ?? null,
         user.cancellation_effective_at || null,
         user.last_paddle_event_at || null,
+        allowCommandSnapshotBeforeEventWatermark,
       ],
     )
 

@@ -180,6 +180,40 @@ test('inspection fails closed on environment, ownership, plan, and ordering evid
   }
 })
 
+test('command reconciliation accepts a direct subscription snapshot before a transaction event watermark without lowering it', async () => {
+  const transactionEventWatermark = '2026-07-28T08:05:00.000Z'
+  const subscriptionUpdatedAt = '2026-07-28T08:00:00.000Z'
+  const mock = dbMock()
+  const result = await reconcilePaddleSubscriptionState({
+    user: user({ last_paddle_event_at: transactionEventWatermark }),
+    paddle: paddle(),
+    paddlePayload: subscription({
+      updated_at: subscriptionUpdatedAt,
+      next_billed_at: null,
+      scheduled_change: {
+        action: 'cancel',
+        effective_at: '2026-08-23T00:00:00.000Z',
+      },
+    }),
+    allowCommandSnapshotBeforeEventWatermark: true,
+    db: mock.db,
+    source: 'subscription_cancel_command',
+  })
+
+  assert.equal(result.reconciled, true)
+  assert.equal(result.user.cancellation_effective_at, '2026-08-23T00:00:00.000Z')
+  assert.equal(result.user.last_paddle_event_at, transactionEventWatermark)
+
+  const update = mock.calls.find(({ sql }) => /UPDATE users/.test(sql))
+  assert.ok(update)
+  assert.equal(update.params[7], subscriptionUpdatedAt)
+  assert.equal(update.params[13], transactionEventWatermark)
+  assert.equal(update.params[14], true)
+  assert.match(update.sql, /last_paddle_event_at = GREATEST/)
+  assert.match(update.sql, /last_paddle_event_at IS NOT DISTINCT FROM \$14::timestamptz/)
+  assert.match(update.sql, /\$15::boolean\s+OR last_paddle_event_at IS NULL/)
+})
+
 test('ownership rejection diagnostics correlate local and provider identity without payloads', async (t) => {
   const warnings = []
   t.mock.method(console, 'warn', (...args) => warnings.push(args))
