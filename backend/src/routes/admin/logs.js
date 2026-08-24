@@ -5,6 +5,66 @@ const router = Router()
 const SENSITIVE_KEY_PATTERN = /(password|token|secret|authorization|cookie|resume|raw|text|email|phone|ssn)/i
 const REDACTED = '[REDACTED]'
 
+export const ERROR_LOGS_LIST_QUERY = `WITH filtered AS (
+  SELECT
+    el.id,
+    el.source,
+    el.message,
+    el.stack,
+    el.context,
+    el.created_at,
+    COALESCE(NULLIF(el.context ->> 'endpoint', ''), NULLIF(el.context ->> 'path', ''), 'n/a') AS endpoint,
+    COALESCE(NULLIF(el.context ->> 'statusCode', ''), 'n/a') AS status_code,
+    COALESCE(el.context @> '{"resolved": true}'::jsonb, false) AS resolved,
+    NULLIF(el.context ->> 'userId', '') AS affected_user_id
+  FROM error_logs el
+  WHERE el.created_at BETWEEN $1::timestamptz AND $2::timestamptz
+    AND ($3 = '' OR el.message ILIKE '%' || $3 || '%')
+    AND ($4 = '' OR COALESCE(NULLIF(el.context ->> 'endpoint', ''), NULLIF(el.context ->> 'path', ''), '') = $4)
+    AND ($5 = '' OR COALESCE(NULLIF(el.context ->> 'statusCode', ''), '') = $5)
+), grouped AS (
+  SELECT
+    message,
+    endpoint,
+    status_code,
+    COUNT(DISTINCT affected_user_id) AS affected_users
+  FROM filtered
+  GROUP BY message, endpoint, status_code
+)
+SELECT
+  filtered.*,
+  grouped.affected_users,
+  COUNT(*) OVER () AS total_count
+FROM filtered
+JOIN grouped USING (message, endpoint, status_code)
+ORDER BY created_at DESC
+LIMIT $6 OFFSET $7`
+
+export const ADMIN_AUDIT_TRAIL_QUERY = `WITH filtered AS (
+  SELECT
+    aa.id,
+    aa.admin_id,
+    aa.action_type,
+    aa.target_id,
+    aa.details,
+    aa.ip_address,
+    aa.created_at,
+    u.email AS admin_email,
+    COUNT(*) OVER () AS total_count
+  FROM admin_actions aa
+  LEFT JOIN users u ON u.id = aa.admin_id
+  WHERE ($1::text[] IS NULL OR aa.action_type = ANY($1::text[]))
+    AND (
+      $2 = ''
+      OR aa.action_type ILIKE '%' || $2 || '%'
+      OR COALESCE(u.email, '') ILIKE '%' || $2 || '%'
+    )
+)
+SELECT *
+FROM filtered
+ORDER BY created_at DESC
+LIMIT $3 OFFSET $4`
+
 function toIsoDate(value, fallback) {
   if (!value) return fallback
   const parsed = new Date(value)
@@ -59,33 +119,7 @@ async function listErrorLogs(req, res) {
 
   try {
     const result = await pool.query(
-      `WITH filtered AS (
-         SELECT
-           el.id,
-           el.source,
-           el.message,
-           el.stack,
-           el.context,
-           el.created_at,
-           COALESCE(NULLIF(el.context ->> 'endpoint', ''), NULLIF(el.context ->> 'path', ''), 'n/a') AS endpoint,
-           COALESCE(NULLIF(el.context ->> 'statusCode', ''), 'n/a') AS status_code,
-           COALESCE((el.context ->> 'resolved')::boolean, false) AS resolved,
-           COUNT(DISTINCT NULLIF(el.context ->> 'userId', '')) OVER (
-             PARTITION BY el.message,
-             COALESCE(NULLIF(el.context ->> 'endpoint', ''), NULLIF(el.context ->> 'path', ''), 'n/a'),
-             COALESCE(NULLIF(el.context ->> 'statusCode', ''), 'n/a')
-           ) AS affected_users,
-           COUNT(*) OVER () AS total_count
-         FROM error_logs el
-         WHERE el.created_at BETWEEN $1::timestamptz AND $2::timestamptz
-           AND ($3 = '' OR el.message ILIKE '%' || $3 || '%')
-           AND ($4 = '' OR COALESCE(NULLIF(el.context ->> 'endpoint', ''), NULLIF(el.context ->> 'path', ''), '') = $4)
-           AND ($5 = '' OR COALESCE(NULLIF(el.context ->> 'statusCode', ''), '') = $5)
-       )
-       SELECT *
-       FROM filtered
-       ORDER BY created_at DESC
-       LIMIT $6 OFFSET $7`,
+      ERROR_LOGS_LIST_QUERY,
       [startDate, endDate, search, endpoint, statusCode, pageSize, offset],
     )
 
@@ -287,30 +321,7 @@ router.get('/audit-trail', async (req, res) => {
 
   try {
     const result = await pool.query(
-      `WITH filtered AS (
-        SELECT
-          aa.id,
-          aa.admin_id,
-          aa.action_type,
-          aa.target_id,
-          aa.details,
-          aa.ip_address,
-          aa.created_at,
-          u.email AS admin_email,
-          COUNT(*) OVER () AS total_count
-        FROM admin_actions aa
-        LEFT JOIN users u ON u.id = aa.admin_id
-        WHERE ($1::text IS NULL OR aa.action_type = ANY($1::text[]))
-          AND (
-            $2 = ''
-            OR aa.action_type ILIKE '%' || $2 || '%'
-            OR COALESCE(u.email, '') ILIKE '%' || $2 || '%'
-          )
-      )
-      SELECT *
-      FROM filtered
-      ORDER BY created_at DESC
-      LIMIT $3 OFFSET $4`,
+      ADMIN_AUDIT_TRAIL_QUERY,
       [actionTypes, search, pageSize, offset],
     )
 
