@@ -52,13 +52,13 @@ async function run() {
   assert(navHrefs.length > 0, 'No admin navigation routes were found in adminNavigation.js')
 
   for (const href of navHrefs) {
-    const routeRegex = new RegExp(`pathname\\s*===\\s*'${regexEscape(href)}'`)
+    const routeRegex = new RegExp(`(?:resolvedPathname|pathname)\\s*===\\s*'${regexEscape(href)}'`)
     assert(routeRegex.test(appSource), `Missing route branch for ${href} in src/App.jsx (route 404 regression risk).`)
   }
 
-  assert(/pathname\s*===\s*'\/admin'\s*\|\|\s*pathname\s*===\s*'\/admin\/overview'/.test(appSource), 'Missing canonical /admin or /admin/overview alias route.')
-  assert(/pathname\.startsWith\('\/admin\/users\/'\)/.test(appSource), 'Missing /admin/users/:id detail route guard.')
-  assert(/pathname\.startsWith\('\/admin\/uploads\/'\)/.test(appSource), 'Missing /admin/uploads/:id detail route guard.')
+  assert(/resolvedPathname\s*===\s*'\/admin'\s*\|\|\s*resolvedPathname\s*===\s*'\/admin\/overview'/.test(appSource), 'Missing canonical /admin or /admin/overview alias route.')
+  assert(/resolvedPathname\.startsWith\('\/admin\/users\/'\)/.test(appSource), 'Missing /admin/users/:id detail route guard.')
+  assert(/resolvedPathname\.startsWith\('\/admin\/uploads\/'\)/.test(appSource), 'Missing /admin/uploads/:id detail route guard.')
 
   assert(/mobileNavOpen\s*\?/.test(shellSource), 'AdminShell mobile drawer must be conditionally rendered to prevent persistent overlays.')
   assert(/admin-shell-v2__mobile-backdrop/.test(shellSource), 'AdminShell is missing mobile backdrop control for overlay dismissal.')
@@ -70,7 +70,7 @@ async function run() {
   assert(/acceptedEula/.test(authSource), 'EULA gating state is missing in useAdminAuth.')
   assert(/needsTwoFactor/.test(authSource), '2FA gating state is missing in useAdminAuth.')
   assert(/sessionSecondsLeft/.test(authSource), 'Session timer state is missing in useAdminAuth.')
-  assert(/localStorage\.removeItem\(ADMIN_SESSION_STORAGE_KEY\)/.test(authSource), 'Admin session clear is missing from useAdminAuth (auth regression risk).')
+  assert(/clearAdminSessionStorage\(localStorage\)/.test(authSource), 'Admin session clear is missing from useAdminAuth (auth regression risk).')
     assert(loginPageSource.includes('Session timer:') && loginPageSource.includes('{formattedTimer}'), 'Admin login page is missing the visible session timer.')
   assert(/onClick=\{\(\) => logout\(\)\}/.test(loginPageSource), 'Admin login page is missing the explicit logout control.')
 

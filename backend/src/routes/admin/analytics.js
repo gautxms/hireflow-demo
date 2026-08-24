@@ -3,6 +3,27 @@ import { pool } from '../../db/client.js'
 
 const router = Router()
 
+export const ADMIN_RETENTION_COHORT_QUERY = `WITH signup_weeks AS (
+  SELECT id AS user_id, date_trunc('week', created_at)::date AS cohort_week
+  FROM users
+  WHERE created_at::date BETWEEN $1::date AND $2::date
+),
+activity_weeks AS (
+  SELECT DISTINCT e.user_id, date_trunc('week', e.timestamp)::date AS activity_week
+  FROM events e
+  WHERE e.user_id IS NOT NULL
+    AND e.timestamp::date BETWEEN $1::date AND $2::date + interval '70 days'
+)
+SELECT
+  s.cohort_week,
+  ((a.activity_week - s.cohort_week) / 7)::int AS week_offset,
+  COUNT(DISTINCT s.user_id)::int AS retained_users
+FROM signup_weeks s
+JOIN activity_weeks a ON a.user_id = s.user_id AND a.activity_week >= s.cohort_week
+WHERE (a.activity_week - s.cohort_week) BETWEEN 0 AND 70
+GROUP BY s.cohort_week, week_offset
+ORDER BY s.cohort_week ASC, week_offset ASC`
+
 function toDateOnly(value) {
   return value ? new Date(`${value}T00:00:00.000Z`) : null
 }
@@ -325,26 +346,7 @@ async function loadAnalytics({ start, end, planType }) {
       [start, end, planFilter],
     ),
     pool.query(
-      `WITH signup_weeks AS (
-         SELECT id AS user_id, date_trunc('week', created_at)::date AS cohort_week
-         FROM users
-         WHERE created_at::date BETWEEN $1::date AND $2::date
-       ),
-       activity_weeks AS (
-         SELECT DISTINCT e.user_id, date_trunc('week', e.timestamp)::date AS activity_week
-         FROM events e
-         WHERE e.user_id IS NOT NULL
-           AND e.timestamp::date BETWEEN $1::date AND $2::date + interval '70 days'
-       )
-       SELECT
-         s.cohort_week,
-         EXTRACT(week FROM (a.activity_week - s.cohort_week))::int AS week_offset,
-         COUNT(DISTINCT s.user_id)::int AS retained_users
-       FROM signup_weeks s
-       JOIN activity_weeks a ON a.user_id = s.user_id AND a.activity_week >= s.cohort_week
-       WHERE EXTRACT(day FROM (a.activity_week - s.cohort_week)) BETWEEN 0 AND 70
-       GROUP BY s.cohort_week, week_offset
-       ORDER BY s.cohort_week ASC, week_offset ASC`,
+      ADMIN_RETENTION_COHORT_QUERY,
       [start, end],
     ),
     pool.query(
