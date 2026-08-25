@@ -44,6 +44,10 @@ export function hasActiveSubscription(status) {
   return ACTIVE_STATUSES.has(normalized) || TRIALING_STATUSES.has(normalized)
 }
 
+export function isCanceledSubscription(status) {
+  return CANCELED_STATUSES.has(normalizeSubscriptionStatus(status))
+}
+
 function getSubscriptionStatus(subscriptionStateOrSubscription) {
   if (typeof subscriptionStateOrSubscription === 'string') {
     return normalizeSubscriptionStatus(subscriptionStateOrSubscription)

@@ -6,6 +6,7 @@ import {
   hasActiveSubscription,
   getFutureSubscriptionEndDate,
   hasScheduledCancellationAccess,
+  isCanceledSubscription,
   canUsePaidMutation,
   isReadOnlyWorkspace,
   resolveSubscriptionState,
@@ -18,6 +19,12 @@ const PAST = '2025-01-07T00:00:00Z'
 function state(subscription) {
   return resolveSubscriptionState({ subscription, now: NOW })
 }
+
+test('canceled subscription recognition accepts Paddle and application spellings', () => {
+  assert.equal(isCanceledSubscription('canceled'), true)
+  assert.equal(isCanceledSubscription('cancelled'), true)
+  assert.equal(isCanceledSubscription('active'), false)
+})
 
 test('active renewing subscription keeps active paid access without cancellation scheduling', () => {
   const resolved = state({ status: 'active', plan: 'monthly', paddleCustomerId: 'ctm_123', paddleSubscriptionId: 'sub_123' })

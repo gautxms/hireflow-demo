@@ -574,7 +574,7 @@ function MainSite({ isAuthenticated, accessResolutionStatus, accessResolutionErr
         return null
       }
 
-      return <BillingPage />
+      return <BillingPage onNavigate={navigate} />
     }
 
     if (resolvedPathname === '/uploader') {

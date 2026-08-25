@@ -206,6 +206,88 @@ test('checkout preflight repairs a stale local Active state before deciding whet
   assert.ok(calls.some(({ sql }) => /UPDATE users/.test(sql)))
 })
 
+test('checkout preflight accepts a matching terminal snapshot before a newer event watermark', async () => {
+  const calls = []
+  const client = {
+    async query(sql, params = []) {
+      calls.push({ sql: String(sql), params })
+      if (/UPDATE users/.test(String(sql))) return { rowCount: 1, rows: [{ id: 42 }] }
+      return { rowCount: 1, rows: [] }
+    },
+    release() {},
+  }
+  const db = { async connect() { return client } }
+  const paddleConfig = {
+    environment: 'sandbox',
+    priceIdsByPlan: { monthly: 'pri_monthly', annual: 'pri_annual' },
+    noTrialPriceIdsByPlan: {},
+    legacyPriceIdsByPlan: {},
+  }
+  const currentUser = {
+    id: 42,
+    subscription_status: 'cancelled',
+    subscription_plan: 'annual',
+    paddle_customer_id: 'ctm_123',
+    paddle_subscription_id: 'sub_123',
+    paddle_environment: 'sandbox',
+    current_period_end: '2025-08-25T00:00:00.000Z',
+    subscription_renewal_date: null,
+    next_billing_date: null,
+    cancellation_effective_at: '2025-08-25T00:00:00.000Z',
+    last_paddle_event_at: '2025-08-25T00:05:00.000Z',
+  }
+  const providerSubscription = {
+    id: 'sub_123',
+    customer_id: 'ctm_123',
+    status: 'canceled',
+    updated_at: '2025-08-25T00:00:00.000Z',
+    canceled_at: '2025-08-25T00:00:00.000Z',
+    current_billing_period: null,
+    next_billed_at: null,
+    items: [],
+  }
+
+  const preflight = await prepareCheckoutSubscriptionState({
+    user: currentUser,
+    paddle: paddleConfig,
+    providerSubscription,
+    reconcile: (args) => reconcilePaddleSubscriptionState({ ...args, db }),
+  })
+
+  assert.equal(preflight.providerSubscriptionVerified, true)
+  assert.equal(preflight.reconciliationReason, 'updated')
+  assert.equal(preflight.user.subscription_status, 'cancelled')
+  assert.equal(preflight.user.last_paddle_event_at, currentUser.last_paddle_event_at)
+  assert.equal(getCheckoutBlockReason(preflight.user, providerSubscription, new Date('2026-08-26T00:00:00.000Z')), null)
+
+  const update = calls.find(({ sql }) => /UPDATE users/.test(sql))
+  assert.ok(update)
+  assert.equal(update.params[14], true)
+  assert.match(update.sql, /last_paddle_event_at = GREATEST/)
+})
+
+test('checkout preflight does not relax the event watermark for non-terminal lifecycles', async () => {
+  const calls = []
+  const reconcile = async (args) => {
+    calls.push(args)
+    return { reconciled: false, providerVerified: false, reason: 'stale_provider_snapshot' }
+  }
+
+  const preflight = await prepareCheckoutSubscriptionState({
+    user: {
+      subscription_status: 'active',
+      cancellation_effective_at: null,
+    },
+    paddle: { environment: 'sandbox' },
+    providerSubscription: { status: 'active' },
+    reconcile,
+  })
+
+  assert.equal(calls[0].allowCommandSnapshotBeforeEventWatermark, false)
+  assert.equal(preflight.providerSubscriptionVerified, false)
+  assert.equal(preflight.reconciliationReason, 'stale_provider_snapshot')
+})
+
 test('selectReturningCheckoutTransaction only selects a completed paid returning checkout for the same user and environment', () => {
   const user = { id: 42, paddle_customer_id: 'ctm_123' }
   const paddleConfig = { environment: 'sandbox' }

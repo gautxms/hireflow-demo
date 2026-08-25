@@ -27,6 +27,10 @@ test('recoverable payment failures bypass pricing and plan checkout', () => {
   assert.match(appSource, /if \(resolvedPathname === '\/checkout'\) \{\s*if \(requiresBillingRecovery\) \{\s*navigate\('\/billing', \{ replace: true \}\)/)
 })
 
+test('billing receives client navigation for the resubscription route', () => {
+  assert.match(appSource, /<BillingPage onNavigate=\{navigate\} \/>/)
+})
+
 test('results root renders empty state safely when data recovery completes with no candidates', () => {
   assert.match(appSource, /if \(isResultsRootPath\(resolvedPathname\)\) \{[\s\S]*route-state--results-empty[\s\S]*RESULTS_EMPTY_STATE_COPY/)
   assert.match(appSource, /candidates:\s*uploadedFiles\?\.candidates \|\| \[\]/)

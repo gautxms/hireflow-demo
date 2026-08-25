@@ -388,6 +388,7 @@ test('BillingPage offers state-specific keep, payment update, and subscribe-agai
   assert.match(source, /Change payment method/)
   assert.match(source, /Subscribe again/)
   assert.match(source, /reason=subscribe_again/)
+  assert.match(source, /event\.preventDefault\(\)[\s\S]*onNavigate\('\/pricing\?reason=subscribe_again'\)/)
   assert.match(source, /const canShowStandardBillingActions = !subscriptionState\.hasCancellationSignal[\s\S]*!hasScheduledCancellation[\s\S]*!isFinalCancellation[\s\S]*!subscriptionState\.isPastDue/)
   assert.match(source, /!subscriptionState\.isPastDue[\s\S]*&& subscriptionState\.isActive/)
   assert.match(source, /\{canShowStandardBillingActions \? \([\s\S]*Change payment method/)

@@ -21,3 +21,10 @@ test('returning checkout keeps paid-subscription context without redundant trial
   assert.doesNotMatch(checkout, /A new trial will not be applied/)
   assert.doesNotMatch(checkout, /checkout-page__trial-note/)
 })
+
+test('returning checkout uses canonical canceled-state recognition', async () => {
+  const checkout = await readFile(new URL('./Checkout.jsx', import.meta.url), 'utf8')
+
+  assert.match(checkout, /isCanceledSubscription\(subscriptionStatus\)/)
+  assert.doesNotMatch(checkout, /subscriptionStatus === 'cancelled'/)
+})
