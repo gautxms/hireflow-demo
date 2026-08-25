@@ -6,11 +6,62 @@ import {
   prepareCheckoutSubscriptionState,
   persistVerifiedCheckoutSubscription,
   selectReturningCheckoutTransaction,
+  supersedeCheckoutReservation,
   transactionMatchesCheckoutReservation,
   validatePaddleCheckoutPlan,
 } from './paddleCheckout.js'
 import { reconcilePaddleSubscriptionState } from '../services/paddleSubscriptionReconciliation.js'
 import { markCheckoutReservationCompleted } from '../services/paddleCheckoutReservations.js'
+
+function checkoutReservationFixture() {
+  const reservation = {
+    id: 'reservation-annual',
+    reservation_token: '42d85541-3b0e-4b1a-8dca-2525950fbaf0',
+    user_id: 42,
+    paddle_environment: 'sandbox',
+    requested_plan: 'annual',
+    stored_plan: 'annual',
+    price_id: 'pri_annual_paid',
+    trial_eligible: false,
+    checkout_mode: 'paid_returning',
+    status: 'ready',
+    paddle_transaction_id: 'txn_annual123',
+    paddle_customer_id: 'ctm_123',
+  }
+  const user = { id: 42, email: 'returning@example.test', paddle_customer_id: 'ctm_123' }
+  const transaction = {
+    id: 'txn_annual123',
+    status: 'ready',
+    customer_id: 'ctm_123',
+    subscription_id: null,
+    items: [{ price_id: 'pri_annual_paid' }],
+    custom_data: {
+      userId: 42,
+      checkoutReservationId: reservation.reservation_token,
+      paddleEnvironment: 'sandbox',
+      requestedPlan: 'annual',
+      plan: 'annual',
+      checkoutMode: 'paid_returning',
+      trialEligible: false,
+    },
+    checkout: { url: 'https://checkout.paddle.test/pay?_ptxn=txn_annual123' },
+  }
+  return {
+    acquisition: {
+      action: 'purchase_conflict',
+      reservation,
+      user,
+      purchase: { requestedPlan: 'monthly' },
+    },
+    transaction,
+    paddle: {
+      apiBaseUrl: 'https://sandbox-api.paddle.test',
+      apiKey: 'sandbox-api-key',
+      apiVersion: '1',
+      environment: 'sandbox',
+    },
+  }
+}
 
 function paddle(overrides = {}) {
   return {
@@ -71,6 +122,116 @@ test('completed checkout reservation updates require an exact UUID, account, env
   })
   assert.equal(rejected.rowCount, 0)
   assert.equal(calls.length, 1)
+})
+
+test('a different plan safely cancels its verified unpaid Paddle checkout before releasing the reservation', async (t) => {
+  const { acquisition, transaction, paddle: paddleConfig } = checkoutReservationFixture()
+  const calls = []
+  const db = {
+    async query(sql, params) {
+      calls.push({ sql: String(sql), params })
+      return { rowCount: 1, rows: [{ ...acquisition.reservation, status: 'failed' }] }
+    },
+  }
+  const providerCalls = []
+  t.mock.method(globalThis, 'fetch', async (url, options = {}) => {
+    providerCalls.push({ url: String(url), options })
+    const data = options.method === 'PATCH' ? { ...transaction, status: 'canceled' } : transaction
+    return { ok: true, status: 200, json: async () => ({ data }) }
+  })
+
+  const result = await supersedeCheckoutReservation({ acquisition, paddle: paddleConfig, db })
+
+  assert.equal(result.action, 'retry')
+  assert.deepEqual(providerCalls.map(({ options }) => options.method || 'GET'), ['GET', 'PATCH'])
+  assert.deepEqual(JSON.parse(providerCalls[1].options.body), { status: 'canceled' })
+  assert.equal(calls.length, 1)
+  assert.match(calls[0].sql, /status = \$3/)
+  assert.equal(calls[0].params[2], 'failed')
+  assert.equal(calls[0].params[5], 'canceled')
+  assert.equal(calls[0].params[6], 'superseded_by_new_purchase')
+})
+
+test('a timed-out Paddle cancellation is released only after a provider read confirms cancellation', async (t) => {
+  const { acquisition, transaction, paddle: paddleConfig } = checkoutReservationFixture()
+  const calls = []
+  const db = {
+    async query(sql, params) {
+      calls.push({ sql: String(sql), params })
+      return { rowCount: 1, rows: [{ ...acquisition.reservation, status: 'failed' }] }
+    },
+  }
+  let providerCall = 0
+  t.mock.method(globalThis, 'fetch', async (_url, options = {}) => {
+    providerCall += 1
+    if (providerCall === 2 && options.method === 'PATCH') {
+      return { ok: false, status: 504, json: async () => ({}) }
+    }
+    const data = providerCall === 3 ? { ...transaction, status: 'canceled' } : transaction
+    return { ok: true, status: 200, json: async () => ({ data }) }
+  })
+
+  const result = await supersedeCheckoutReservation({ acquisition, paddle: paddleConfig, db })
+
+  assert.equal(result.action, 'retry')
+  assert.equal(providerCall, 3)
+  assert.equal(calls.length, 1)
+  assert.equal(calls[0].params[6], 'superseded_by_new_purchase')
+})
+
+test('a different plan remains blocked when Paddle does not confirm the old checkout was canceled', async (t) => {
+  const { acquisition, transaction, paddle: paddleConfig } = checkoutReservationFixture()
+  const db = { async query() { throw new Error('reservation must stay open') } }
+  t.mock.method(globalThis, 'fetch', async (_url, options = {}) => {
+    if (options.method === 'PATCH') {
+      return { ok: false, status: 409, json: async () => ({}) }
+    }
+    return { ok: true, status: 200, json: async () => ({ data: transaction }) }
+  })
+
+  const result = await supersedeCheckoutReservation({ acquisition, paddle: paddleConfig, db })
+
+  assert.equal(result.action, 'in_progress')
+})
+
+test('a canceled checkout is not retried when its reservation changed concurrently', async (t) => {
+  const { acquisition, transaction, paddle: paddleConfig } = checkoutReservationFixture()
+  const db = { async query() { return { rowCount: 0, rows: [] } } }
+  t.mock.method(globalThis, 'fetch', async (_url, options = {}) => ({
+    ok: true,
+    status: 200,
+    json: async () => ({ data: options.method === 'PATCH' ? { ...transaction, status: 'canceled' } : transaction }),
+  }))
+
+  const result = await supersedeCheckoutReservation({ acquisition, paddle: paddleConfig, db })
+
+  assert.equal(result.action, 'conflict')
+})
+
+test('a different plan never cancels a checkout that has already completed', async (t) => {
+  const { acquisition, transaction, paddle: paddleConfig } = checkoutReservationFixture()
+  const calls = []
+  const db = {
+    async query(sql, params) {
+      calls.push({ sql: String(sql), params })
+      return { rowCount: 1, rows: [{ ...acquisition.reservation, status: 'completed' }] }
+    },
+  }
+  const providerCalls = []
+  t.mock.method(globalThis, 'fetch', async (_url, options = {}) => {
+    providerCalls.push(options.method || 'GET')
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({ data: { ...transaction, status: 'completed', subscription_id: 'sub_new' } }),
+    }
+  })
+
+  const result = await supersedeCheckoutReservation({ acquisition, paddle: paddleConfig, db })
+
+  assert.equal(result.action, 'completed')
+  assert.deepEqual(providerCalls, ['GET'])
+  assert.equal(calls[0].params[2], 'completed')
 })
 
 test('validatePaddleCheckoutPlan hides test-monthly when disabled or missing price', () => {
