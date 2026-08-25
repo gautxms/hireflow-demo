@@ -152,6 +152,33 @@ test('a different plan safely cancels its verified unpaid Paddle checkout before
   assert.equal(calls[0].params[6], 'superseded_by_new_purchase')
 })
 
+test('a closed checkout without a reusable URL is still canceled before changing plans', async (t) => {
+  const { acquisition, transaction, paddle: paddleConfig } = checkoutReservationFixture()
+  const closedTransaction = { ...transaction, checkout: { url: null } }
+  const calls = []
+  const db = {
+    async query(sql, params) {
+      calls.push({ sql: String(sql), params })
+      return { rowCount: 1, rows: [{ ...acquisition.reservation, status: 'failed' }] }
+    },
+  }
+  const providerCalls = []
+  t.mock.method(globalThis, 'fetch', async (_url, options = {}) => {
+    providerCalls.push(options.method || 'GET')
+    const data = options.method === 'PATCH'
+      ? { ...closedTransaction, status: 'canceled' }
+      : closedTransaction
+    return { ok: true, status: 200, json: async () => ({ data }) }
+  })
+
+  const result = await supersedeCheckoutReservation({ acquisition, paddle: paddleConfig, db })
+
+  assert.equal(result.action, 'retry')
+  assert.deepEqual(providerCalls, ['GET', 'PATCH'])
+  assert.equal(calls.length, 1)
+  assert.equal(calls[0].params[6], 'superseded_by_new_purchase')
+})
+
 test('a timed-out Paddle cancellation is released only after a provider read confirms cancellation', async (t) => {
   const { acquisition, transaction, paddle: paddleConfig } = checkoutReservationFixture()
   const calls = []
