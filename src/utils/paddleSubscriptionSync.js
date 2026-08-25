@@ -2,6 +2,7 @@ export async function syncCompletedCheckout({
   apiBase,
   token,
   transactionId = null,
+  checkoutReservationId = null,
   fetchImpl = globalThis.fetch,
 }) {
   if (!token || typeof fetchImpl !== 'function') {
@@ -14,7 +15,10 @@ export async function syncCompletedCheckout({
       'Content-Type': 'application/json',
       Authorization: `Bearer ${token}`,
     },
-    body: JSON.stringify(transactionId ? { transactionId } : {}),
+    body: JSON.stringify({
+      ...(transactionId ? { transactionId } : {}),
+      ...(checkoutReservationId ? { checkoutReservationId } : {}),
+    }),
   })
   const payload = await response.json().catch(() => ({}))
 

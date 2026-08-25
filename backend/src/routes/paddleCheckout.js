@@ -13,6 +13,7 @@ const TEST_MONTHLY_PLAN = 'test-monthly'
 const TEST_MONTHLY_STORED_PLAN = 'monthly'
 const CHECKOUT_BLOCKED_STATUSES = new Set(['active', 'trialing', 'trial', 'past_due', 'payment_failed', 'paused'])
 const CHECKOUT_RESERVATION_TTL_MS = 24 * 60 * 60 * 1000
+const CHECKOUT_RESERVATION_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 export const CHECKOUT_CREATION_RECOVERY_GRACE_MS = 10 * 60 * 1000
 
 const CHECKOUT_USER_SELECT = `id, email, subscription_status, subscription_started_at, trial_ends_at, trial_consumed_at,
@@ -127,6 +128,41 @@ async function loadCompletedCheckoutTransaction(user, paddle, transactionId = nu
   })
   const payload = await paddleApiGet(`/transactions?${query.toString()}`, paddle)
   return selectReturningCheckoutTransaction(payload?.data || [], user, paddle)
+}
+
+export async function loadCheckoutReservationForSync({
+  db = pool,
+  reservationToken,
+  userId,
+  environment,
+}) {
+  const normalizedToken = String(reservationToken || '').trim()
+  if (!CHECKOUT_RESERVATION_PATTERN.test(normalizedToken)) return null
+
+  const result = await db.query(
+    `SELECT id, reservation_token, user_id, paddle_environment, requested_plan, stored_plan,
+            price_id, trial_eligible, checkout_mode, status, paddle_transaction_id,
+            paddle_customer_id
+     FROM paddle_checkout_reservations
+     WHERE reservation_token = $1::uuid
+       AND user_id = $2
+       AND paddle_environment = $3
+       AND status IN ('creating', 'ready', 'completed')
+     LIMIT 1`,
+    [normalizedToken, userId, environment],
+  )
+  return result.rows[0] || null
+}
+
+export function buildCheckoutSuccessUrl(appOrigin, reservation, purchase) {
+  const successUrl = new URL('/billing/success', `${String(appOrigin || '').replace(/\/$/, '')}/`)
+  successUrl.searchParams.set('checkout', reservation.reservation_token)
+  successUrl.searchParams.set('plan', purchase.storedPlan)
+  return successUrl.toString()
+}
+
+export function resolveCheckoutSyncTransactionId({ transactionId = null, reservation = null } = {}) {
+  return reservation?.paddle_transaction_id || transactionId || null
 }
 
 export async function persistVerifiedCheckoutSubscription({
@@ -1149,7 +1185,7 @@ export async function createCheckout(req, res, logLabel = 'checkout') {
       }
 
       const appOrigin = getAppOrigin(req)
-      const successUrl = `${appOrigin}/billing/success`
+      const successUrl = buildCheckoutSuccessUrl(appOrigin, acquisition.reservation, acquisition.purchase)
       let paddleResponse
       let paddlePayload
 
@@ -1289,9 +1325,15 @@ router.post('/checkout-url', requireAuth, generalApiLimiterAuth, validateBody(sc
 
 router.post('/checkout/sync', requireAuth, generalApiLimiterAuth, async (req, res) => {
   const transactionId = typeof req.body?.transactionId === 'string' ? req.body.transactionId.trim() : null
+  const checkoutReservationId = typeof req.body?.checkoutReservationId === 'string'
+    ? req.body.checkoutReservationId.trim()
+    : null
 
   if (transactionId && !/^txn_[a-z0-9]+$/i.test(transactionId)) {
     return res.status(400).json({ error: 'Invalid transaction reference' })
+  }
+  if (checkoutReservationId && !CHECKOUT_RESERVATION_PATTERN.test(checkoutReservationId)) {
+    return res.status(400).json({ error: 'Invalid checkout reference' })
   }
 
   let user
@@ -1317,7 +1359,7 @@ router.post('/checkout/sync', requireAuth, generalApiLimiterAuth, async (req, re
     return res.status(404).json({ error: 'User not found' })
   }
 
-  if (!transactionId && !isTerminalCancellation(user)) {
+  if (!transactionId && !checkoutReservationId && !isTerminalCancellation(user)) {
     return res.json({ synced: false, reason: 'not_required' })
   }
 
@@ -1327,13 +1369,33 @@ router.post('/checkout/sync', requireAuth, generalApiLimiterAuth, async (req, re
   }
 
   try {
-    const transaction = await loadCompletedCheckoutTransaction(user, paddle, transactionId)
+    const reservation = checkoutReservationId
+      ? await loadCheckoutReservationForSync({
+        reservationToken: checkoutReservationId,
+        userId: user.id,
+        environment: paddle.environment,
+      })
+      : null
+    if (checkoutReservationId && !reservation) {
+      return res.status(404).json({ synced: false, result: 'ownership_mismatch', error: 'Completed checkout was not found' })
+    }
+
+    const resolvedTransactionId = resolveCheckoutSyncTransactionId({ transactionId, reservation })
+    if (reservation && !resolvedTransactionId) {
+      return res.status(202).json({ synced: false, result: 'still_pending', reason: 'transaction_pending' })
+    }
+
+    const transaction = await loadCompletedCheckoutTransaction(user, paddle, resolvedTransactionId)
 
     if (!transaction) {
       return res.status(202).json({ synced: false, result: 'still_pending', reason: 'transaction_pending' })
     }
 
-    if (!transactionBelongsToUser(transaction, user, paddle) && !transactionMatchesPastDueLifecycle(transaction, user, paddle)) {
+    const reservationMatches = !reservation || transactionMatchesCheckoutReservation(transaction, reservation, user)
+    if (
+      !reservationMatches
+      || (!transactionBelongsToUser(transaction, user, paddle) && !transactionMatchesPastDueLifecycle(transaction, user, paddle))
+    ) {
       return res.status(404).json({ synced: false, result: 'ownership_mismatch', error: 'Completed checkout was not found' })
     }
 
@@ -1374,7 +1436,8 @@ router.post('/checkout/sync', requireAuth, generalApiLimiterAuth, async (req, re
   } catch (error) {
     console.error('[Paddle checkout] subscription reconciliation failed', {
       userId: req.userId,
-      transactionId,
+      transactionId: transactionId || null,
+      checkoutReservationId: checkoutReservationId || null,
       error: error?.message || String(error),
     })
     return res.status(502).json({

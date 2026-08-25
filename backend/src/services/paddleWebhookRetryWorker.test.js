@@ -10,6 +10,7 @@ import {
   PADDLE_WEBHOOK_SCHEDULER_MAX_ATTEMPTS,
   getPaddleWebhookRetryDelayMs,
 } from '../routes/paddleWebhook.js'
+import { requestPaddleWebhookProcessing } from './paddleWebhookProcessingSignal.js'
 
 const enabled = {
   PADDLE_WEBHOOK_RETRY_WORKER_ENABLED: 'true',
@@ -115,6 +116,58 @@ test('worker startup proves durable-inbox access before scheduling', async () =>
   assert.equal(scheduled, true)
   assert.equal(returnedTimer, timer)
   assert.deepEqual(states, [{ ready: true, status: 'running', errorCode: null }])
+})
+
+test('a newly persisted webhook can request an immediate durable worker run', async () => {
+  let queryNumber = 0
+  let completeRun
+  const runCompleted = new Promise((resolve) => { completeRun = resolve })
+  const db = {
+    async query() {
+      queryNumber += 1
+      if (queryNumber < 3) return { rowCount: 0, rows: [] }
+      completeRun()
+      return { rowCount: 0, rows: [] }
+    },
+  }
+
+  await startPaddleWebhookRetryWorker(enabled, {
+    db,
+    setInterval() { return { unref() {} } },
+  })
+
+  assert.equal(requestPaddleWebhookProcessing(), true)
+  await runCompleted
+  assert.equal(queryNumber, 3)
+})
+
+test('an immediate webhook signal during an active batch is coalesced into a follow-up run', async () => {
+  let queryNumber = 0
+  let releaseFirstRun
+  let completeSecondRun
+  const firstRunBlocked = new Promise((resolve) => { releaseFirstRun = resolve })
+  const secondRunCompleted = new Promise((resolve) => { completeSecondRun = resolve })
+  const db = {
+    async query() {
+      queryNumber += 1
+      if (queryNumber === 2) await firstRunBlocked
+      if (queryNumber === 5) completeSecondRun()
+      return { rowCount: 0, rows: [] }
+    },
+  }
+
+  await startPaddleWebhookRetryWorker(enabled, {
+    db,
+    setInterval() { return { unref() {} } },
+  })
+
+  requestPaddleWebhookProcessing()
+  await new Promise((resolve) => setImmediate(resolve))
+  requestPaddleWebhookProcessing()
+  releaseFirstRun()
+  await secondRunCompleted
+
+  assert.equal(queryNumber, 5)
 })
 
 test('worker initialization failure is surfaced and no timer is scheduled', async () => {

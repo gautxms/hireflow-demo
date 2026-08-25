@@ -3,6 +3,7 @@ import {
   PADDLE_WEBHOOK_SCHEDULER_MAX_ATTEMPTS,
   processStoredPaddleWebhookEvent,
 } from '../routes/paddleWebhook.js'
+import { registerPaddleWebhookProcessingRequest } from './paddleWebhookProcessingSignal.js'
 
 export const DEFAULT_PADDLE_WEBHOOK_RETRY_BATCH_SIZE = 20
 export const PADDLE_WEBHOOK_RETRY_INTERVAL_MS = 60_000
@@ -127,8 +128,12 @@ export async function startPaddleWebhookRetryWorker(env = process.env, dependenc
   const schedule = dependencies.setInterval || setInterval
   const onStateChange = dependencies.onStateChange || (() => {})
   let running = false
+  let rerunRequested = false
   const run = async () => {
-    if (running) return
+    if (running) {
+      rerunRequested = true
+      return
+    }
     running = true
     try {
       const summary = await runPaddleWebhookRetryWorker({ env, db, processEvent })
@@ -143,6 +148,10 @@ export async function startPaddleWebhookRetryWorker(env = process.env, dependenc
       console.error('[Paddle webhook retry] run failed', { errorCode: error?.code || error?.name || 'UNKNOWN_ERROR' })
     } finally {
       running = false
+      if (rerunRequested) {
+        rerunRequested = false
+        void run()
+      }
     }
   }
 
@@ -166,6 +175,7 @@ export async function startPaddleWebhookRetryWorker(env = process.env, dependenc
 
   const timer = schedule(() => void run(), PADDLE_WEBHOOK_RETRY_INTERVAL_MS)
   timer.unref?.()
+  registerPaddleWebhookProcessingRequest(() => void run())
   console.info('[Paddle webhook retry] worker scheduled', { intervalMs: PADDLE_WEBHOOK_RETRY_INTERVAL_MS })
   return timer
 }
