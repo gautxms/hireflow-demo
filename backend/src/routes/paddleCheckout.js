@@ -817,12 +817,15 @@ async function resolveReservedCheckout({ acquisition, paddle, db = pool }) {
     return { action: 'retry' }
   }
 
-  return { action: 'in_progress' }
+  return { action: 'in_progress', transaction }
 }
 
 export async function supersedeCheckoutReservation({ acquisition, paddle, db = pool }) {
   const resolved = await resolveReservedCheckout({ acquisition, paddle, db })
-  if (resolved.action !== 'reuse') return resolved
+  const providerStatus = normalizeStatus(resolved.transaction?.status)
+  const isMutableUnpaidTransaction = ['draft', 'ready'].includes(providerStatus)
+    && !resolved.transaction?.subscription_id
+  if (resolved.action !== 'reuse' && !isMutableUnpaidTransaction) return resolved
 
   const { reservation, user } = acquisition
   const transactionPath = `/transactions/${encodeURIComponent(resolved.transaction.id)}`
