@@ -6,6 +6,10 @@ import BillingStatusLayout from '../components/BillingStatusLayout'
 import API_BASE from '../config/api'
 import { hasActiveSubscription } from '../utils/routeGuards'
 import { syncCompletedCheckout } from '../utils/paddleSubscriptionSync'
+import {
+  PADDLE_LAST_TRANSACTION_STORAGE_KEY,
+  resolveBillingSuccessState,
+} from '../utils/billingSuccessState'
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 const USER_STORAGE_KEY = 'hireflow_user_profile'
@@ -20,20 +24,19 @@ function navigate(pathname, options = {}) {
   }
 }
 
-function getBillingState() {
-  const historyState = window.history.state && typeof window.history.state === 'object' ? window.history.state : {}
-
-  return {
-    transactionId: historyState.transactionId || '',
-    plan: historyState.plan || 'monthly',
-    message: historyState.message || '',
-  }
-}
-
 export default function BillingSuccess() {
   usePageSeo('Billing Success', 'Your HireFlow subscription checkout completed successfully.')
 
-  const { transactionId, plan, message } = useMemo(() => getBillingState(), [])
+  const {
+    transactionId,
+    checkoutReservationId,
+    plan,
+    message,
+  } = useMemo(() => resolveBillingSuccessState({
+    historyState: window.history.state,
+    search: window.location.search,
+    storage: window.sessionStorage,
+  }), [])
   const [countdown, setCountdown] = useState(5)
   const [finalizingStatus, setFinalizingStatus] = useState('polling')
   const [retryCount, setRetryCount] = useState(0)
@@ -59,7 +62,12 @@ export default function BillingSuccess() {
       }
 
       try {
-        await syncCompletedCheckout({ apiBase: API_BASE, token, transactionId: transactionId || null })
+        await syncCompletedCheckout({
+          apiBase: API_BASE,
+          token,
+          transactionId: transactionId || null,
+          checkoutReservationId: checkoutReservationId || null,
+        })
 
         const response = await fetch(`${API_BASE}/auth/me`, {
           headers: { Authorization: `Bearer ${token}` },
@@ -71,6 +79,7 @@ export default function BillingSuccess() {
 
           if (hasActiveSubscription(subscriptionStatus)) {
             persistSubscriptionState(user)
+            sessionStorage.removeItem(PADDLE_LAST_TRANSACTION_STORAGE_KEY)
             if (isMounted) {
               setFinalizingStatus('active')
             }
@@ -99,7 +108,7 @@ export default function BillingSuccess() {
       window.clearTimeout(pollTimer)
       window.clearTimeout(timeoutTimer)
     }
-  }, [retryCount, transactionId])
+  }, [checkoutReservationId, retryCount, transactionId])
 
   useEffect(() => {
     if (finalizingStatus !== 'active') {

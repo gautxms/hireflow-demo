@@ -4,13 +4,13 @@ import { resolveCheckoutCloseState } from './checkoutState'
 import API_BASE from '../config/api'
 import { syncCompletedCheckout } from '../utils/paddleSubscriptionSync'
 import { isCanceledSubscription } from '../utils/subscriptionState'
+import { PADDLE_LAST_TRANSACTION_STORAGE_KEY } from '../utils/billingSuccessState'
 import '../styles/checkout.css'
 
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 const fallbackClientToken = import.meta.env.VITE_PADDLE_CLIENT_TOKEN
 const CHECKOUT_COMPLETED_STORAGE_KEY = 'hireflow_checkout_completed_at'
-const PADDLE_LAST_TRANSACTION_STORAGE_KEY = 'paddle_last_transaction'
 const PADDLE_CHECKOUT_ACTIVE_STORAGE_KEY = 'paddle_checkout_active'
 
 const PLAN_DETAILS = {

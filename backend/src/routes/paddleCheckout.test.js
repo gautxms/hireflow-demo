@@ -1,10 +1,13 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
+  buildCheckoutSuccessUrl,
   getCheckoutBlockReason,
   isTrialEligibleForUser,
+  loadCheckoutReservationForSync,
   prepareCheckoutSubscriptionState,
   persistVerifiedCheckoutSubscription,
+  resolveCheckoutSyncTransactionId,
   selectReturningCheckoutTransaction,
   supersedeCheckoutReservation,
   transactionMatchesCheckoutReservation,
@@ -122,6 +125,63 @@ test('completed checkout reservation updates require an exact UUID, account, env
   })
   assert.equal(rejected.rowCount, 0)
   assert.equal(calls.length, 1)
+})
+
+test('checkout success URL carries the exact reservation and selected plan', () => {
+  const url = new URL(buildCheckoutSuccessUrl(
+    'https://hireflow.dev',
+    { reservation_token: '42d85541-3b0e-4b1a-8dca-2525950fbaf0' },
+    { storedPlan: 'annual' },
+  ))
+
+  assert.equal(url.origin, 'https://hireflow.dev')
+  assert.equal(url.pathname, '/billing/success')
+  assert.equal(url.searchParams.get('checkout'), '42d85541-3b0e-4b1a-8dca-2525950fbaf0')
+  assert.equal(url.searchParams.get('plan'), 'annual')
+})
+
+test('completed checkout sync resolves only the authenticated exact reservation', async () => {
+  const calls = []
+  const reservation = checkoutReservationFixture().acquisition.reservation
+  const db = {
+    async query(sql, params) {
+      calls.push({ sql: String(sql), params })
+      return { rowCount: 1, rows: [reservation] }
+    },
+  }
+
+  const result = await loadCheckoutReservationForSync({
+    db,
+    reservationToken: reservation.reservation_token,
+    userId: 42,
+    environment: 'sandbox',
+  })
+
+  assert.equal(result.paddle_transaction_id, 'txn_annual123')
+  assert.match(calls[0].sql, /reservation_token = \$1::uuid/)
+  assert.match(calls[0].sql, /user_id = \$2/)
+  assert.match(calls[0].sql, /paddle_environment = \$3/)
+  assert.deepEqual(calls[0].params, [reservation.reservation_token, 42, 'sandbox'])
+
+  const invalid = await loadCheckoutReservationForSync({
+    db,
+    reservationToken: 'not-a-reservation',
+    userId: 42,
+    environment: 'sandbox',
+  })
+  assert.equal(invalid, null)
+  assert.equal(calls.length, 1)
+})
+
+test('server reservation correlation overrides stale browser transaction state', () => {
+  assert.equal(resolveCheckoutSyncTransactionId({
+    transactionId: 'txn_stale123',
+    reservation: { paddle_transaction_id: 'txn_exact123' },
+  }), 'txn_exact123')
+  assert.equal(resolveCheckoutSyncTransactionId({
+    transactionId: 'txn_browser123',
+    reservation: { paddle_transaction_id: null },
+  }), 'txn_browser123')
 })
 
 test('a different plan safely cancels its verified unpaid Paddle checkout before releasing the reservation', async (t) => {

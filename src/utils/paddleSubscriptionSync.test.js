@@ -44,6 +44,27 @@ test('syncCompletedCheckout can request automatic repair for a final-cancellatio
   assert.equal(result.reason, 'transaction_pending')
 })
 
+test('syncCompletedCheckout sends the durable checkout reservation when browser history state is unavailable', async () => {
+  let requestBody
+  await syncCompletedCheckout({
+    apiBase: 'https://api.example.test/api',
+    token: 'token-123',
+    checkoutReservationId: '42d85541-3b0e-4b1a-8dca-2525950fbaf0',
+    fetchImpl: async (_url, options) => {
+      requestBody = JSON.parse(options.body)
+      return {
+        ok: true,
+        status: 202,
+        json: async () => ({ synced: false, reason: 'transaction_pending' }),
+      }
+    },
+  })
+
+  assert.deepEqual(requestBody, {
+    checkoutReservationId: '42d85541-3b0e-4b1a-8dca-2525950fbaf0',
+  })
+})
+
 test('syncCompletedCheckout does not claim activation when reconciliation is rejected', async () => {
   const result = await syncCompletedCheckout({
     apiBase: 'https://api.example.test/api',

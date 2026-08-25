@@ -31,6 +31,7 @@ import {
 import { markCheckoutReservationCompleted } from '../services/paddleCheckoutReservations.js'
 import { applyPaddleSubscriptionLifecycle } from '../services/paddleSubscriptionLifecycle.js'
 import { isDurableWebhookInboxEnabled } from '../services/paddleBillingReadiness.js'
+import { requestPaddleWebhookProcessing } from '../services/paddleWebhookProcessingSignal.js'
 import {
   firstNormalizedPaddleTimestamp,
   normalizePaddleTimestamp,
@@ -975,6 +976,10 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment, storedEv
           eventId: dedupeEventId,
         })
         return res.status(409).json({ error: 'Webhook event payload conflict' })
+      }
+
+      if (!persisted.duplicate) {
+        requestPaddleWebhookProcessing()
       }
 
       return res.status(200).json({
