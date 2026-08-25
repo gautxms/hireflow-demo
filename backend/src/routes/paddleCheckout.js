@@ -88,6 +88,27 @@ async function paddleApiGet(path, paddle) {
   return payload
 }
 
+async function paddleApiPatch(path, body, paddle) {
+  const response = await fetch(`${paddle.apiBaseUrl}${path}`, {
+    method: 'PATCH',
+    headers: {
+      Authorization: `Bearer ${paddle.apiKey}`,
+      'Content-Type': 'application/json',
+      'Paddle-Version': paddle.apiVersion,
+    },
+    body: JSON.stringify(body),
+  })
+  const payload = await response.json().catch(() => ({}))
+
+  if (!response.ok) {
+    const error = new Error('Unable to cancel the previous Paddle checkout')
+    error.status = response.status
+    throw error
+  }
+
+  return payload
+}
+
 async function loadCompletedCheckoutTransaction(user, paddle, transactionId = null) {
   if (transactionId) {
     const payload = await paddleApiGet(`/transactions/${encodeURIComponent(transactionId)}`, paddle)
@@ -692,7 +713,7 @@ async function findReservationTransactions(reservation, user, paddle) {
   ))
 }
 
-async function resolveReservedCheckout({ acquisition, paddle }) {
+async function resolveReservedCheckout({ acquisition, paddle, db = pool }) {
   const { reservation, user } = acquisition
   let transaction = null
 
@@ -703,6 +724,7 @@ async function resolveReservedCheckout({ acquisition, paddle }) {
       const matches = await findReservationTransactions(reservation, user, paddle)
       if (matches.length > 1) {
         await updateCheckoutReservationStatus({
+          db,
           reservation,
           status: 'conflict',
           failureCode: 'multiple_provider_transactions',
@@ -720,6 +742,7 @@ async function resolveReservedCheckout({ acquisition, paddle }) {
   } catch (error) {
     if (error.status === 404 && reservation.paddle_transaction_id) {
       await updateCheckoutReservationStatus({
+        db,
         reservation,
         status: 'failed',
         failureCode: 'provider_transaction_missing',
@@ -732,6 +755,7 @@ async function resolveReservedCheckout({ acquisition, paddle }) {
 
   if (!transaction) {
     await updateCheckoutReservationStatus({
+      db,
       reservation,
       status: 'failed',
       failureCode: 'stale_creation_without_provider_transaction',
@@ -747,6 +771,7 @@ async function resolveReservedCheckout({ acquisition, paddle }) {
 
   if (!transactionMatchesCheckoutReservation(transaction, reservation, user)) {
     await updateCheckoutReservationStatus({
+      db,
       reservation,
       status: 'conflict',
       failureCode: 'provider_transaction_mismatch',
@@ -764,7 +789,7 @@ async function resolveReservedCheckout({ acquisition, paddle }) {
 
   if (isReusableCheckoutTransaction(transaction)) {
     if (reservation.status === 'creating') {
-      await storeCheckoutReservationResult({ reservation, transaction })
+      await storeCheckoutReservationResult({ db, reservation, transaction })
     }
     console.info('[Paddle checkout] existing checkout reused', {
       userId: user.id,
@@ -777,12 +802,13 @@ async function resolveReservedCheckout({ acquisition, paddle }) {
 
   const status = normalizeStatus(transaction.status)
   if (['paid', 'completed'].includes(status) || transaction.subscription_id) {
-    await updateCheckoutReservationStatus({ reservation, status: 'completed', transaction })
+    await updateCheckoutReservationStatus({ db, reservation, status: 'completed', transaction })
     return { action: 'completed', transaction }
   }
 
   if (['canceled', 'cancelled', 'past_due'].includes(status)) {
     await updateCheckoutReservationStatus({
+      db,
       reservation,
       status: 'failed',
       failureCode: `provider_${status}`,
@@ -792,6 +818,72 @@ async function resolveReservedCheckout({ acquisition, paddle }) {
   }
 
   return { action: 'in_progress' }
+}
+
+export async function supersedeCheckoutReservation({ acquisition, paddle, db = pool }) {
+  const resolved = await resolveReservedCheckout({ acquisition, paddle, db })
+  if (resolved.action !== 'reuse') return resolved
+
+  const { reservation, user } = acquisition
+  const transactionPath = `/transactions/${encodeURIComponent(resolved.transaction.id)}`
+  let transaction
+
+  try {
+    const payload = await paddleApiPatch(transactionPath, { status: 'canceled' }, paddle)
+    transaction = dataFromPayload(payload)
+  } catch (cancellationError) {
+    try {
+      transaction = await loadPaddleTransaction(resolved.transaction.id, paddle)
+    } catch (verificationError) {
+      cancellationError.cause = verificationError
+      throw cancellationError
+    }
+  }
+
+  if (!transactionMatchesCheckoutReservation(transaction, reservation, user)) {
+    console.error('[Paddle checkout] superseded transaction ownership could not be verified', {
+      userId: user.id,
+      environment: paddle.environment,
+      reservationId: reservation.id,
+      transactionId: transaction?.id || null,
+    })
+    return { action: 'conflict' }
+  }
+
+  const status = normalizeStatus(transaction.status)
+  if (['paid', 'completed'].includes(status) || transaction.subscription_id) {
+    await updateCheckoutReservationStatus({ db, reservation, status: 'completed', transaction })
+    return { action: 'completed', transaction }
+  }
+
+  if (!['canceled', 'cancelled'].includes(status)) {
+    return { action: 'in_progress', transaction }
+  }
+
+  const released = await updateCheckoutReservationStatus({
+    db,
+    reservation,
+    status: 'failed',
+    failureCode: 'superseded_by_new_purchase',
+    transaction,
+  })
+  if (released.rowCount !== 1) {
+    console.warn('[Paddle checkout] canceled checkout reservation changed concurrently', {
+      userId: user.id,
+      environment: paddle.environment,
+      reservationId: reservation.id,
+      transactionId: transaction.id,
+    })
+    return { action: 'conflict', transaction }
+  }
+  console.info('[Paddle checkout] previous unpaid checkout superseded', {
+    userId: user.id,
+    environment: paddle.environment,
+    reservationId: reservation.id,
+    transactionId: transaction.id,
+    requestedPlan: acquisition.purchase.requestedPlan,
+  })
+  return { action: 'retry', transaction }
 }
 
 function checkoutResponse({ transaction, user, paddle, purchase }) {
@@ -980,7 +1072,22 @@ export async function createCheckout(req, res, logLabel = 'checkout') {
         return res.status(500).json({ error: `Paddle price ID is missing for ${plan} plan` })
       }
       if (acquisition.action === 'purchase_conflict') {
-        console.warn('[Paddle checkout] duplicate request prevented for a different purchase', {
+        const superseded = await supersedeCheckoutReservation({ acquisition, paddle })
+        if (superseded.action === 'retry') continue
+        if (superseded.action === 'completed') {
+          return res.status(409).json({
+            error: 'This checkout has already completed. Subscription confirmation is in progress.',
+            code: 'checkout_completed',
+            redirectTo: '/billing/success',
+          })
+        }
+        if (superseded.action === 'conflict') {
+          return res.status(409).json({
+            error: 'Checkout ownership could not be verified. Please contact support.',
+            code: 'checkout_ownership_conflict',
+          })
+        }
+        console.warn('[Paddle checkout] different purchase remains collectible', {
           userId: acquisition.user.id,
           environment: paddle.environment,
           reservationId: acquisition.reservation.id,
