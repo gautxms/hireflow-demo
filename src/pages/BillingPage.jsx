@@ -93,7 +93,7 @@ function Modal({ title, children, onClose, isPending = false }) {
   )
 }
 
-export default function BillingPage() {
+export default function BillingPage({ onNavigate = null }) {
   const [subscription, setSubscription] = useState(null)
   const [history, setHistory] = useState([])
   const [error, setError] = useState('')
@@ -523,7 +523,17 @@ export default function BillingPage() {
                     <a className="hf-btn hf-btn--secondary" href="/account/payment-method">Change payment method</a>
                   ) : null}
                   {isFinalCancellation ? (
-                    <a className="hf-btn hf-btn--primary" href="/pricing?reason=subscribe_again">Subscribe again</a>
+                    <a
+                      className="hf-btn hf-btn--primary"
+                      href="/pricing?reason=subscribe_again"
+                      onClick={(event) => {
+                        if (!onNavigate) return
+                        event.preventDefault()
+                        onNavigate('/pricing?reason=subscribe_again')
+                      }}
+                    >
+                      Subscribe again
+                    </a>
                   ) : null}
                 </div>
               ) : null}

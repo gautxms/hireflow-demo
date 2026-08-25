@@ -817,10 +817,18 @@ export async function prepareCheckoutSubscriptionState({
     return { user, providerSubscriptionVerified: false, reconciliationReason: 'provider_missing' }
   }
 
+  const providerStatus = normalizeStatus(dataFromPayload(providerSubscription)?.status)
+  const isMatchingTerminalLifecycle = isTerminalCancellation(user)
+    && ['canceled', 'cancelled'].includes(providerStatus)
+
   const providerReconciliation = await reconcile({
     user,
     paddlePayload: providerSubscription,
     paddle,
+    // A direct Paddle subscription read can predate a newer webhook/transaction
+    // watermark. Only an already-terminal lifecycle may safely use that snapshot;
+    // reconciliation still verifies ownership/environment and preserves the watermark.
+    allowCommandSnapshotBeforeEventWatermark: isMatchingTerminalLifecycle,
     source: 'paddle.checkout_preflight',
   })
 

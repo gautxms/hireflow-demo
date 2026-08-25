@@ -3,6 +3,7 @@ import usePageSeo from '../hooks/usePageSeo'
 import { resolveCheckoutCloseState } from './checkoutState'
 import API_BASE from '../config/api'
 import { syncCompletedCheckout } from '../utils/paddleSubscriptionSync'
+import { isCanceledSubscription } from '../utils/subscriptionState'
 import '../styles/checkout.css'
 
 
@@ -229,6 +230,7 @@ export default function Checkout({ onAuthSuccess }) {
       try {
         console.log('[Checkout] Checking subscription status before initializing checkout')
         const { user, isActive, subscriptionStatus } = await verifySubscriptionStatus(token)
+        const isCanceled = isCanceledSubscription(subscriptionStatus)
 
         if (isActive) {
           console.log('[Checkout] User already subscribed, redirecting to dashboard')
@@ -236,7 +238,7 @@ export default function Checkout({ onAuthSuccess }) {
           return
         }
 
-        if (subscriptionStatus === 'cancelled' && !reactivateRequested) {
+        if (isCanceled && !reactivateRequested) {
           console.log('[Checkout] Subscription cancelled, showing reactivation option')
           setStatus('action_required')
           setRequiredAction('cancelled')
@@ -256,7 +258,7 @@ export default function Checkout({ onAuthSuccess }) {
           return
         }
 
-        if (subscriptionStatus === 'cancelled' && reactivateRequested) {
+        if (isCanceled && reactivateRequested) {
           console.log('[Checkout] Reactivation requested, opening checkout')
         } else {
           console.log('[Checkout] User not subscribed, opening checkout')
