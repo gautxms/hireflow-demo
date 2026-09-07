@@ -522,7 +522,29 @@ export async function runRecoveryBillingAdjustments(dependencies = {}) {
   const enabled = enabledEnvironments(env)
   if (enabled.length === 0) return 0
   const candidates = await db.query(
-    `SELECT pa.* FROM payment_attempts pa JOIN users u ON u.id=pa.user_id
+    `SELECT pa.*, u.id AS resolved_user_id
+     FROM payment_attempts pa
+     JOIN users u ON u.id=pa.user_id OR (
+       pa.user_id IS NULL
+       AND COALESCE(pa.payload->'data'->>'customer_id', pa.payload->>'customer_id', '') <> ''
+       AND COALESCE(pa.payload->'data'->>'subscription_id', pa.payload->>'subscription_id', '') <> ''
+       AND u.paddle_customer_id = COALESCE(pa.payload->'data'->>'customer_id', pa.payload->>'customer_id')
+       AND u.paddle_subscription_id = COALESCE(pa.payload->'data'->>'subscription_id', pa.payload->>'subscription_id')
+       AND COALESCE(NULLIF(LOWER(u.paddle_environment),''),'production')
+         = COALESCE(NULLIF(LOWER(pa.paddle_environment),''),'production')
+       AND NOT EXISTS (
+         SELECT 1 FROM users conflicting_owner
+         WHERE conflicting_owner.id <> u.id
+           AND COALESCE(NULLIF(LOWER(conflicting_owner.paddle_environment),''),'production')
+             = COALESCE(NULLIF(LOWER(pa.paddle_environment),''),'production')
+           AND (
+             conflicting_owner.paddle_customer_id
+               = COALESCE(pa.payload->'data'->>'customer_id', pa.payload->>'customer_id')
+             OR conflicting_owner.paddle_subscription_id
+               = COALESCE(pa.payload->'data'->>'subscription_id', pa.payload->>'subscription_id')
+           )
+       )
+     )
      WHERE pa.status='succeeded' AND pa.transaction_id IS NOT NULL
        AND (
          COALESCE(pa.metadata->>'resolved_by','') IN ('webhook', 'automatic_retry', 'admin_retry')
@@ -543,7 +565,7 @@ export async function runRecoveryBillingAdjustments(dependencies = {}) {
        )
        AND COALESCE(pa.payload->'data'->>'origin', pa.payload->>'origin','') = 'subscription_recurring'
        AND COALESCE(NULLIF(LOWER(pa.paddle_environment),''),'production') = ANY($1::text[])
-       AND (NOT $2::boolean OR (pa.user_id=$3 AND pa.transaction_id=$4))
+       AND (NOT $2::boolean OR (u.id=$3 AND pa.transaction_id=$4))
        AND NOT EXISTS (SELECT 1 FROM recovery_billing_adjustments a
          WHERE COALESCE(NULLIF(LOWER(a.paddle_environment),''),'production')
              = COALESCE(NULLIF(LOWER(pa.paddle_environment),''),'production')
@@ -552,8 +574,57 @@ export async function runRecoveryBillingAdjustments(dependencies = {}) {
               pa.updated_at DESC
      LIMIT 20`, [enabled, scoped, scopedUserId, scopedTransactionId],
   )
-  for (const attempt of candidates.rows) {
+  for (const candidate of candidates.rows) {
+    let attempt = candidate
     try {
+      if (!attempt.user_id && attempt.resolved_user_id) {
+        const attribution = await db.query(
+          `UPDATE payment_attempts
+           SET user_id=$2,
+               metadata=COALESCE(metadata, '{}'::jsonb)
+                 || jsonb_build_object('recovery_attribution', 'verified_provider_identity'),
+               updated_at=NOW()
+           WHERE id=$1
+             AND user_id IS NULL
+             AND status='succeeded'
+             AND transaction_id=$3
+             AND COALESCE(NULLIF(LOWER(paddle_environment),''),'production')=$4
+             AND COALESCE(payload->'data'->>'customer_id', payload->>'customer_id')=$5
+             AND COALESCE(payload->'data'->>'subscription_id', payload->>'subscription_id')=$6
+             AND EXISTS (
+               SELECT 1 FROM users owner
+               WHERE owner.id=$2
+                 AND owner.paddle_customer_id=$5
+                 AND owner.paddle_subscription_id=$6
+                 AND COALESCE(NULLIF(LOWER(owner.paddle_environment),''),'production')=$4
+                 AND NOT EXISTS (
+                   SELECT 1 FROM users conflicting_owner
+                   WHERE conflicting_owner.id <> owner.id
+                     AND COALESCE(NULLIF(LOWER(conflicting_owner.paddle_environment),''),'production')=$4
+                     AND (
+                       conflicting_owner.paddle_customer_id=$5
+                       OR conflicting_owner.paddle_subscription_id=$6
+                     )
+                 )
+             )
+           RETURNING *`,
+          [
+            attempt.id,
+            attempt.resolved_user_id,
+            attempt.transaction_id,
+            normalizedEnvironment(attempt.paddle_environment),
+            attempt.payload?.data?.customer_id || attempt.payload?.customer_id,
+            attempt.payload?.data?.subscription_id || attempt.payload?.subscription_id,
+          ],
+        )
+        if (attribution.rowCount === 0) continue
+        attempt = { ...attribution.rows[0], resolved_user_id: attempt.resolved_user_id }
+        console.info('[recovery-billing-adjustment] attributed recovery attempt', {
+          attemptId: attempt.id,
+          userId: attempt.user_id,
+          environment: normalizedEnvironment(attempt.paddle_environment),
+        })
+      }
       await createAdjustment(attempt, { ...dependencies, db, env })
     } catch (error) {
       await (dependencies.logError || logErrorToDatabase)('recovery_billing_adjustment.discovery_failed', error, { attemptId: attempt.id })

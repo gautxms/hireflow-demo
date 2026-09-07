@@ -45,8 +45,15 @@ function getSubscriptionId(payload) {
   return payload?.data?.subscription_id || payload?.subscription_id || null
 }
 
-export async function recordFailedPaymentAttempt(payload, errorMessage = null, paddleEnvironment = null, db = pool) {
+export async function recordFailedPaymentAttempt(
+  payload,
+  errorMessage = null,
+  paddleEnvironment = null,
+  db = pool,
+  { verifiedUserId = null } = {},
+) {
   const transactionId = getTransactionId(payload)
+  const userId = verifiedUserId ?? getUserId(payload)
   const environment = normalizePaddleEnvironment(
     paddleEnvironment
       || payload?.data?.custom_data?.paddleEnvironment
@@ -56,7 +63,7 @@ export async function recordFailedPaymentAttempt(payload, errorMessage = null, p
   if (!transactionId) {
     await logErrorToDatabase('payment.failure.missing_transaction_id', new Error('Missing transaction id'), {
       eventType: payload?.event_type || payload?.eventType || null,
-      userId: getUserId(payload),
+      userId,
       environment,
       customerId: getCustomerId(payload),
       subscriptionId: getSubscriptionId(payload),
@@ -85,7 +92,7 @@ export async function recordFailedPaymentAttempt(payload, errorMessage = null, p
     ON CONFLICT (transaction_id) WHERE transaction_id IS NOT NULL
     DO UPDATE SET
       customer_email = COALESCE(EXCLUDED.customer_email, payment_attempts.customer_email),
-      user_id = COALESCE(EXCLUDED.user_id, payment_attempts.user_id),
+      user_id = COALESCE(payment_attempts.user_id, EXCLUDED.user_id),
       amount = COALESCE(EXCLUDED.amount, payment_attempts.amount),
       currency = COALESCE(EXCLUDED.currency, payment_attempts.currency),
       last_error = EXCLUDED.last_error,
@@ -100,7 +107,7 @@ export async function recordFailedPaymentAttempt(payload, errorMessage = null, p
     RETURNING *`,
     [
       transactionId,
-      getUserId(payload),
+      userId,
       getCustomerEmail(payload),
       getTransactionAmount(payload),
       getTransactionCurrency(payload),
