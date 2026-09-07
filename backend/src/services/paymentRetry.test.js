@@ -76,6 +76,29 @@ test('recordFailedPaymentAttempt stores the webhook-selected sandbox environment
   assert.match(calls[0].sql, /paddle_environment/)
 })
 
+test('recordFailedPaymentAttempt uses the verified webhook owner when recurring custom data omits userId', async (t) => {
+  const calls = []
+  t.mock.method(pool, 'query', async (sql, params) => {
+    calls.push({ sql: String(sql), params })
+    return { rows: [{ transaction_id: params[0], user_id: params[1], status: 'failed' }] }
+  })
+
+  const attempt = await recordFailedPaymentAttempt({
+    event_type: 'transaction.payment_failed',
+    data: {
+      id: 'txn_recurring_without_custom_user',
+      origin: 'subscription_recurring',
+      customer_id: 'ctm_verified_owner',
+      subscription_id: 'sub_verified_owner',
+      custom_data: { plan: 'annual', paddleEnvironment: 'sandbox' },
+    },
+  }, null, 'sandbox', pool, { verifiedUserId: 42 })
+
+  assert.equal(attempt.user_id, 42)
+  assert.equal(calls[0].params[1], 42)
+  assert.match(calls[0].sql, /user_id = COALESCE\(payment_attempts\.user_id, EXCLUDED\.user_id\)/)
+})
+
 test('missing transaction diagnostics use identifiers without storing the full Paddle payload', async (t) => {
   const calls = []
   t.mock.method(pool, 'query', async (sql, params) => {

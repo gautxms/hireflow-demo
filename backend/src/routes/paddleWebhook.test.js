@@ -2915,7 +2915,7 @@ test('POST /api/paddle/webhook still makes a failed Monthly renewal past due', a
       origin: 'subscription_recurring',
       subscription_id: 'sub_current_123',
       customer_id: 'ctm_test_123',
-      custom_data: { userId: 42, plan: 'monthly', paddleEnvironment: 'sandbox' },
+      custom_data: { plan: 'monthly', paddleEnvironment: 'sandbox' },
     },
   }
   const rawBody = JSON.stringify(payload)
@@ -2940,6 +2940,8 @@ test('POST /api/paddle/webhook still makes a failed Monthly renewal past due', a
 
   assert.equal(response.status, 200)
   assert.equal(calls.some(({ sql, params }) => /UPDATE users/.test(sql) && params?.[1] === 'payment_failed'), true)
+  const attemptInsert = calls.find(({ sql }) => /INSERT INTO payment_attempts/.test(sql))
+  assert.equal(attemptInsert?.params?.[1], 42)
 })
 
 test('POST /api/paddle/webhook does not preserve a scheduled downgrade when its recurring renewal fails', async (t) => {
@@ -3059,7 +3061,7 @@ test('POST /api/paddle/webhook transaction.completed keeps setting user active',
       id: 'txn_completed_sets_active',
       subscription_id: 'sub_test_123',
       customer_id: 'ctm_test_123',
-      custom_data: { userId: 42, plan: 'monthly', paddleEnvironment: 'sandbox' },
+      custom_data: { plan: 'monthly', paddleEnvironment: 'sandbox' },
       billing_period: {
         starts_at: '2026-07-24T00:00:00.000Z',
         ends_at: '2026-08-24T00:00:00.000Z',
@@ -3087,6 +3089,9 @@ test('POST /api/paddle/webhook transaction.completed keeps setting user active',
   const activeUpdate = calls.find(({ sql }) => /UPDATE users[\s\S]+subscription_status = 'active'/.test(sql))
   assert.match(activeUpdate.sql, /quota_anchor_at = COALESCE/)
   assert.equal(activeUpdate.params[7], '2026-07-24T00:00:00.000Z')
+  const attemptUpdate = calls.find(({ sql }) => /UPDATE payment_attempts/.test(sql))
+  assert.match(attemptUpdate.sql, /user_id = COALESCE\(user_id, \$3\)/)
+  assert.equal(attemptUpdate.params[2], 42)
   const recoveryLog = infoLogs.find(([message]) => String(message).includes('[Paddle payment] completed transaction processed'))
   assert.equal(recoveryLog?.[1]?.eventId, 'evt_transaction_completed_sets_active')
   assert.equal(recoveryLog?.[1]?.userId, 42)

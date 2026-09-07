@@ -408,7 +408,7 @@ function getPaymentAmount(payload) {
   return 0
 }
 
-async function markPaymentAttemptSucceeded(payload, db = pool) {
+async function markPaymentAttemptSucceeded(payload, db = pool, verifiedUserId = null) {
   const transactionId = payload?.data?.id || payload?.transaction_id || payload?.id || null
 
   if (!transactionId) {
@@ -418,11 +418,13 @@ async function markPaymentAttemptSucceeded(payload, db = pool) {
   await db.query(
     `UPDATE payment_attempts
      SET status = 'succeeded',
+         user_id = COALESCE(user_id, $3),
          next_retry_at = NULL,
          updated_at = NOW(),
          metadata = COALESCE(metadata, '{}'::jsonb) || $2::jsonb
-     WHERE transaction_id = $1`,
-    [transactionId, JSON.stringify({ resolved_by: 'webhook', event: 'transaction.completed' })],
+     WHERE transaction_id = $1
+       AND ($3::integer IS NULL OR user_id IS NULL OR user_id = $3::integer)`,
+    [transactionId, JSON.stringify({ resolved_by: 'webhook', event: 'transaction.completed' }), verifiedUserId],
   )
 }
 
@@ -1237,7 +1239,7 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment, storedEv
 
           // A completed transaction is authoritative for its own payment attempt even
           // when a newer subscription event has already won the user projection CAS.
-          await markPaymentAttemptSucceeded(payload, db)
+          await markPaymentAttemptSucceeded(payload, db, userId)
           if (activationApplied && subscriptionProjection) {
             await upsertSubscriptionProjection(subscriptionProjection, db)
           }
@@ -1373,7 +1375,9 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment, storedEv
         }
 
         if (failedStatusApplied || !shouldApplyFailure) {
-          await recordFailedPaymentAttempt(payload, null, paddle.environment, db)
+          await recordFailedPaymentAttempt(payload, null, paddle.environment, db, {
+            verifiedUserId: !hasEnvironmentMismatch ? user?.id || null : null,
+          })
           failedPaymentAttemptRecorded = true
         }
 

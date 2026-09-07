@@ -272,11 +272,65 @@ test('immediate recovery processing scopes discovery and claiming to one transac
   })
 
   assert.equal(calls.length, 2)
-  assert.match(calls[0].sql, /pa\.user_id=\$3 AND pa\.transaction_id=\$4/)
+  assert.match(calls[0].sql, /u\.id=\$3 AND pa\.transaction_id=\$4/)
   assert.match(calls[1].sql, /a\.user_id=\$3 AND a\.recovery_transaction_id=\$4/)
   assert.deepEqual(calls.map(({ params }) => params), [
     [['sandbox'], true, 7, 'txn_immediate'],
     [['sandbox'], true, 7, 'txn_immediate'],
+  ])
+})
+
+test('scheduler safely attributes and processes an orphaned recurring recovery attempt', async () => {
+  const orphan = {
+    id: 'attempt_orphaned_recovery',
+    user_id: null,
+    resolved_user_id: 42,
+    transaction_id: 'txn_orphaned_recovery',
+    status: 'succeeded',
+    paddle_environment: 'sandbox',
+    payload: {
+      data: {
+        origin: 'subscription_recurring',
+        customer_id: 'ctm_verified_owner',
+        subscription_id: 'sub_verified_owner',
+      },
+    },
+  }
+  const calls = []
+  const created = []
+  const db = {
+    async query(sql, params) {
+      calls.push({ sql: String(sql), params })
+      if (/SELECT pa\.\*/.test(sql)) return { rows: [orphan], rowCount: 1 }
+      if (/UPDATE payment_attempts/.test(sql)) {
+        return { rows: [{ ...orphan, user_id: 42 }], rowCount: 1 }
+      }
+      return { rows: [], rowCount: 0 }
+    },
+  }
+
+  await runRecoveryBillingAdjustments({
+    db,
+    env: { PADDLE_PAST_DUE_RECOVERY_BILLING_ADJUSTMENT_ENVIRONMENTS: 'sandbox' },
+    createAdjustment: async (attempt) => created.push(attempt),
+  })
+
+  assert.equal(created.length, 1)
+  assert.equal(created[0].user_id, 42)
+  assert.match(calls[0].sql, /pa\.user_id IS NULL/)
+  assert.match(calls[0].sql, /u\.paddle_customer_id/)
+  assert.match(calls[0].sql, /u\.paddle_subscription_id/)
+  assert.match(calls[0].sql, /NOT EXISTS \([\s\S]*conflicting_owner/)
+  assert.match(calls[1].sql, /recovery_attribution.*verified_provider_identity/)
+  assert.match(calls[1].sql, /EXISTS \([\s\S]*owner\.paddle_customer_id=\$5/)
+  assert.match(calls[1].sql, /NOT EXISTS \([\s\S]*conflicting_owner/)
+  assert.deepEqual(calls[1].params, [
+    'attempt_orphaned_recovery',
+    42,
+    'txn_orphaned_recovery',
+    'sandbox',
+    'ctm_verified_owner',
+    'sub_verified_owner',
   ])
 })
 
