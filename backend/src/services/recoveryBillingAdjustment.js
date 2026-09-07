@@ -206,6 +206,64 @@ export async function createRecoveryAdjustmentForAttempt(attempt, dependencies =
     await markAttemptPermanentlyIneligible(db, attempt, 'environment_ownership_mismatch')
     return null
   }
+  if (['pending', 'failed', 'retrying'].includes(String(attempt.status || '').toLowerCase())) {
+    const resolution = await db.query(
+      `UPDATE payment_attempts
+       SET status='succeeded',
+           next_retry_at=NULL,
+           metadata=COALESCE(metadata, '{}'::jsonb) || $7::jsonb,
+           updated_at=NOW()
+       WHERE id=$1
+         AND user_id=$2
+         AND transaction_id=$3
+         AND status IN ('pending', 'failed', 'retrying')
+         AND COALESCE(NULLIF(LOWER(paddle_environment),''),'production')=$4
+         AND COALESCE(
+           payload->'data'->>'subscription_id', payload->'data'->>'subscriptionId',
+           payload->>'subscription_id', payload->>'subscriptionId'
+         )=$5
+         AND COALESCE(
+           payload->'data'->>'customer_id', payload->'data'->>'customerId',
+           payload->>'customer_id', payload->>'customerId'
+         )=$6
+         AND COALESCE(metadata->>'recovery_adjustment_ineligible','')=''
+         AND EXISTS (
+           SELECT 1 FROM users owner
+           WHERE owner.id=$2
+             AND owner.paddle_subscription_id=$5
+             AND owner.paddle_customer_id=$6
+             AND COALESCE(NULLIF(LOWER(owner.paddle_environment),''),'production')=$4
+             AND NOT EXISTS (
+               SELECT 1 FROM users conflicting_owner
+               WHERE conflicting_owner.id <> owner.id
+                 AND COALESCE(NULLIF(LOWER(conflicting_owner.paddle_environment),''),'production')=$4
+                 AND (
+                   conflicting_owner.paddle_subscription_id=$5
+                   OR conflicting_owner.paddle_customer_id=$6
+                 )
+             )
+         )
+       RETURNING id`,
+      [
+        attempt.id,
+        user.id,
+        transaction.id,
+        paddle.environment,
+        transaction.subscription_id,
+        transaction.customer_id,
+        JSON.stringify({
+          resolved_by: 'authoritative_reconciliation',
+          transaction_id: transaction.id,
+        }),
+      ],
+    )
+    if (resolution.rowCount === 0) return null
+    console.info('[recovery-billing-adjustment] resolved completed recovery attempt', {
+      attemptId: attempt.id,
+      userId: user.id,
+      environment: paddle.environment,
+    })
+  }
   if (user.cancellation_effective_at || ['canceled', 'cancelled'].includes(String(user.subscription_status).toLowerCase())) {
     await markAttemptPermanentlyIneligible(db, attempt, 'subscription_finally_cancelled')
     return null
@@ -545,12 +603,44 @@ export async function runRecoveryBillingAdjustments(dependencies = {}) {
            )
        )
      )
-     WHERE pa.status='succeeded' AND pa.transaction_id IS NOT NULL
+     WHERE pa.transaction_id IS NOT NULL
        AND (
-         COALESCE(pa.metadata->>'resolved_by','') IN ('webhook', 'automatic_retry', 'admin_retry')
+         (
+           pa.status='succeeded'
+           AND (
+             COALESCE(pa.metadata->>'resolved_by','') IN ('webhook', 'automatic_retry', 'admin_retry')
+             OR (
+               pa.metadata->>'resolved_by' IN ('authoritative_reconciliation', 'subscription_get_reconciliation')
+               AND pa.metadata->>'transaction_id' = pa.transaction_id
+             )
+           )
+         )
          OR (
-           pa.metadata->>'resolved_by' IN ('authoritative_reconciliation', 'subscription_get_reconciliation')
-           AND pa.metadata->>'transaction_id' = pa.transaction_id
+           pa.status IN ('pending', 'failed', 'retrying')
+           AND COALESCE(pa.metadata->>'resolved_by','') IN ('', 'subscription_get_reconciliation_pending')
+           AND pa.user_id IS NOT NULL
+           AND LOWER(COALESCE(u.subscription_status,''))='active'
+           AND u.cancellation_effective_at IS NULL
+           AND COALESCE(NULLIF(LOWER(u.paddle_environment),''),'production')
+             = COALESCE(NULLIF(LOWER(pa.paddle_environment),''),'production')
+           AND u.paddle_subscription_id=COALESCE(
+             pa.payload->'data'->>'subscription_id', pa.payload->'data'->>'subscriptionId',
+             pa.payload->>'subscription_id', pa.payload->>'subscriptionId'
+           )
+           AND u.paddle_customer_id=COALESCE(
+             pa.payload->'data'->>'customer_id', pa.payload->'data'->>'customerId',
+             pa.payload->>'customer_id', pa.payload->>'customerId'
+           )
+           AND NOT EXISTS (
+             SELECT 1 FROM users conflicting_owner
+             WHERE conflicting_owner.id <> u.id
+               AND COALESCE(NULLIF(LOWER(conflicting_owner.paddle_environment),''),'production')
+                 = COALESCE(NULLIF(LOWER(pa.paddle_environment),''),'production')
+               AND (
+                 conflicting_owner.paddle_subscription_id=u.paddle_subscription_id
+                 OR conflicting_owner.paddle_customer_id=u.paddle_customer_id
+               )
+           )
          )
        )
        AND COALESCE(pa.metadata->>'recovery_adjustment_ineligible','') = ''

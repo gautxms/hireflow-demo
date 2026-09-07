@@ -248,6 +248,11 @@ test('scheduler filters enabled environments before both limits and isolates can
   assert.match(sql[0].text, /recovery_adjustment_discovery_retry_at[\s\S]*timestamptz<=NOW\(\)/)
   assert.match(sql[0].text, /recovery_adjustment_discovery_retry_at[\s\S]*ASC NULLS FIRST/)
   assert.match(sql[0].text, /authoritative_reconciliation', 'subscription_get_reconciliation'[\s\S]*metadata->>'transaction_id' = pa\.transaction_id/)
+  assert.match(sql[0].text, /pa\.status IN \('pending', 'failed', 'retrying'\)/)
+  assert.match(sql[0].text, /LOWER\(COALESCE\(u\.subscription_status,''\)\)='active'/)
+  assert.match(sql[0].text, /LOWER\(u\.paddle_environment\)[\s\S]*LOWER\(pa\.paddle_environment\)/)
+  assert.match(sql[0].text, /u\.paddle_subscription_id=COALESCE/)
+  assert.match(sql[0].text, /u\.paddle_customer_id=COALESCE/)
   assert.match(sql[1].text, /paddle_environment = ANY\(\$1::text\[\]\)[\s\S]*LIMIT 20 FOR UPDATE OF a SKIP LOCKED/)
   assert.match(sql[1].text, /u\.last_paddle_event_at AS observed_last_paddle_event_at/)
   assert.match(sql[1].text, /u\.current_period_end AS observed_current_period_end/)
@@ -723,6 +728,118 @@ test('candidate creation rejects a historical Monthly renewal after an Annual pl
   assert.equal(writes.some((sql) => /INSERT INTO recovery_billing_adjustments/.test(sql)), false)
 })
 
+test('authoritative discovery resolves an active account failed renewal before creating its adjustment', async () => {
+  const writes = []
+  const db = { async query(sql, params) {
+    writes.push({ sql, params })
+    if (/FROM users WHERE id/.test(sql)) return { rows: [{
+      id: 50,
+      subscription_status: 'active',
+      subscription_plan: 'annual',
+      paddle_environment: 'sandbox',
+      paddle_customer_id: 'ctm_recovered',
+      paddle_subscription_id: 'sub_recovered',
+      cancellation_effective_at: null,
+    }] }
+    if (/UPDATE payment_attempts/.test(sql)) return { rowCount: 1, rows: [{ id: 501 }] }
+    if (/INSERT INTO recovery_billing_adjustments/.test(sql)) {
+      return { rowCount: 1, rows: [{ id: 'adj_recovered' }] }
+    }
+    return { rowCount: 0, rows: [] }
+  } }
+  const transaction = recurringTransaction({
+    id: 'txn_recovered',
+    customerId: 'ctm_recovered',
+    subscriptionId: 'sub_recovered',
+    plan: 'annual',
+    capturedAt: '2026-09-07T12:00:00Z',
+  })
+  const result = await createRecoveryAdjustmentForAttempt({
+    id: 501,
+    user_id: 50,
+    transaction_id: 'txn_recovered',
+    status: 'failed',
+    paddle_environment: 'sandbox',
+  }, {
+    db,
+    env: { PADDLE_PAST_DUE_RECOVERY_BILLING_ADJUSTMENT_ENVIRONMENTS: 'sandbox' },
+    paddle: {
+      environment: 'sandbox',
+      priceIdsByPlan: { annual: 'pri_year' },
+      noTrialPriceIdsByPlan: {},
+      legacyPriceIdsByPlan: {},
+    },
+    getTransaction: async () => transaction,
+    getSubscription: async () => ({
+      id: 'sub_recovered',
+      customer_id: 'ctm_recovered',
+      status: 'active',
+      scheduled_change: null,
+      next_billed_at: '2027-09-01T12:00:00Z',
+      items: [{ price: { id: 'pri_year' } }],
+    }),
+  })
+
+  assert.equal(result.id, 'adj_recovered')
+  const resolution = writes.find(({ sql }) => /UPDATE payment_attempts/.test(sql))
+  assert.match(resolution.sql, /status='succeeded'/)
+  assert.match(resolution.sql, /metadata=COALESCE\(metadata, '\{\}'::jsonb\) \|\| \$7::jsonb/)
+  assert.deepEqual(JSON.parse(resolution.params[6]), {
+    resolved_by: 'authoritative_reconciliation',
+    transaction_id: 'txn_recovered',
+  })
+  assert.ok(
+    writes.findIndex(({ sql }) => /UPDATE payment_attempts/.test(sql))
+      < writes.findIndex(({ sql }) => /INSERT INTO recovery_billing_adjustments/.test(sql)),
+  )
+})
+
+test('authoritative discovery does not create an adjustment when the attempt resolution race is lost', async () => {
+  let adjustmentInsertAttempted = false
+  const db = { async query(sql) {
+    if (/FROM users WHERE id/.test(sql)) return { rows: [{
+      id: 50,
+      subscription_status: 'active',
+      subscription_plan: 'annual',
+      paddle_environment: 'sandbox',
+      paddle_customer_id: 'ctm_recovered',
+      paddle_subscription_id: 'sub_recovered',
+      cancellation_effective_at: null,
+    }] }
+    if (/UPDATE payment_attempts/.test(sql)) return { rowCount: 0, rows: [] }
+    if (/INSERT INTO recovery_billing_adjustments/.test(sql)) adjustmentInsertAttempted = true
+    return { rowCount: 0, rows: [] }
+  } }
+  const transaction = recurringTransaction({
+    id: 'txn_recovered',
+    customerId: 'ctm_recovered',
+    subscriptionId: 'sub_recovered',
+    plan: 'annual',
+    capturedAt: '2026-09-07T12:00:00Z',
+  })
+  const result = await createRecoveryAdjustmentForAttempt({
+    id: 501,
+    user_id: 50,
+    transaction_id: 'txn_recovered',
+    status: 'failed',
+    paddle_environment: 'sandbox',
+  }, {
+    db,
+    env: { PADDLE_PAST_DUE_RECOVERY_BILLING_ADJUSTMENT_ENVIRONMENTS: 'sandbox' },
+    paddle: {
+      environment: 'sandbox',
+      priceIdsByPlan: { annual: 'pri_year' },
+      noTrialPriceIdsByPlan: {},
+      legacyPriceIdsByPlan: {},
+    },
+    getTransaction: async () => transaction,
+    getSubscription: async () => assert.fail('provider subscription lookup must not follow a lost resolution claim'),
+  })
+
+  assert.equal(result, null)
+  assert.equal(adjustmentInsertAttempted, false)
+})
+
 for (const followingStatus of ['ready', 'completed']) {
   test(`following renewal already ${followingStatus} requires manual accounting without a Paddle PATCH`, async () => {
     const updates = []
@@ -824,7 +941,7 @@ test('transient Past Due subscription stays retryable while later candidates con
 test('matching recurring transaction that is not completed remains retryable', async () => {
   const writes = []
   const result = await createRecoveryAdjustmentForAttempt({
-    id: 104, user_id: 7, transaction_id: 'txn_processing', paddle_environment: 'sandbox',
+    id: 104, user_id: 7, transaction_id: 'txn_processing', status: 'failed', paddle_environment: 'sandbox',
   }, {
     db: { async query(sql, params) {
       writes.push({ sql, params })
@@ -841,6 +958,7 @@ test('matching recurring transaction that is not completed remains retryable', a
 
   assert.equal(result, null)
   assert.equal(writes.some(({ sql }) => /recovery_adjustment_ineligible/.test(sql)), false)
+  assert.equal(writes.some(({ sql }) => /UPDATE payment_attempts[\s\S]*status='succeeded'/.test(sql)), false)
   const retry = writes.find(({ sql }) => /recovery_adjustment_discovery_retry_at/.test(sql))
   assert.deepEqual(retry.params, [104, 'provider_transaction_not_completed'])
 })
