@@ -7,7 +7,8 @@ const MAX_REQUIREMENT_LENGTH = 360
 const EXPERIENCE_CONTEXT_PATTERN = /\b(?:experience|tenure|background|worked|working|role|roles|position|positions|account\s+executive|sales|engineer(?:ing)?|developer|manager|management|analyst|analysis)\b/i
 const MAXIMUM_ONLY_PATTERN = /\b(?:maximum(?:\s+of)?|no\s+more\s+than|up\s+to|at\s+most)\s*$/i
 const POSITIVE_REQUIREMENT_PATTERN = /\b(?:meet(?:s|ing)?|met|exceed(?:s|ed|ing)?|satisf(?:y|ies|ied|ying)|fulfil(?:l|ls|led|ling)?|above|sufficient|qualified)\b/i
-const NEGATIVE_REQUIREMENT_PATTERN = /\b(?:below|shortfall|does\s+not\s+meet|did\s+not\s+meet|fail(?:s|ed|ing)?|insufficient|underqualified|lacks?|missing|gap)\b/i
+const NEGATIVE_REQUIREMENT_PATTERN = /\b(?:below|fewer\s+than|less\s+than|short\s+of|shortfall|does\s+not\s+(?:meet|satisfy)|did\s+not\s+(?:meet|satisfy)|not\s+(?:the\s+)?required|fail(?:s|ed|ing)?|insufficient|underqualified|lacks?|missing|gap)\b/i
+const DURATION_REFERENCE_PATTERN = /\b(?:\d+(?:\.\d+)?\s*\+?\s*(?:years?|yrs?|months?|mos?)|(?:one|two|three|four|five|six|seven|eight|nine|ten)[-\s](?:year|month)s?)\b/i
 
 const SUBJECT_STOP_WORDS = new Set([
   'a', 'an', 'and', 'at', 'background', 'be', 'candidate', 'candidates', 'direct', 'essential', 'for',
@@ -21,6 +22,7 @@ const GENERAL_EXPERIENCE_TOKENS = new Set([
 ])
 
 const SHARED_ALTERNATIVE_ROLE_PATTERN = /\b(account\s+executive|sales\s+(?:representative|manager)|software\s+engineer|product\s+manager)\b/i
+const SALES_ROLE_PATTERN = /\b(?:account\s+executive|business\s+development\s+(?:executive|representative)|sales\s+development\s+representative|sales\s+(?:associate|coordinator|executive|manager|representative|supervisor))\b/i
 
 function normalizeText(value, maxLength = MAX_REQUIREMENT_LENGTH) {
   const normalized = String(value ?? '').replace(/\s+/g, ' ').trim()
@@ -60,39 +62,46 @@ function monthsFromDuration(value, unit) {
   return Math.round(numeric * multiplier)
 }
 
-function findDurationDescriptor(value) {
+function findDurationDescriptors(value) {
   const text = normalizeText(value)
-  const range = text.match(/\b(\d+(?:\.\d+)?)\s*(?:-|–|—|to)\s*(\d+(?:\.\d+)?)\s*(years?|yrs?|months?|mos?)\b/i)
-  if (range) {
-    const requiredMonths = monthsFromDuration(range[1], range[3])
-    return requiredMonths === null ? null : {
-      index: range.index,
-      endIndex: range.index + range[0].length,
+  const pattern = /\b(?:(\d+(?:\.\d+)?)\s*(?:-|–|—|to)\s*(\d+(?:\.\d+)?)\s*(years?|yrs?|months?|mos?)|(\d+(?:\.\d+)?)\s*\+?\s*(years?|yrs?|months?|mos?))\b/gi
+  const descriptors = []
+
+  for (const match of text.matchAll(pattern)) {
+    const index = match.index ?? 0
+    const prefix = text.slice(Math.max(0, index - 32), index)
+    if (MAXIMUM_ONLY_PATTERN.test(prefix)) continue
+    const requiredMonths = match[1]
+      ? monthsFromDuration(match[1], match[3])
+      : monthsFromDuration(match[4], match[5])
+    if (requiredMonths === null) continue
+    descriptors.push({
+      index,
+      endIndex: index + match[0].length,
       requiredMonths,
-    }
+    })
   }
 
-  const single = text.match(/\b(\d+(?:\.\d+)?)\s*\+?\s*(years?|yrs?|months?|mos?)\b/i)
-  if (!single) return null
-  const prefix = text.slice(Math.max(0, single.index - 32), single.index)
-  if (MAXIMUM_ONLY_PATTERN.test(prefix)) return null
-  const requiredMonths = monthsFromDuration(single[1], single[2])
-  return requiredMonths === null ? null : {
-    index: single.index,
-    endIndex: single.index + single[0].length,
-    requiredMonths,
-  }
+  return descriptors
 }
 
-function extractSubjectSource(text, descriptor) {
-  let suffix = text.slice(descriptor.endIndex).trim()
+function findDurationDescriptor(value) {
+  return findDurationDescriptors(value)[0] || null
+}
+
+function extractSubjectSource(text, descriptor, nextDescriptor = null) {
+  let suffix = text.slice(descriptor.endIndex, nextDescriptor?.index ?? text.length).trim()
     .replace(/^[’']s?\s*/, '')
+    .replace(/[,;:]?\s*\b(?:and|including|with)\s+(?:(?:a\s+)?minimum\s+of\s+|at\s+least\s+)?$/i, '')
     .replace(/\b(?:required|mandatory|minimum\s+qualification|must\s+have)\b.*$/i, '')
     .replace(/[.;].*$/, '')
     .trim()
 
   const experienceThenSubject = suffix.match(/^(?:of\s+)?experience\s+(?:in|as|with)\s+(.+)$/i)
   if (experienceThenSubject) return experienceThenSubject[1]
+
+  const generalExperience = suffix.match(/^(?:of\s+)?((?:(?:total|overall|professional|progressive|work)\s+)*)experience\b/i)
+  if (generalExperience) return generalExperience[1].trim() || 'total professional'
 
   const subjectThenExperience = suffix.match(/^(?:of|in|as|with)\s+(.+?)\s+experience\b/i)
   if (subjectThenExperience) return subjectThenExperience[1]
@@ -108,14 +117,21 @@ function isGeneralExperienceSubject(tokens) {
   return tokens.length === 0 || tokens.every((token) => GENERAL_EXPERIENCE_TOKENS.has(token))
 }
 
-function buildSubjectTokenGroups(subject) {
-  const alternatives = normalizeText(subject, 160).split(/\s+or\s+/i)
-  if (alternatives.length < 2) return [meaningfulSubjectTokens(subject)]
+function matchingSubjectTokens(value) {
+  const tokens = meaningfulSubjectTokens(value)
+  const specificTokens = tokens.filter((token) => !GENERAL_EXPERIENCE_TOKENS.has(token))
+  return specificTokens.length > 0 ? specificTokens : tokens
+}
 
-  const sharedRole = normalizeText(subject, 160).match(SHARED_ALTERNATIVE_ROLE_PATTERN)?.[1] || ''
-  const sharedRoleTokens = meaningfulSubjectTokens(sharedRole)
+function buildSubjectTokenGroups(subject) {
+  const normalizedSubject = normalizeComparable(normalizeText(subject, 160))
+  const alternatives = normalizedSubject.split(/\s+or\s+/i)
+  if (alternatives.length < 2) return [matchingSubjectTokens(normalizedSubject)]
+
+  const sharedRole = normalizedSubject.match(SHARED_ALTERNATIVE_ROLE_PATTERN)?.[1] || ''
+  const sharedRoleTokens = matchingSubjectTokens(sharedRole)
   return alternatives
-    .map((alternative) => [...new Set([...meaningfulSubjectTokens(alternative), ...sharedRoleTokens])])
+    .map((alternative) => [...new Set([...matchingSubjectTokens(alternative), ...sharedRoleTokens])])
     .filter((tokens) => tokens.length > 0)
 }
 
@@ -130,26 +146,29 @@ export function extractDurationRequirements(semantics = {}) {
     if (!requirementText || seen.has(comparable)) continue
     seen.add(comparable)
 
-    const descriptor = findDurationDescriptor(requirementText)
-    if (!descriptor) continue
-    const suffix = requirementText.slice(descriptor.endIndex)
-    if (!EXPERIENCE_CONTEXT_PATTERN.test(requirementText) && !/^\s*(?:of|in|as|with)\b/i.test(suffix)) continue
+    const descriptors = findDurationDescriptors(requirementText)
+    for (const [descriptorIndex, descriptor] of descriptors.entries()) {
+      const suffix = requirementText.slice(descriptor.endIndex)
+      if (!EXPERIENCE_CONTEXT_PATTERN.test(requirementText) && !/^\s*(?:of|in|as|with)\b/i.test(suffix)) continue
 
-    const subject = normalizeText(extractSubjectSource(requirementText, descriptor), 160)
-      .replace(/^(?:a|an)\s+/i, '')
-      .replace(/\s+(?:role|position)$/i, '')
-    const subjectTokens = meaningfulSubjectTokens(subject)
-    const scope = isGeneralExperienceSubject(subjectTokens) ? 'total' : 'subject_specific'
-    const subjectTokenGroups = scope === 'total' ? [] : buildSubjectTokenGroups(subject)
-    requirements.push({
-      requirement_id: `duration_requirement_${requirements.length + 1}`,
-      requirement_text: requirementText,
-      required_months: descriptor.requiredMonths,
-      subject: scope === 'total' ? 'total professional' : subject,
-      subject_tokens: scope === 'total' ? [] : subjectTokens,
-      subject_token_groups: subjectTokenGroups,
-      scope,
-    })
+      const subject = normalizeText(extractSubjectSource(requirementText, descriptor, descriptors[descriptorIndex + 1]), 160)
+        .replace(/^(?:a|an)\s+/i, '')
+        .replace(/\s+(?:role|position)$/i, '')
+      const rawSubjectTokens = meaningfulSubjectTokens(subject)
+      const scope = isGeneralExperienceSubject(rawSubjectTokens) ? 'total' : 'subject_specific'
+      const subjectTokens = scope === 'total' ? [] : matchingSubjectTokens(subject)
+      const subjectTokenGroups = scope === 'total' ? [] : buildSubjectTokenGroups(subject)
+      requirements.push({
+        requirement_id: `duration_requirement_${requirements.length + 1}`,
+        requirement_text: requirementText,
+        required_months: descriptor.requiredMonths,
+        subject: scope === 'total' ? 'total professional' : subject,
+        subject_tokens: subjectTokens,
+        subject_token_groups: subjectTokenGroups,
+        scope,
+      })
+      if (requirements.length >= MAX_REQUIREMENTS) break
+    }
     if (requirements.length >= MAX_REQUIREMENTS) break
   }
 
@@ -184,10 +203,13 @@ function unionIntervalMonths(intervals) {
 function entryMatchesSubject(entry, subjectTokenGroups) {
   if (subjectTokenGroups.length === 0) return true
   const groups = Array.isArray(subjectTokenGroups[0]) ? subjectTokenGroups : [subjectTokenGroups]
-  const evidenceTokens = new Set(meaningfulSubjectTokens([
+  const evidenceText = [
     entry?.title,
     entry?.description,
-  ].filter(Boolean).join(' ')))
+  ].filter(Boolean).join(' ')
+  const evidenceTokens = new Set(meaningfulSubjectTokens(evidenceText))
+  if (SALES_ROLE_PATTERN.test(normalizeComparable(entry?.title))) evidenceTokens.add('sales')
+  else evidenceTokens.delete('sales')
   return groups.some((tokens) => tokens.every((token) => evidenceTokens.has(token)))
 }
 
@@ -274,6 +296,12 @@ function formatYears(value) {
   return Number.isInteger(numeric) ? String(numeric) : String(Math.round(numeric * 10) / 10)
 }
 
+function formatYearUnit(unit, value) {
+  const abbreviated = /^yr/i.test(unit)
+  if (Number(value) === 1) return abbreviated ? 'yr' : 'year'
+  return abbreviated ? 'yrs' : 'years'
+}
+
 function formatMonths(value) {
   const numeric = Number(value)
   return `${numeric} month${numeric === 1 ? '' : 's'}`
@@ -284,12 +312,12 @@ function canonicalRequirementStatement(check) {
   const evidence = formatMonths(check.evidenced_months)
   const required = formatMonths(check.required_months)
   if (check.status === 'met') return `${evidence} of dated ${subject} meets the ${required} requirement.`
-  return `${evidence} of dated ${subject} is evidenced against a ${required} requirement.`
+  return `${evidence} of dated ${subject} does not meet the ${required} requirement.`
 }
 
 function textRelatesToCheck(value, check) {
   const text = normalizeComparable(value)
-  if (!text || !/\b(?:experience|tenure|year|years|month|months|requirement|minimum)\b/.test(text)) return false
+  if (!text || !DURATION_REFERENCE_PATTERN.test(text)) return false
   if (check.scope === 'total') {
     return /\b(?:total|overall|professional|work)\s+(?:experience|tenure)\b/.test(text)
       || /\b(?:candidate|they|he|she)\s+(?:has|have|brings?|offers?)\s+\d+(?:\.\d+)?\s*\+?\s*(?:years?|yrs?|months?|mos?)\s+(?:of\s+)?experience\b/.test(text)
@@ -336,21 +364,54 @@ function replaceConflictingTotalYears(value, originalYears, canonicalYears) {
   return value
     .replace(
       new RegExp(`\\b${numberPattern}\\s*\\+?\\s*(years?|yrs?)\\s+of\\s+((?:(?:total|overall|professional|work)\\s+)?experience)\\b`, 'gi'),
-      (_match, unit, descriptor) => `${canonical} ${unit} of ${descriptor}`,
+      (_match, unit, descriptor) => `${canonical} ${formatYearUnit(unit, canonicalYears)} of ${descriptor}`,
     )
     .replace(
       new RegExp(`\\b((?:total|overall|professional|work)\\s+(?:experience|tenure)\\s+(?:of|is|:)?\\s*)${numberPattern}\\s*(years?|yrs?)\\b`, 'gi'),
-      (_match, prefix, unit) => `${prefix}${canonical} ${unit}`,
+      (_match, prefix, unit) => `${prefix}${canonical} ${formatYearUnit(unit, canonicalYears)}`,
     )
     .replace(
       new RegExp(`\\b((?:candidate|they|he|she)\\s+(?:has|brings|offers)\\s+)${numberPattern}\\s*(years?|yrs?)(?=\\s+(?:of\\s+)?experience\\b)`, 'gi'),
-      (_match, prefix, unit) => `${prefix}${canonical} ${unit}`,
+      (_match, prefix, unit) => `${prefix}${canonical} ${formatYearUnit(unit, canonicalYears)}`,
     )
 }
 
-function reconcileNarrativeValue(value, { originalYears, canonicalYears, checks }) {
+function replaceConflictingSubjectYears(value, originalYears, canonicalYears, checks, assumeExperienceContext = false) {
+  if (typeof value !== 'string' || originalYears === null || canonicalYears === null || originalYears === canonicalYears) return value
+  const escapedOriginal = String(originalYears).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const numberPattern = Number.isInteger(originalYears) ? `${escapedOriginal}(?:\\.0)?` : escapedOriginal
+  const canonical = formatYears(canonicalYears)
+  const contextualPattern = new RegExp(
+    `(?<![\\d.])\\b${numberPattern}\\s*\\+?\\s*(years?|yrs?)(?=\\s+(?:of\\s+)?(?:(?:[a-z0-9+#.-]+)\\s+){0,8}experience\\b)`,
+    'gi',
+  )
+  const barePattern = new RegExp(`(?<![\\d.])\\b${numberPattern}\\s*\\+?\\s*(years?|yrs?)\\b`, 'gi')
+
+  return splitNarrativeSentences(value).map((sentence) => {
+    const related = assumeExperienceContext || checks.some((check) => textRelatesToCheck(sentence, check))
+    if (!related) return sentence
+    const replaceCandidateDuration = (match, unit, offset, source) => {
+      const previous = source.slice(Math.max(0, offset - 48), offset)
+      const previousCharacter = source[offset - 1] || ''
+      if (/[-–—]$/.test(previousCharacter)) return match
+      if (/\b(?:at\s+least|at\s+most|minimum(?:\s+of)?|maximum(?:\s+of)?|requires?|required)\s*$/i.test(previous)) return match
+      return `${canonical} ${formatYearUnit(unit, canonicalYears)}`
+    }
+    const contextual = sentence.replace(contextualPattern, replaceCandidateDuration)
+    return assumeExperienceContext ? contextual.replace(barePattern, replaceCandidateDuration) : contextual
+  }).join(' ').trim()
+}
+
+function reconcileNarrativeValue(value, { originalYears, canonicalYears, checks, assumeExperienceContext = false }) {
   const correctedYears = replaceConflictingTotalYears(value, originalYears, canonicalYears)
-  return reconcileContradictoryNarrative(correctedYears, checks)
+  const correctedSubjectYears = replaceConflictingSubjectYears(
+    correctedYears,
+    originalYears,
+    canonicalYears,
+    checks,
+    assumeExperienceContext,
+  )
+  return reconcileContradictoryNarrative(correctedSubjectYears, checks)
 }
 
 function reconcileNarrativeArray(value, options) {
@@ -400,6 +461,7 @@ function reconcileRequirementArrayPair(target, matchedField, missingField, check
 
 function reconcileRequirementArrays(candidate, checks) {
   reconcileRequirementArrayPair(candidate, 'matchedRequirementsFull', 'missingRequirementsFull', checks)
+  reconcileRequirementArrayPair(candidate, 'matchedSkills', 'missingSkills', checks)
   reconcileRequirementArrayPair(
     candidate?.fit_assessment,
     'matched_requirements',
@@ -412,16 +474,25 @@ function reconcileCandidateNarratives(candidate, { originalYears, canonicalYears
   const options = { originalYears, canonicalYears, checks }
   const next = structuredClone(candidate)
 
-  for (const field of ['strengths', 'considerations', 'concerns', 'matchedRequirementsFull', 'missingRequirementsFull', 'risksOrGapsFull']) {
+  for (const field of ['strengths', 'considerations', 'concerns', 'matchedRequirementsFull', 'missingRequirementsFull', 'risksOrGapsFull', 'matchedSkills', 'missingSkills']) {
     if (Array.isArray(next[field])) next[field] = reconcileNarrativeArray(next[field], options)
   }
-  for (const field of ['summary', 'summaryFull', 'recommendation', 'recommendationFull']) {
+  for (const field of ['summary', 'summaryFull', 'strengthsFull', 'recommendation', 'recommendationFull']) {
     if (typeof next[field] === 'string') next[field] = reconcileNarrativeValue(next[field], options)
   }
 
   if (next.matchScore && typeof next.matchScore === 'object' && !Array.isArray(next.matchScore)) {
     if (typeof next.matchScore.reason === 'string') {
       next.matchScore.reason = reconcileNarrativeValue(next.matchScore.reason, options)
+    }
+    if (next.matchScore.breakdown && typeof next.matchScore.breakdown === 'object' && !Array.isArray(next.matchScore.breakdown)) {
+      for (const [field, value] of Object.entries(next.matchScore.breakdown)) {
+        if (typeof value !== 'string') continue
+        next.matchScore.breakdown[field] = reconcileNarrativeValue(value, {
+          ...options,
+          assumeExperienceContext: /\b(?:experience|tenure|years?)\b/i.test(field.replace(/_/g, ' ')),
+        })
+      }
     }
   }
 
@@ -489,6 +560,7 @@ export const __testables = {
   buildSubjectTokenGroups,
   entryMatchesSubject,
   findDurationDescriptor,
+  findDurationDescriptors,
   meaningfulSubjectTokens,
   reconcileContradictoryNarrative,
   replaceConflictingTotalYears,
