@@ -17,6 +17,7 @@ import { resolveCanonicalCandidateIdentity } from '../utils/candidateIdentity.js
 import { classifyParseJobRetryability } from './parseJobErrorClassifier.js'
 import { normalizeCandidateEducation } from '../utils/candidateEducation.js'
 import { normalizeCandidateFieldArray } from '../utils/candidateStructuredFields.js'
+import { EXPERIENCE_FACTS_VERSION, buildExperienceFacts, normalizeStructuredExperienceEntries } from '../utils/experienceFacts.js'
 import { isLegacyDocExtractionEnabled } from '../services/legacyDocExtractionService.js'
 import { createUnsupportedLegacyWordError, getLegacyWordDocumentDetection } from '../utils/legacyWordDocument.js'
 import { emitAiScoringContractV2ScoreDeltaDiagnostic, emitScoreContractShadowDiagnostic } from '../services/scoreContractShadowDiagnostics.js'
@@ -1294,7 +1295,38 @@ function flattenStructuredSkills(skillsStructured) {
   return [...new Set(flattened.map((entry) => normalizeString(entry)).filter(Boolean))]
 }
 
-function buildNormalizedCandidates(analysisResult, { resumeId, filename }) {
+function buildShadowExperienceData(value, referenceDate) {
+  try {
+    const experienceEntries = normalizeStructuredExperienceEntries(value)
+    return {
+      experienceEntries,
+      experienceFacts: buildExperienceFacts(experienceEntries, { referenceDate }),
+    }
+  } catch (_) {
+    // Shadow metadata must never prevent the existing AI analysis from completing.
+    return {
+      experienceEntries: [],
+      experienceFacts: {
+        version: EXPERIENCE_FACTS_VERSION,
+        status: 'failed_open',
+        calculation_method: 'union_of_month_intervals',
+        reference_date: null,
+        total_months: null,
+        total_years: null,
+        source: 'unavailable',
+        confidence: 'unavailable',
+        entry_count: 0,
+        parsed_entry_count: 0,
+        unparsed_entry_count: 0,
+        date_coverage_ratio: 0,
+        overlap_months_removed: 0,
+        entry_facts: [],
+      },
+    }
+  }
+}
+
+function buildNormalizedCandidates(analysisResult, { resumeId, filename, experienceFactsReferenceDate = new Date() } = {}) {
   if (!Array.isArray(analysisResult?.candidates)) return []
 
   return analysisResult.candidates.map((candidate, index) => {
@@ -1302,6 +1334,10 @@ function buildNormalizedCandidates(analysisResult, { resumeId, filename }) {
     const fallbackSkills = normalizeSkills(candidate?.skills)
     const flattenedSkills = flattenStructuredSkills(skillsStructured)
     const resolvedSkillsFlat = flattenedSkills.length > 0 ? flattenedSkills : fallbackSkills
+    const { experienceEntries, experienceFacts } = buildShadowExperienceData(
+      candidate?.experience,
+      experienceFactsReferenceDate,
+    )
     const identity = resolveCanonicalCandidateIdentity(
       candidate,
       `${(resumeId || filename || 'resume').toString().toLowerCase()}-${index + 1}`,
@@ -1318,6 +1354,8 @@ function buildNormalizedCandidates(analysisResult, { resumeId, filename }) {
       considerations: clampStringArray(candidate?.considerations, 5, 160),
       education: normalizeCandidateEducation(candidate?.education),
       experience: normalizeCandidateFieldArray(candidate?.experience, { fieldName: 'experience', maxItems: 30, maxItemLength: 220 }),
+      experience_entries: experienceEntries,
+      experience_facts_v1: experienceFacts,
       projects: normalizeCandidateFieldArray(candidate?.projects, { fieldName: 'projects', maxItems: 20, maxItemLength: 200 }),
       seniority_level: normalizeString(candidate?.seniority_level),
       tags: normalizeStringArray(candidate?.tags),
@@ -2112,7 +2150,11 @@ export async function runParse(job) {
     throw aiError
   }
 
-  const candidates = buildNormalizedCandidates(analysisResult, { resumeId, filename: analysisFilename })
+  const candidates = buildNormalizedCandidates(analysisResult, {
+    resumeId,
+    filename: analysisFilename,
+    experienceFactsReferenceDate: new Date(),
+  })
     .map((candidate) => reconcileCandidateExperienceRange(candidate, jobDescriptionContext))
     .map((candidate) => reconcileCandidateRequirementSemantics(
       candidate,
@@ -2443,6 +2485,7 @@ export function registerParseResumeJobProcessor() {
 
 export const __testables = {
   normalizeStructuredSkills,
+  buildShadowExperienceData,
   buildNormalizedCandidates,
   reconcileCandidateExperienceRange,
   reconcileCandidateRequirementSemantics,

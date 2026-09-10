@@ -31,6 +31,7 @@ after(async () => {
 
 const {
   buildNormalizedCandidates,
+  buildShadowExperienceData,
   isLegacyWordDocument,
   reconcileCandidateExperienceRange,
   reconcileCandidateRequirementSemantics,
@@ -122,6 +123,71 @@ test('buildNormalizedCandidates preserves fractional/integer/null years_experien
   assert.equal(fractional.years_experience, 3.5)
   assert.equal(integer.years_experience, 3)
   assert.equal(missing.years_experience, null)
+})
+
+test('buildNormalizedCandidates attaches canonical experience facts without changing visible score fields', () => {
+  const modelCandidate = {
+    name: 'Daniel Example',
+    years_experience: 4.5,
+    score: 60.5,
+    matchScore: { score: 60.5, score_out_of_ten: 6.1, reason: 'Existing model reasoning.' },
+    fit_assessment: { overall_fit_score: 60.5, rationale: 'Existing fit rationale.' },
+    experience: [{
+      title: 'Account Executive',
+      company: 'Example Co',
+      startDate: '2024-01',
+      endDate: '2025-07',
+      description: 'Owned a quota-carrying book of business.',
+    }],
+    experience_entries: [{ title: 'Untrusted model-owned shadow field' }],
+    experience_facts_v1: { total_months: 999 },
+  }
+  const snapshot = structuredClone(modelCandidate)
+
+  const [candidate] = buildNormalizedCandidates(
+    { candidates: [modelCandidate] },
+    {
+      resumeId: 'resume-shadow-facts',
+      filename: 'daniel.pdf',
+      experienceFactsReferenceDate: '2026-09-10T00:00:00.000Z',
+    },
+  )
+
+  assert.deepEqual(modelCandidate, snapshot)
+  assert.deepEqual(candidate.experience, [
+    'Account Executive at Example Co — 2024-01 - 2025-07: Owned a quota-carrying book of business.',
+  ])
+  assert.deepEqual(candidate.experience_entries, [{
+    title: 'Account Executive',
+    company: 'Example Co',
+    start_date: '2024-01',
+    end_date: '2025-07',
+    duration: null,
+    description: 'Owned a quota-carrying book of business.',
+  }])
+  assert.equal(candidate.experience_facts_v1.version, 'experience_facts_v1')
+  assert.equal(candidate.experience_facts_v1.total_months, 18)
+  assert.equal(candidate.experience_facts_v1.total_years, 1.5)
+  assert.equal(candidate.experience_facts_v1.confidence, 'high')
+  assert.equal(candidate.years_experience, 4.5)
+  assert.equal(candidate.score, 60.5)
+  assert.deepEqual(candidate.matchScore, modelCandidate.matchScore)
+  assert.deepEqual(candidate.fit_assessment, modelCandidate.fit_assessment)
+})
+
+test('experience-facts shadow calculation fails open without exposing thrown content', () => {
+  const hostileExperience = new Proxy([], {
+    get() {
+      throw new Error('private resume content must not escape')
+    },
+  })
+
+  const result = buildShadowExperienceData(hostileExperience, '2026-09-10T00:00:00.000Z')
+
+  assert.deepEqual(result.experienceEntries, [])
+  assert.equal(result.experienceFacts.status, 'failed_open')
+  assert.equal(result.experienceFacts.total_months, null)
+  assert.equal(JSON.stringify(result).includes('private resume content'), false)
 })
 
 test('new in-range analyses suppress only contradictory experience judgments without mutating AI payloads', () => {
