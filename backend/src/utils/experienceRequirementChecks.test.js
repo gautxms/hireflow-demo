@@ -320,6 +320,7 @@ test('corrects stale Liam and Noah sales-year claims while retaining the AE gap 
       reason: 'Liam has 2 years of retail sales experience, not the required 4-7 years of professional sales experience.',
       breakdown: '15/100 - Has 2 years retail; requires 4-7 years professional sales.',
       risk: 'His 2 years of retail sales experience does not satisfy the 4-7 year requirement.',
+      aeGap: '2+ years in closing or quota-carrying AE role (no evidence of quota-carrying sales)',
     },
     {
       name: 'Noah Example',
@@ -338,7 +339,8 @@ test('corrects stale Liam and Noah sales-year claims while retaining the AE gap 
       ],
       reason: 'Noah has 1 year of consumer retail and inbound service sales experience, well below the required 4-7 years.',
       breakdown: '12/100 (1 year vs. 4-7 required)',
-      risk: 'Career stage mismatch with 1 year total sales experience.',
+      risk: 'Significant experience gap: 1 year vs. 4–7 years required; candidate is early-career and lacks enterprise sales maturity.',
+      aeGap: 'At least 2 years in a quota-carrying Account Executive role; candidate has none.',
     },
   ]
 
@@ -362,12 +364,12 @@ test('corrects stale Liam and Noah sales-year claims while retaining the AE gap 
         matchedSkills: [],
         missingSkills: [
           `${scenario.originalYears} years of professional sales experience does not meet the 4-7 year requirement.`,
-          'At least 2 years in a quota-carrying Account Executive role; candidate has none.',
+          scenario.aeGap,
         ],
         matchedRequirementsFull: [],
         missingRequirementsFull: [
           `${scenario.originalYears} years of professional sales experience does not meet the 4-7 year requirement.`,
-          'At least 2 years in a quota-carrying Account Executive role; candidate has none.',
+          scenario.aeGap,
         ],
         matchScore: {
           score: 32.4,
@@ -380,7 +382,7 @@ test('corrects stale Liam and Noah sales-year claims while retaining the AE gap 
           matched_requirements: [],
           missing_requirements: [
             `${scenario.originalYears} years of professional sales experience does not meet the 4-7 year requirement.`,
-            'At least 2 years in a quota-carrying Account Executive role; candidate has none.',
+            scenario.aeGap,
           ],
           risks_or_gaps: [scenario.risk],
           rationale: scenario.risk,
@@ -411,7 +413,14 @@ test('corrects stale Liam and Noah sales-year claims while retaining the AE gap 
       assert.equal(result.candidate.experience_requirement_checks_v1.checks[1].status, 'unknown')
       assert.doesNotMatch(visibleNarrative, scenario.stalePattern)
       assert.match(visibleNarrative, new RegExp(String(scenario.canonicalYears).replace('.', '\\.') + ' years', 'i'))
-      assert.match(visibleNarrative, /At least 2 years in a quota-carrying Account Executive role/i)
+      assert.match(visibleNarrative, /(?:2\+ years in closing or quota-carrying AE|At least 2 years in a quota-carrying Account Executive role)/i)
+      for (const missingRequirements of [
+        result.candidate.missingSkills,
+        result.candidate.missingRequirementsFull,
+        result.candidate.fit_assessment.missing_requirements,
+      ]) {
+        assert.equal(missingRequirements.includes(scenario.aeGap), true)
+      }
       assert.equal(result.candidate.score, 32.4)
       assert.equal(result.candidate.matchScore.score, 32.4)
       assert.equal(result.candidate.matchScore.score_out_of_ten, 3.2)

@@ -315,6 +315,16 @@ function canonicalRequirementStatement(check) {
   return `${evidence} of dated ${subject} does not meet the ${required} requirement.`
 }
 
+function isSalesOnlyCheck(check) {
+  const groups = Array.isArray(check?.subject_token_groups) && check.subject_token_groups.length > 0
+    ? check.subject_token_groups
+    : [check?.subject_tokens]
+  return groups.length === 1
+    && Array.isArray(groups[0])
+    && groups[0].length === 1
+    && groups[0][0] === 'sales'
+}
+
 function textRelatesToCheck(value, check) {
   const text = normalizeComparable(value)
   if (!text || !DURATION_REFERENCE_PATTERN.test(text)) return false
@@ -322,6 +332,11 @@ function textRelatesToCheck(value, check) {
     return /\b(?:total|overall|professional|work)\s+(?:experience|tenure)\b/.test(text)
       || /\b(?:candidate|they|he|she)\s+(?:has|have|brings?|offers?)\s+\d+(?:\.\d+)?\s*\+?\s*(?:years?|yrs?|months?|mos?)\s+(?:of\s+)?experience\b/.test(text)
   }
+  // A broad professional-sales check must not consume a distinct AE-tenure
+  // requirement just because its explanation also contains the word "sales".
+  if (isSalesOnlyCheck(check)
+    && /\baccount executive\b/.test(text)
+    && !/\bsales\s+(?:experience|tenure)\b/.test(text)) return false
   const tokens = new Set(meaningfulSubjectTokens(text))
   const groups = Array.isArray(check.subject_token_groups) && check.subject_token_groups.length > 0
     ? check.subject_token_groups
@@ -372,6 +387,10 @@ function replaceConflictingTotalYears(value, originalYears, canonicalYears) {
     )
     .replace(
       new RegExp(`\\b((?:candidate|they|he|she)\\s+(?:has|brings|offers)\\s+)${numberPattern}\\s*(years?|yrs?)(?=\\s+(?:of\\s+)?experience\\b)`, 'gi'),
+      (_match, prefix, unit) => `${prefix}${canonical} ${formatYearUnit(unit, canonicalYears)}`,
+    )
+    .replace(
+      new RegExp(`\\b((?:(?:significant|material|overall|total|professional)\\s+)?(?:experience|tenure)\\s+(?:gap|shortfall)\\s*:\\s*)${numberPattern}\\s*(years?|yrs?)(?=\\s*(?:vs\\.?|versus|compared\\s+(?:with|to))\\s+)`, 'gi'),
       (_match, prefix, unit) => `${prefix}${canonical} ${formatYearUnit(unit, canonicalYears)}`,
     )
 }
