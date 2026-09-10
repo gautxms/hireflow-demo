@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 
 import { __testables } from './aiResumeAnalysisService.js'
+import { EXPERIENCE_FACTS_SOURCE_ENTRIES } from '../utils/experienceFacts.js'
 
 const { normalizeCompactAnalysis } = __testables
 
@@ -76,6 +77,52 @@ test('normalizeCompactAnalysis preserves rich candidate fields in compact pipeli
   assert.equal(candidate.summary, fixtureCandidate.summary)
   assert.deepEqual(candidate.strengths, fixtureCandidate.strengths)
   assert.deepEqual(candidate.considerations, fixtureCandidate.considerations)
+})
+
+test('normalizeCompactAnalysis preserves structured experience privately while keeping display output stable', () => {
+  const result = normalizeCompactAnalysis({
+    candidates: [{
+      name: 'Daniel Example',
+      experience: [{
+        title: 'Account Executive',
+        company: 'Example Co',
+        startDate: '2025-03',
+        endDate: 'Present',
+        description: 'Owned a quota-carrying book of business.',
+      }],
+      [EXPERIENCE_FACTS_SOURCE_ENTRIES]: [{
+        title: 'Untrusted provider-supplied sidecar',
+        start_date: '1900-01',
+        end_date: 'Present',
+      }],
+    }],
+  })
+  const candidate = result.candidates[0]
+
+  assert.deepEqual(candidate.experience, [
+    'Account Executive at Example Co — 2025-03 - Present: Owned a quota-carrying book of business.',
+  ])
+  assert.deepEqual(candidate[EXPERIENCE_FACTS_SOURCE_ENTRIES], [{
+    title: 'Account Executive',
+    company: 'Example Co',
+    start_date: '2025-03',
+    end_date: 'Present',
+    duration: null,
+    description: 'Owned a quota-carrying book of business.',
+  }])
+  assert.equal(Object.getOwnPropertyDescriptor(candidate, EXPERIENCE_FACTS_SOURCE_ENTRIES).enumerable, false)
+  assert.equal(JSON.stringify(candidate).includes('Untrusted provider-supplied sidecar'), false)
+
+  const minimalCandidate = normalizeCompactAnalysis({
+    candidates: [{ experience: [{
+      title: 'Account Executive',
+      company: 'Example Co',
+      startDate: '2025-03',
+      endDate: 'Present',
+    }] }],
+  }, { minimalMode: true }).candidates[0]
+  assert.deepEqual(minimalCandidate.experience, [])
+  assert.equal(minimalCandidate[EXPERIENCE_FACTS_SOURCE_ENTRIES].length, 1)
 })
 
 

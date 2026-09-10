@@ -7,6 +7,7 @@ import { getRuntimeSystemPromptConfig } from './adminSystemPromptService.js'
 import { prepareResumePayloadForAnalysis } from './resumeDocumentExtractionService.js'
 import { normalizeCandidateEducation } from '../utils/candidateEducation.js'
 import { normalizeCandidateFieldArray } from '../utils/candidateStructuredFields.js'
+import { EXPERIENCE_FACTS_SOURCE_ENTRIES, normalizeStructuredExperienceEntries } from '../utils/experienceFacts.js'
 import { buildRequirementSemantics, formatRequirementSemanticsForPrompt } from '../utils/requirementSemantics.js'
 import { formatLocationAlignmentForPrompt } from '../utils/locationAlignment.js'
 
@@ -493,7 +494,7 @@ function normalizeCompactCandidate(candidate = {}, { minimalMode = false, aiScor
     candidate?.missingSkills || candidate?.fit_assessment?.missing_requirements || [],
     { maxItems: minimalMode ? 5 : 10, maxItemLength: 80 },
   )
-  return {
+  const normalizedCandidate = {
     analysis_mode: clampString(candidate?.analysis_mode || '', 40),
     id: clampString(candidate?.id || '', 120),
     name: clampString(candidate?.name || candidate?.full_name || 'Unknown Candidate', 80),
@@ -545,6 +546,15 @@ function normalizeCompactCandidate(candidate = {}, { minimalMode = false, aiScor
     ai_scoring_contract_v2: normalizeAiScoringContractV2(candidate?.ai_scoring_contract_v2)
       || (aiScoringContractV2Expected ? buildMissingAiScoringContractV2Diagnostic() : null),
   }
+
+  Object.defineProperty(normalizedCandidate, EXPERIENCE_FACTS_SOURCE_ENTRIES, {
+    configurable: false,
+    enumerable: false,
+    writable: false,
+    value: normalizeStructuredExperienceEntries(candidate?.experience),
+  })
+
+  return normalizedCandidate
 }
 
 function normalizeCompactAnalysis(result = {}, { minimalMode = false, aiScoringContractV2Expected = false } = {}) {
