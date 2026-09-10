@@ -1,4 +1,5 @@
 export const EXPERIENCE_FACTS_VERSION = 'experience_facts_v1'
+export const EXPERIENCE_FACTS_SOURCE_ENTRIES = Symbol('experience_facts_source_entries_v1')
 
 const MAX_EXPERIENCE_ENTRIES = 30
 const MAX_TITLE_LENGTH = 120

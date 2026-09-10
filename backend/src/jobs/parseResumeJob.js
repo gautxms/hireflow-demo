@@ -17,7 +17,12 @@ import { resolveCanonicalCandidateIdentity } from '../utils/candidateIdentity.js
 import { classifyParseJobRetryability } from './parseJobErrorClassifier.js'
 import { normalizeCandidateEducation } from '../utils/candidateEducation.js'
 import { normalizeCandidateFieldArray } from '../utils/candidateStructuredFields.js'
-import { EXPERIENCE_FACTS_VERSION, buildExperienceFacts, normalizeStructuredExperienceEntries } from '../utils/experienceFacts.js'
+import {
+  EXPERIENCE_FACTS_SOURCE_ENTRIES,
+  EXPERIENCE_FACTS_VERSION,
+  buildExperienceFacts,
+  normalizeStructuredExperienceEntries,
+} from '../utils/experienceFacts.js'
 import { applyCanonicalExperienceFactsToCandidate } from '../utils/experienceRequirementChecks.js'
 import { isLegacyDocExtractionEnabled } from '../services/legacyDocExtractionService.js'
 import { createUnsupportedLegacyWordError, getLegacyWordDocumentDetection } from '../utils/legacyWordDocument.js'
@@ -1452,8 +1457,9 @@ function buildNormalizedCandidates(analysisResult, { resumeId, filename, experie
     const fallbackSkills = normalizeSkills(candidate?.skills)
     const flattenedSkills = flattenStructuredSkills(skillsStructured)
     const resolvedSkillsFlat = flattenedSkills.length > 0 ? flattenedSkills : fallbackSkills
+    const normalizedSourceEntries = candidate?.[EXPERIENCE_FACTS_SOURCE_ENTRIES]
     const { experienceEntries, experienceFacts } = buildShadowExperienceData(
-      candidate?.experience,
+      Array.isArray(normalizedSourceEntries) ? normalizedSourceEntries : candidate?.experience,
       experienceFactsReferenceDate,
     )
     const identity = resolveCanonicalCandidateIdentity(

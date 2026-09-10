@@ -376,14 +376,12 @@ function removeRelatedRequirementEntries(values, check) {
   })
 }
 
-function reconcileRequirementArrays(candidate, checks) {
-  const fit = candidate?.fit_assessment && typeof candidate.fit_assessment === 'object' && !Array.isArray(candidate.fit_assessment)
-    ? candidate.fit_assessment
-    : null
-  if (!fit) return
+function reconcileRequirementArrayPair(target, matchedField, missingField, checks) {
+  if (!target || typeof target !== 'object' || Array.isArray(target)) return
+  if (!Array.isArray(target[matchedField]) && !Array.isArray(target[missingField])) return
 
-  let matched = Array.isArray(fit.matched_requirements) ? fit.matched_requirements : []
-  let missing = Array.isArray(fit.missing_requirements) ? fit.missing_requirements : []
+  let matched = Array.isArray(target[matchedField]) ? target[matchedField] : []
+  let missing = Array.isArray(target[missingField]) ? target[missingField] : []
 
   for (const check of checks) {
     const statement = canonicalRequirementStatement(check)
@@ -396,8 +394,18 @@ function reconcileRequirementArrays(candidate, checks) {
     }
   }
 
-  fit.matched_requirements = matched
-  fit.missing_requirements = missing
+  target[matchedField] = matched
+  target[missingField] = missing
+}
+
+function reconcileRequirementArrays(candidate, checks) {
+  reconcileRequirementArrayPair(candidate, 'matchedRequirementsFull', 'missingRequirementsFull', checks)
+  reconcileRequirementArrayPair(
+    candidate?.fit_assessment,
+    'matched_requirements',
+    'missing_requirements',
+    checks,
+  )
 }
 
 function reconcileCandidateNarratives(candidate, { originalYears, canonicalYears, checks }) {
@@ -407,7 +415,7 @@ function reconcileCandidateNarratives(candidate, { originalYears, canonicalYears
   for (const field of ['strengths', 'considerations', 'concerns', 'matchedRequirementsFull', 'missingRequirementsFull', 'risksOrGapsFull']) {
     if (Array.isArray(next[field])) next[field] = reconcileNarrativeArray(next[field], options)
   }
-  for (const field of ['recommendation', 'recommendationFull']) {
+  for (const field of ['summary', 'summaryFull', 'recommendation', 'recommendationFull']) {
     if (typeof next[field] === 'string') next[field] = reconcileNarrativeValue(next[field], options)
   }
 

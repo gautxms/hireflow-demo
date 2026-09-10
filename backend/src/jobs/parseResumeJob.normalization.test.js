@@ -21,6 +21,7 @@ import { __resetPdfJsClientForTests, __setPdfJsClientForTests } from '../service
 import { scoreCandidateDeterministically } from '../services/deterministicJdFitScoringService.js'
 import { V3_SHADOW_SCORING_CONTRACT_VERSION, scoreCandidateWithV3Shadow } from '../services/v3ShadowScoringService.js'
 import { buildAiScoringContractV2ScoreDeltaDiagnostic } from '../services/scoreContractShadowDiagnostics.js'
+import { __testables as aiResumeAnalysisTestables } from '../services/aiResumeAnalysisService.js'
 import { pool } from '../db/client.js'
 import { parseQueue } from '../services/jobQueue.js'
 
@@ -173,6 +174,104 @@ test('buildNormalizedCandidates attaches canonical experience facts without chan
   assert.equal(candidate.score, 60.5)
   assert.deepEqual(candidate.matchScore, modelCandidate.matchScore)
   assert.deepEqual(candidate.fit_assessment, modelCandidate.fit_assessment)
+})
+
+test('compact provider normalization carries structured experience into allowlisted deterministic application', () => {
+  const rawProviderResult = {
+    candidates: [{
+      name: 'Daniel Example',
+      years_experience: 4,
+      summary: 'Daniel has 4 years of total professional experience.',
+      score: 60.5,
+      matchScore: {
+        score: 60.5,
+        score_out_of_ten: 6.1,
+        reason: 'Daniel has 18 months of quota-carrying Account Executive experience, exceeding the 2-year minimum.',
+      },
+      fit_assessment: {
+        overall_fit_score: 60.5,
+        matched_requirements: [
+          '4 years of total professional experience meets the minimum.',
+          '18 months of quota-carrying Account Executive experience exceeds the 2-year minimum.',
+        ],
+        missing_requirements: ['Formal sales methodology training is not evidenced.'],
+        risks_or_gaps: [],
+        rationale: 'The quota-carrying Account Executive tenure meets the 2-year requirement.',
+        notes: [],
+      },
+      recommendation: 'Daniel meets the core experience requirements with 18 months as a quota-carrying Account Executive.',
+      experience: [{
+        title: 'Sales Development Representative',
+        company: 'Example Co',
+        startDate: '2022-03',
+        endDate: '2025-03',
+        description: 'Generated qualified sales opportunities.',
+      }, {
+        title: 'Account Executive',
+        company: 'Example Co',
+        startDate: '2025-03',
+        endDate: 'Present',
+        description: 'Owned a quota and closed new business.',
+      }],
+      experience_entries: [{ title: 'Untrusted provider-owned shadow field' }],
+      experience_facts_v1: { total_months: 999 },
+    }],
+  }
+  const compactResult = aiResumeAnalysisTestables.normalizeCompactAnalysis(rawProviderResult)
+  assert.deepEqual(compactResult.candidates[0].experience, [
+    'Sales Development Representative at Example Co — 2022-03 - 2025-03: Generated qualified sales opportunities.',
+    'Account Executive at Example Co — 2025-03 - Present: Owned a quota and closed new business.',
+  ])
+  assert.equal(JSON.stringify(compactResult).includes('Untrusted provider-owned shadow field'), false)
+
+  const [normalized] = buildNormalizedCandidates(compactResult, {
+    resumeId: 'resume-daniel-pipeline',
+    filename: 'daniel.pdf',
+    experienceFactsReferenceDate: '2026-09-10T00:00:00.000Z',
+  })
+  assert.equal(normalized.experience_entries.length, 2)
+  assert.equal(normalized.experience_facts_v1.status, 'computed')
+  assert.equal(normalized.experience_facts_v1.confidence, 'high')
+  assert.equal(normalized.experience_facts_v1.total_months, 54)
+  assert.equal(normalized.experience_facts_v1.total_years, 4.5)
+
+  const [applied] = __testables.applyExperienceFactsV1ForRuntimeTest({
+    candidates: [normalized],
+    jobDescriptionContext: {
+      hasContext: true,
+      requirementSemantics: {
+        required: [
+          'Minimum 4 years of total professional experience.',
+          'Minimum 2 years of closing or quota-carrying Account Executive experience.',
+        ],
+        preferred: [],
+        alternativeGroups: [],
+      },
+    },
+    userId: 24,
+    analysisId: 'analysis-daniel-pipeline',
+    resumeId: 'resume-daniel-pipeline',
+    env: {
+      EXPERIENCE_FACTS_V1_APPLY_ENABLED: 'true',
+      EXPERIENCE_FACTS_V1_APPLY_ALLOWED_ANALYSIS_IDS: 'analysis-daniel-pipeline',
+    },
+    logger: { info() {}, warn() {} },
+  })
+
+  assert.equal(applied.years_experience, 4.5)
+  assert.equal(applied.score, 60.5)
+  assert.equal(applied.matchScore.score, 60.5)
+  assert.equal(applied.matchScore.score_out_of_ten, 6.1)
+  assert.equal(applied.fit_assessment.overall_fit_score, 60.5)
+  assert.equal(applied.experience_requirement_checks_v1.checks[0].status, 'met')
+  assert.equal(applied.experience_requirement_checks_v1.checks[1].status, 'not_met')
+  assert.equal(applied.experience_requirement_checks_v1.checks[1].evidenced_months, 18)
+  assert.equal(applied.fit_assessment.matched_requirements.some((entry) => /18 months/i.test(entry)), false)
+  assert.equal(applied.fit_assessment.missing_requirements.some((entry) => /18 months.*24 months/i.test(entry)), true)
+  assert.equal(applied.matchedRequirementsFull.some((entry) => /18 months/i.test(entry)), false)
+  assert.equal(applied.missingRequirementsFull.some((entry) => /18 months.*24 months/i.test(entry)), true)
+  assert.doesNotMatch(applied.matchScore.reason, /exceed/i)
+  assert.doesNotMatch(applied.recommendation, /meets the core experience requirements/i)
 })
 
 test('experience-facts shadow calculation fails open without exposing thrown content', () => {
@@ -349,11 +448,20 @@ test('equivalent PDF, DOCX, and DOC fixtures preserve decimal evidence and downs
             weighted_total_score_recomputed: 89.1,
             score_confidence: 'high',
           },
+          experience: [{
+            title: 'Backend Engineer',
+            company: 'Synthetic Labs',
+            startDate: '2022-03',
+            endDate: '2026-09',
+            description: 'Built Node.js and PostgreSQL services.',
+          }],
         }],
       }
-      const [normalized] = buildNormalizedCandidates(frozenModelResult, {
+      const compactModelResult = aiResumeAnalysisTestables.normalizeCompactAnalysis(frozenModelResult)
+      const [normalized] = buildNormalizedCandidates(compactModelResult, {
         resumeId: 'synthetic-cross-format-resume',
         filename: fixture.filename,
+        experienceFactsReferenceDate: '2026-09-10T00:00:00.000Z',
       })
       const experienceReconciled = reconcileCandidateExperienceRange(normalized, { experienceMin: 2, experienceMax: 5 })
       const reconciled = reconcileCandidateRequirementSemantics(experienceReconciled, {
@@ -382,13 +490,17 @@ test('equivalent PDF, DOCX, and DOC fixtures preserve decimal evidence and downs
       const provenance = buildAiScoringContractV2ScoreDeltaDiagnostic({ candidate: locationReconciled })
       outputs.push({
         yearsExperience: locationReconciled.years_experience,
+        experienceEntries: locationReconciled.experience_entries,
+        experienceFactsStatus: locationReconciled.experience_facts_v1.status,
+        experienceFactsConfidence: locationReconciled.experience_facts_v1.confidence,
+        experienceFactsMonths: locationReconciled.experience_facts_v1.total_months,
         classification: locationReconciled.experience_range.classification,
         skills: locationReconciled.skills_flat,
         matchedRequirements: locationReconciled.fit_assessment.matched_requirements,
         missingRequirements: locationReconciled.fit_assessment.missing_requirements,
         preferredGaps: locationReconciled.fit_assessment.preferred_gaps,
         locationRisks: locationReconciled.fit_assessment.risks_or_gaps,
-        locationMatchScore: locationReconciled.fit_assessment.location_match_score,
+        locationMatchScore: locationReconciled.fit_assessment.location_match_score ?? null,
         deterministicLocation: deterministic.scoring_breakdown.location_alignment,
         deterministicScore: deterministic.final_score,
         deterministicExperience: deterministic.scoring_breakdown.experience_alignment,
@@ -403,6 +515,10 @@ test('equivalent PDF, DOCX, and DOC fixtures preserve decimal evidence and downs
     assert.deepEqual(outputs[1], outputs[0])
     assert.deepEqual(outputs[2], outputs[0])
     assert.equal(outputs[0].yearsExperience, 4.5)
+    assert.equal(outputs[0].experienceEntries.length, 1)
+    assert.equal(outputs[0].experienceFactsStatus, 'computed')
+    assert.equal(outputs[0].experienceFactsConfidence, 'high')
+    assert.equal(outputs[0].experienceFactsMonths, 54)
     assert.equal(outputs[0].classification, 'within_range')
     assert.equal(outputs[0].deterministicExperience.range_classification, 'within_range')
     assert.deepEqual(outputs[0].missingRequirements, [])

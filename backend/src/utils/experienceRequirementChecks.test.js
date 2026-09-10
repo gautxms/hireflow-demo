@@ -94,8 +94,14 @@ test('classifies Daniel-style quota AE tenure from matching dated entries, not t
 
 test('reconciles a false matched requirement while preserving score fields and unrelated narrative', () => {
   const candidate = buildHighConfidenceCandidate({
+    summary: 'Daniel has 4.5 years of total professional experience.',
     strengths: ['Strong discovery skills'],
     considerations: ['Review enterprise deal size'],
+    matchedRequirementsFull: [
+      '18 months of quota-carrying Account Executive experience exceeds the required two years.',
+      'Strong discovery methodology',
+    ],
+    missingRequirementsFull: ['Enterprise deal size is unclear'],
     matchScore: {
       score: 60.5,
       score_out_of_ten: 6.1,
@@ -126,6 +132,10 @@ test('reconciles a false matched requirement while preserving score fields and u
   assert.deepEqual(result.candidate.fit_assessment.matched_requirements, ['Strong discovery methodology'])
   assert.equal(result.candidate.fit_assessment.missing_requirements.includes('Enterprise deal size is unclear'), true)
   assert.equal(result.candidate.fit_assessment.missing_requirements.some((entry) => /18 months.*24 months/i.test(entry)), true)
+  assert.deepEqual(result.candidate.matchedRequirementsFull, ['Strong discovery methodology'])
+  assert.equal(result.candidate.missingRequirementsFull.includes('Enterprise deal size is unclear'), true)
+  assert.equal(result.candidate.missingRequirementsFull.some((entry) => /18 months.*24 months/i.test(entry)), true)
+  assert.equal(result.candidate.summary, 'Daniel has 4.5 years of total professional experience.')
   assert.match(result.candidate.matchScore.reason, /18 months.*24 months/i)
   assert.match(result.candidate.matchScore.reason, /Discovery skills are strong/i)
   assert.match(result.candidate.fit_assessment.rationale, /18 months.*24 months/i)
