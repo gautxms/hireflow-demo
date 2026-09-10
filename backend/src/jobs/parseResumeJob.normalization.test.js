@@ -2359,6 +2359,197 @@ test('AI score cache read-shadow read failures fail open and do not fail parse d
   }
 })
 
+function experienceFactsApplyCandidateFixture(overrides = {}) {
+  return {
+    resumeId: 'resume-experience-facts-1',
+    name: 'Sensitive Experience Candidate',
+    email: 'experience-candidate@example.com',
+    years_experience: 4,
+    score: 71,
+    matchScore: {
+      score: 71,
+      score_out_of_ten: 7.1,
+      reason: 'The candidate has 4 years of experience and meets the overall minimum.',
+    },
+    fit_assessment: {
+      overall_fit_score: 71,
+      matched_requirements: ['4 years of total experience meets the requirement.'],
+      missing_requirements: [],
+      risks_or_gaps: [],
+      rationale: 'The candidate has 4 years of experience and meets the overall minimum.',
+      notes: [],
+    },
+    experience_entries: [{
+      title: 'Software Engineer',
+      company: 'Private Employer',
+      start_date: '2022-01',
+      end_date: '2025-01',
+      duration: null,
+      description: 'Built private systems.',
+    }],
+    experience_facts_v1: {
+      version: 'experience_facts_v1',
+      status: 'computed',
+      confidence: 'high',
+      total_months: 36,
+      total_years: 3,
+      entry_facts: [{
+        entry_index: 0,
+        start_date: '2022-01',
+        end_date: '2025-01',
+        duration_months: 36,
+      }],
+    },
+    ...overrides,
+  }
+}
+
+const EXPERIENCE_FACTS_APPLY_JOB_CONTEXT = {
+  hasContext: true,
+  requirementSemantics: {
+    required: ['Minimum 4 years of total professional experience.'],
+    preferred: [],
+    alternativeGroups: [],
+  },
+}
+
+test('experience facts apply leaves candidates unchanged when disabled or not allowlisted', () => {
+  const disabledCandidate = experienceFactsApplyCandidateFixture()
+  const disabledCandidates = [disabledCandidate]
+  const disabledLogs = []
+  const disabledResult = __testables.applyExperienceFactsV1ForRuntimeTest({
+    candidates: disabledCandidates,
+    jobDescriptionContext: EXPERIENCE_FACTS_APPLY_JOB_CONTEXT,
+    userId: 24,
+    analysisId: 'analysis-experience-facts-1',
+    resumeId: 'resume-experience-facts-1',
+    env: {
+      EXPERIENCE_FACTS_V1_APPLY_ENABLED: 'false',
+      EXPERIENCE_FACTS_V1_APPLY_ALLOWED_USER_IDS: '24',
+    },
+    logger: { info: (...args) => disabledLogs.push(args), warn: (...args) => disabledLogs.push(args) },
+  })
+
+  assert.strictEqual(disabledResult, disabledCandidates)
+  assert.strictEqual(disabledResult[0], disabledCandidate)
+  assert.equal(disabledLogs.length, 0)
+
+  const unlistedCandidate = experienceFactsApplyCandidateFixture()
+  const unlistedLogs = []
+  const unlistedResult = __testables.applyExperienceFactsV1ForRuntimeTest({
+    candidates: [unlistedCandidate],
+    jobDescriptionContext: EXPERIENCE_FACTS_APPLY_JOB_CONTEXT,
+    userId: 24,
+    analysisId: 'analysis-experience-facts-1',
+    resumeId: 'resume-experience-facts-1',
+    env: { EXPERIENCE_FACTS_V1_APPLY_ENABLED: 'true' },
+    logger: { info: (...args) => unlistedLogs.push(args), warn: (...args) => unlistedLogs.push(args) },
+  })
+
+  assert.strictEqual(unlistedResult[0], unlistedCandidate)
+  assert.equal(unlistedLogs.length, 0)
+})
+
+test('experience facts apply reconciles allowlisted duration facts without changing any score field', () => {
+  const candidate = experienceFactsApplyCandidateFixture()
+  const before = structuredClone(candidate)
+  const logs = []
+  const result = __testables.applyExperienceFactsV1ForRuntimeTest({
+    candidates: [candidate],
+    jobDescriptionContext: EXPERIENCE_FACTS_APPLY_JOB_CONTEXT,
+    userId: 24,
+    analysisId: 'analysis-experience-facts-1',
+    resumeId: 'resume-experience-facts-1',
+    env: {
+      EXPERIENCE_FACTS_V1_APPLY_ENABLED: 'true',
+      EXPERIENCE_FACTS_V1_APPLY_ALLOWED_USER_IDS: '24',
+    },
+    logger: { info: (...args) => logs.push(args), warn: (...args) => logs.push(args) },
+  })
+
+  assert.deepEqual(candidate, before)
+  assert.notStrictEqual(result[0], candidate)
+  assert.equal(result[0].years_experience, 3)
+  assert.equal(result[0].score, 71)
+  assert.equal(result[0].matchScore.score, 71)
+  assert.equal(result[0].matchScore.score_out_of_ten, 7.1)
+  assert.equal(result[0].fit_assessment.overall_fit_score, 71)
+  assert.match(result[0].matchScore.reason, /36 months.*48 months/i)
+  assert.equal(result[0].fit_assessment.matched_requirements.length, 0)
+  assert.match(result[0].fit_assessment.missing_requirements[0], /36 months.*48 months/i)
+  assert.equal(result[0].experience_requirement_checks_v1.checks[0].status, 'not_met')
+  assert.equal(result[0].experience_facts_apply_metadata.years_delta, -1)
+  assert.equal(logs[0][0], '[ExperienceFactsV1] apply diagnostic')
+  assert.equal(logs[0][1].action, 'applied')
+  assert.equal(logs[0][1].score_fields_unchanged, true)
+  const serializedLogs = JSON.stringify(logs)
+  for (const forbidden of ['Sensitive Experience Candidate', 'experience-candidate@example.com', 'Private Employer', 'Built private systems', 'Minimum 4 years']) {
+    assert.equal(serializedLogs.includes(forbidden), false)
+  }
+})
+
+test('experience facts apply skips non-high-confidence facts and fails open without exposing resume data', () => {
+  const logs = []
+  const mediumConfidenceCandidate = experienceFactsApplyCandidateFixture({
+    experience_facts_v1: {
+      ...experienceFactsApplyCandidateFixture().experience_facts_v1,
+      confidence: 'medium',
+    },
+  })
+  const env = {
+    EXPERIENCE_FACTS_V1_APPLY_ENABLED: 'true',
+    EXPERIENCE_FACTS_V1_APPLY_ALLOWED_ANALYSIS_IDS: 'analysis-experience-facts-1',
+  }
+  const skipped = __testables.applyExperienceFactsV1ForRuntimeTest({
+    candidates: [mediumConfidenceCandidate],
+    jobDescriptionContext: EXPERIENCE_FACTS_APPLY_JOB_CONTEXT,
+    userId: 999,
+    analysisId: 'analysis-experience-facts-1',
+    resumeId: 'resume-experience-facts-1',
+    env,
+    logger: { info: (...args) => logs.push(args), warn: (...args) => logs.push(args) },
+  })
+
+  assert.strictEqual(skipped[0], mediumConfidenceCandidate)
+  assert.equal(logs[0][1].action, 'skipped_not_eligible')
+
+  const uncloneableCandidate = experienceFactsApplyCandidateFixture({
+    privatePayload: () => 'Never log Sensitive Experience Candidate',
+  })
+  const failedOpen = __testables.applyExperienceFactsV1ForRuntimeTest({
+    candidates: [uncloneableCandidate],
+    jobDescriptionContext: EXPERIENCE_FACTS_APPLY_JOB_CONTEXT,
+    userId: 999,
+    analysisId: 'analysis-experience-facts-1',
+    resumeId: 'resume-experience-facts-1',
+    env,
+    logger: { info: (...args) => logs.push(args), warn: (...args) => logs.push(args) },
+  })
+
+  assert.strictEqual(failedOpen[0], uncloneableCandidate)
+  assert.equal(logs[1][0], '[ExperienceFactsV1] apply diagnostic')
+  assert.equal(logs[1][1].action, 'failed_open')
+  assert.equal(JSON.stringify(logs).includes('Sensitive Experience Candidate'), false)
+  assert.equal(JSON.stringify(logs).includes('experience-candidate@example.com'), false)
+})
+
+test('experience facts apply requires a job description context', () => {
+  const candidate = experienceFactsApplyCandidateFixture()
+  const result = __testables.applyExperienceFactsV1ForRuntimeTest({
+    candidates: [candidate],
+    jobDescriptionContext: { hasContext: false },
+    userId: 24,
+    analysisId: 'analysis-experience-facts-1',
+    env: {
+      EXPERIENCE_FACTS_V1_APPLY_ENABLED: 'true',
+      EXPERIENCE_FACTS_V1_APPLY_ALLOWED_USER_IDS: '24',
+    },
+  })
+
+  assert.strictEqual(result[0], candidate)
+  assert.equal(result[0].years_experience, 4)
+})
+
 function withDeterministicJdFitShadowEnv(overrides = {}) {
   const keys = [
     'DETERMINISTIC_JD_FIT_SHADOW_ENABLED',

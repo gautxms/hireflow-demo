@@ -18,6 +18,7 @@ import { classifyParseJobRetryability } from './parseJobErrorClassifier.js'
 import { normalizeCandidateEducation } from '../utils/candidateEducation.js'
 import { normalizeCandidateFieldArray } from '../utils/candidateStructuredFields.js'
 import { EXPERIENCE_FACTS_VERSION, buildExperienceFacts, normalizeStructuredExperienceEntries } from '../utils/experienceFacts.js'
+import { applyCanonicalExperienceFactsToCandidate } from '../utils/experienceRequirementChecks.js'
 import { isLegacyDocExtractionEnabled } from '../services/legacyDocExtractionService.js'
 import { createUnsupportedLegacyWordError, getLegacyWordDocumentDetection } from '../utils/legacyWordDocument.js'
 import { emitAiScoringContractV2ScoreDeltaDiagnostic, emitScoreContractShadowDiagnostic } from '../services/scoreContractShadowDiagnostics.js'
@@ -544,6 +545,24 @@ function buildDeterministicJdFitApplyAllowlistDiagnostic({ userId, analysisId, e
   }
 }
 
+function isExperienceFactsV1ApplyEnabled(env = process.env) {
+  return String(env.EXPERIENCE_FACTS_V1_APPLY_ENABLED || '').trim().toLowerCase() === 'true'
+}
+
+function buildExperienceFactsV1ApplyAllowlistDiagnostic({ userId, analysisId, env = process.env } = {}) {
+  const userAllowlist = parseRuntimeAllowlist(env.EXPERIENCE_FACTS_V1_APPLY_ALLOWED_USER_IDS)
+  const analysisAllowlist = parseRuntimeAllowlist(env.EXPERIENCE_FACTS_V1_APPLY_ALLOWED_ANALYSIS_IDS)
+  const allowedByUser = runtimeAllowlistMatches(userId, userAllowlist)
+  const allowedByAnalysis = runtimeAllowlistMatches(analysisId, analysisAllowlist)
+
+  return {
+    has_allowlist: userAllowlist.length > 0 || analysisAllowlist.length > 0,
+    allowlist_matched: allowedByUser || allowedByAnalysis,
+    allowed_by_user_allowlist: allowedByUser,
+    allowed_by_analysis_allowlist: allowedByAnalysis,
+  }
+}
+
 function isV3ShadowScoringEnabled(env = process.env) {
   return String(env.AI_SCORING_CONTRACT_V3_SHADOW_ENABLED || '').trim().toLowerCase() === 'true'
 }
@@ -841,6 +860,105 @@ function logAiScoringContractV2Diagnostic(candidate = {}, metadata = {}, logger 
 function logDeterministicJdFitApplyDiagnostic(logger, level, diagnostic) {
   if (level === 'warn') logger.warn?.('[DeterministicJdFit] apply diagnostic', diagnostic)
   else logger.info?.('[DeterministicJdFit] apply diagnostic', diagnostic)
+}
+
+function normalizeExperienceFactsDiagnosticValue(value, allowedValues) {
+  const normalized = String(value || '').trim().toLowerCase()
+  return allowedValues.includes(normalized) ? normalized : null
+}
+
+function buildSafeExperienceFactsV1ApplyDiagnostic({
+  action = 'skipped_not_eligible',
+  candidate = {},
+  result = null,
+  userId = null,
+  analysisId = null,
+  resumeId = null,
+  jobDescriptionContext = null,
+  allowlist = {},
+} = {}) {
+  const facts = candidate?.experience_facts_v1 || {}
+  const appliedCandidate = result?.candidate || candidate
+  const metadata = appliedCandidate?.experience_facts_apply_metadata || {}
+  const originalScore = resolveNumericScore(candidate?.score)
+  const appliedScore = resolveNumericScore(appliedCandidate?.score)
+  const originalMatchScore = resolveCandidateMatchScoreValue(candidate)
+  const appliedMatchScore = resolveCandidateMatchScoreValue(appliedCandidate)
+  const originalFitScore = resolveNumericScore(candidate?.fit_assessment?.overall_fit_score)
+  const appliedFitScore = resolveNumericScore(appliedCandidate?.fit_assessment?.overall_fit_score)
+
+  return {
+    action,
+    analysis_id: analysisId || null,
+    resume_id: resumeId || candidate?.resumeId || null,
+    user_id: userId ?? null,
+    has_jd_context: Boolean(jobDescriptionContext?.hasContext),
+    has_allowlist: Boolean(allowlist.has_allowlist),
+    allowlist_matched: Boolean(allowlist.allowlist_matched),
+    allowed_by_user_allowlist: Boolean(allowlist.allowed_by_user_allowlist),
+    allowed_by_analysis_allowlist: Boolean(allowlist.allowed_by_analysis_allowlist),
+    canonical_facts_version_match: facts?.version === EXPERIENCE_FACTS_VERSION,
+    canonical_facts_status: normalizeExperienceFactsDiagnosticValue(facts?.status, ['computed', 'unavailable', 'failed_open']),
+    canonical_facts_confidence: normalizeExperienceFactsDiagnosticValue(facts?.confidence, ['high', 'medium', 'low', 'unavailable']),
+    original_years_experience: resolveNumericScore(metadata.original_years_experience ?? candidate?.years_experience),
+    applied_years_experience: resolveNumericScore(metadata.applied_years_experience),
+    years_delta: resolveNumericScore(metadata.years_delta),
+    duration_requirement_count: resolveNumericScore(metadata.duration_requirement_count),
+    duration_requirement_met_count: resolveNumericScore(metadata.duration_requirement_met_count),
+    duration_requirement_not_met_count: resolveNumericScore(metadata.duration_requirement_not_met_count),
+    duration_requirement_unknown_count: resolveNumericScore(metadata.duration_requirement_unknown_count),
+    score_fields_unchanged: originalScore === appliedScore
+      && originalMatchScore === appliedMatchScore
+      && originalFitScore === appliedFitScore,
+  }
+}
+
+function logExperienceFactsV1ApplyDiagnostic(logger, level, diagnostic) {
+  try {
+    if (level === 'warn') logger.warn?.('[ExperienceFactsV1] apply diagnostic', diagnostic)
+    else logger.info?.('[ExperienceFactsV1] apply diagnostic', diagnostic)
+  } catch (_) {
+    // Diagnostics must never affect resume analysis.
+  }
+}
+
+export function applyExperienceFactsV1ForRuntimeTest({
+  candidates = [],
+  jobDescriptionContext,
+  userId,
+  analysisId,
+  resumeId,
+  logger = console,
+  env = process.env,
+} = {}) {
+  if (!Array.isArray(candidates) || !isExperienceFactsV1ApplyEnabled(env)) return candidates
+
+  const allowlist = buildExperienceFactsV1ApplyAllowlistDiagnostic({ userId, analysisId, env })
+  if (!allowlist.allowlist_matched || !jobDescriptionContext?.hasContext) return candidates
+
+  return candidates.map((candidate) => {
+    try {
+      const result = applyCanonicalExperienceFactsToCandidate(candidate, jobDescriptionContext)
+      const action = result.applied ? 'applied' : 'skipped_not_eligible'
+      logExperienceFactsV1ApplyDiagnostic(logger, 'info', buildSafeExperienceFactsV1ApplyDiagnostic({
+        action, candidate, result, userId, analysisId, resumeId, jobDescriptionContext, allowlist,
+      }))
+      return result.applied ? result.candidate : candidate
+    } catch (_) {
+      logExperienceFactsV1ApplyDiagnostic(logger, 'warn', {
+        action: 'failed_open',
+        analysis_id: analysisId || null,
+        resume_id: resumeId || null,
+        user_id: userId ?? null,
+        has_jd_context: Boolean(jobDescriptionContext?.hasContext),
+        has_allowlist: Boolean(allowlist.has_allowlist),
+        allowlist_matched: Boolean(allowlist.allowlist_matched),
+        allowed_by_user_allowlist: Boolean(allowlist.allowed_by_user_allowlist),
+        allowed_by_analysis_allowlist: Boolean(allowlist.allowed_by_analysis_allowlist),
+      })
+      return candidate
+    }
+  })
 }
 
 function isEligibleDeterministicJdFitApply({ deterministicResult, jobDescriptionContext, allowlistMatched }) {
@@ -2150,11 +2268,20 @@ export async function runParse(job) {
     throw aiError
   }
 
-  const candidates = buildNormalizedCandidates(analysisResult, {
+  const candidatesWithExperienceFactsApplied = applyExperienceFactsV1ForRuntimeTest({
+    candidates: buildNormalizedCandidates(analysisResult, {
+      resumeId,
+      filename: analysisFilename,
+      experienceFactsReferenceDate: new Date(),
+    }),
+    jobDescriptionContext,
+    userId: job.data.userId ?? null,
+    analysisId: analysisId || null,
     resumeId,
-    filename: analysisFilename,
-    experienceFactsReferenceDate: new Date(),
+    logger: console,
   })
+
+  const candidates = candidatesWithExperienceFactsApplied
     .map((candidate) => reconcileCandidateExperienceRange(candidate, jobDescriptionContext))
     .map((candidate) => reconcileCandidateRequirementSemantics(
       candidate,
@@ -2506,6 +2633,9 @@ export const __testables = {
   buildSafeDeterministicJdFitShadowDiagnostic,
   applyDeterministicJdFitScoresForRuntimeTest,
   buildSafeDeterministicJdFitApplyDiagnostic,
+  applyExperienceFactsV1ForRuntimeTest,
+  buildSafeExperienceFactsV1ApplyDiagnostic,
+  buildExperienceFactsV1ApplyAllowlistDiagnostic,
   hasDeterministicJdFitAppliedScore,
   hasV2VisibleScoreExperimentApplied,
   shouldSkipAiScoreCacheShadowForCandidate,
