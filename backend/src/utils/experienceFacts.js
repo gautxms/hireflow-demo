@@ -231,7 +231,7 @@ export function buildExperienceFacts(value, { referenceDate } = {}) {
     unparsed_entry_count: unparsedEntryCount,
     date_coverage_ratio: Math.round(coverageRatio * 100) / 100,
     overlap_months_removed: overlapMonthsRemoved,
-    entry_facts: intervals.map(({ start, end, ...interval }) => interval),
+    entry_facts: intervals.map(({ start: _start, end: _end, ...interval }) => interval),
   }
 }
 
