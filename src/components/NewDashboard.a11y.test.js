@@ -57,3 +57,14 @@ test('dashboard separates the resumes analyzed reporting KPI from canonical allo
   assert.match(dashboardSource, /useResumeAnalysisQuota\(\)/)
   assert.match(dashboardSource, /<ResumeAllowanceCard status=\{resumeQuota\.status\} quota=\{resumeQuota\.quota\} \/>/)
 })
+
+test('resume allowance uses a compact responsive strip without changing quota semantics', () => {
+  const allowanceSource = readFileSync(new URL('./ResumeAllowanceCard.jsx', import.meta.url), 'utf8')
+
+  assert.match(allowanceSource, /className="resume-allowance__summary"/)
+  assert.match(allowanceSource, /role="progressbar"[\s\S]*aria-valuenow=\{Math\.min\(quota\.used, quota\.limit\)\}/)
+  assert.match(dashboardStyles, /grid-template-columns: auto minmax\(160px, 1fr\) auto;/)
+  assert.match(dashboardStyles, /"summary track reset"\n {4}"detail detail detail";/)
+  assert.match(dashboardStyles, /\.resume-allowance__track \{ grid-area: track; height: 8px;/)
+  assert.match(dashboardStyles, /@media \(max-width: 640px\) \{[\s\S]*"summary"\n {6}"track"\n {6}"reset"\n {6}"detail";/)
+})
