@@ -9,6 +9,7 @@ const MAXIMUM_ONLY_PATTERN = /\b(?:maximum(?:\s+of)?|no\s+more\s+than|up\s+to|at
 const POSITIVE_REQUIREMENT_PATTERN = /\b(?:meet(?:s|ing)?|met|exceed(?:s|ed|ing)?|satisf(?:y|ies|ied|ying)|fulfil(?:l|ls|led|ling)?|above|sufficient|qualified)\b/i
 const NEGATIVE_REQUIREMENT_PATTERN = /\b(?:below|fewer\s+than|less\s+than|short\s+of|shortfall|does\s+not\s+(?:meet|satisfy)|did\s+not\s+(?:meet|satisfy)|not\s+(?:the\s+)?required|fail(?:s|ed|ing)?|insufficient|underqualified|lacks?|missing|gap)\b/i
 const DURATION_REFERENCE_PATTERN = /\b(?:\d+(?:\.\d+)?\s*\+?\s*(?:years?|yrs?|months?|mos?)|(?:one|two|three|four|five|six|seven|eight|nine|ten)[-\s](?:year|month)s?)\b/i
+const CAREER_BACKGROUND_PATTERN = /\b(?:b2b|b2c|career|commercial|consumer|customer\s+service|employment|inbound|industry|outbound|professional|retail|saas|sales|software|technology|work)\b/i
 
 const SUBJECT_STOP_WORDS = new Set([
   'a', 'an', 'and', 'at', 'background', 'be', 'candidate', 'candidates', 'direct', 'essential', 'for',
@@ -375,6 +376,10 @@ function replaceConflictingTotalYears(value, originalYears, canonicalYears) {
   const escapedOriginal = String(originalYears).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   const canonical = formatYears(canonicalYears)
   const numberPattern = Number.isInteger(originalYears) ? `${escapedOriginal}(?:\\.0)?` : escapedOriginal
+  const careerStagePattern = new RegExp(
+    `\\b((?:entry[-\\s]+level|early[-\\s]+career|junior|mid[-\\s]+level|senior)\\s+candidate\\s+with\\s+)${numberPattern}\\s*(years?|yrs?)\\s+of\\s+((?:(?:[a-z0-9+#.-]+)\\s+){0,8}experience)\\b`,
+    'gi',
+  )
 
   return value
     .replace(
@@ -393,6 +398,11 @@ function replaceConflictingTotalYears(value, originalYears, canonicalYears) {
       new RegExp(`\\b((?:(?:significant|material|overall|total|professional)\\s+)?(?:experience|tenure)\\s+(?:gap|shortfall)\\s*:\\s*)${numberPattern}\\s*(years?|yrs?)(?=\\s*(?:vs\\.?|versus|compared\\s+(?:with|to))\\s+)`, 'gi'),
       (_match, prefix, unit) => `${prefix}${canonical} ${formatYearUnit(unit, canonicalYears)}`,
     )
+    .replace(careerStagePattern, (match, prefix, unit, descriptor) => (
+      CAREER_BACKGROUND_PATTERN.test(descriptor)
+        ? `${prefix}${canonical} ${formatYearUnit(unit, canonicalYears)} of ${descriptor}`
+        : match
+    ))
 }
 
 function replaceConflictingSubjectYears(value, originalYears, canonicalYears, checks, assumeExperienceContext = false) {

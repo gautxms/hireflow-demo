@@ -320,6 +320,7 @@ test('corrects stale Liam and Noah sales-year claims while retaining the AE gap 
       reason: 'Liam has 2 years of retail sales experience, not the required 4-7 years of professional sales experience.',
       breakdown: '15/100 - Has 2 years retail; requires 4-7 years professional sales.',
       risk: 'His 2 years of retail sales experience does not satisfy the 4-7 year requirement.',
+      rationale: 'His 2 years of retail sales experience does not satisfy the 4-7 year requirement.',
       aeGap: '2+ years in closing or quota-carrying AE role (no evidence of quota-carrying sales)',
     },
     {
@@ -340,6 +341,7 @@ test('corrects stale Liam and Noah sales-year claims while retaining the AE gap 
       reason: 'Noah has 1 year of consumer retail and inbound service sales experience, well below the required 4-7 years.',
       breakdown: '12/100 (1 year vs. 4-7 required)',
       risk: 'Significant experience gap: 1 year vs. 4–7 years required; candidate is early-career and lacks enterprise sales maturity.',
+      rationale: 'Noah Bennett is an entry-level candidate with 1 year of consumer retail and inbound call center experience. While he demonstrates basic objection handling and needs discovery, he lacks the 4–7 years of quota-carrying B2B SaaS sales experience required.',
       aeGap: 'At least 2 years in a quota-carrying Account Executive role; candidate has none.',
     },
   ]
@@ -385,7 +387,7 @@ test('corrects stale Liam and Noah sales-year claims while retaining the AE gap 
             scenario.aeGap,
           ],
           risks_or_gaps: [scenario.risk],
-          rationale: scenario.risk,
+          rationale: scenario.rationale,
           notes: [],
         },
         recommendation: scenario.reason,
@@ -450,6 +452,14 @@ test('uses canonical total years consistently without rewriting skill-specific t
       'The candidate has 4 years of experience and meets the overall minimum.',
       'Only 4 years of Kubernetes experience is documented.',
     ],
+    fit_assessment: {
+      overall_fit_score: 60.5,
+      matched_requirements: [],
+      missing_requirements: [],
+      risks_or_gaps: [],
+      rationale: 'Jordan is an entry-level candidate with 4 years of Kubernetes experience.',
+      notes: [],
+    },
   })
 
   const result = applyCanonicalExperienceFactsToCandidate(candidate, {
@@ -460,6 +470,7 @@ test('uses canonical total years consistently without rewriting skill-specific t
   assert.equal(result.candidate.years_experience, 3)
   assert.equal(result.candidate.considerations[0], 'The candidate has 3 years of experience and meets the overall minimum.')
   assert.equal(result.candidate.considerations[1], 'Only 4 years of Kubernetes experience is documented.')
+  assert.equal(result.candidate.fit_assessment.rationale, 'Jordan is an entry-level candidate with 4 years of Kubernetes experience.')
   assert.equal(result.candidate.score, 60.5)
 })
 
