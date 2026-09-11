@@ -19,6 +19,8 @@ const WORK_MODE_TOKENS = new Set([
 
 const LOCATION_REFERENCE_PATTERN = /\b(?:location|located|based|city|remote|hybrid|on[ -]?site|relocat(?:e|ion)|geograph(?:y|ic|ical))\b/i
 const DEFINITE_LOCATION_FAILURE_PATTERN = /\b(?:location\s+mismatch|geograph(?:ic|ical)\s+mismatch|incompatible\s+location|location\s+incompatib(?:le|ility)|not\s+(?:location\s+)?eligible|does\s+not\s+meet\s+(?:the\s+)?location|fails?\s+(?:the\s+)?location|outside\s+(?:the\s+)?required\s+location|cannot\s+(?:work|commute)|unable\s+to\s+(?:work|commute)|must\s+relocate|relocation\s+required|penali[sz](?:e|ed|ing)\s+(?:the\s+)?candidate\s+for\s+location)\b/i
+const ONSITE_WORK_MODE_PATTERN = /\bon[ -]?site\b/i
+const FLEXIBLE_LOCATION_UNCERTAINTY_PATTERN = /\b(?:no\s+(?:indication\s+of\s+)?(?:willingness|ability)?\s*(?:or\s+ability\s+)?to\s+relocate|no\s+relocation\s+signal|relocation[^.!?;]{0,100}(?:not\s+(?:stated|provided)|must\s+be\s+confirmed))\b/i
 
 const normalizeWorkModeValue = (value) => {
   const normalized = normalizeText(value)
@@ -89,54 +91,155 @@ export function evaluateLocationAlignment(candidate = {}, context = {}) {
 }
 
 const splitNarrativeClauses = (value) => String(value ?? '')
-  .split(/(?<=[.!?])\s+|\s*;\s*/)
+  .split(/(?<!\bvs\.)(?<=[.!?])\s+|\s*;\s*/i)
   .map((entry) => entry.trim())
   .filter(Boolean)
 
-const isDefiniteLocationFailureClause = (value) => LOCATION_REFERENCE_PATTERN.test(String(value ?? ''))
-  && DEFINITE_LOCATION_FAILURE_PATTERN.test(String(value ?? ''))
+const isDefiniteLocationFailureClause = (value, { workMode = 'unspecified' } = {}) => {
+  const text = String(value ?? '')
+  if (!LOCATION_REFERENCE_PATTERN.test(text)) return false
+  if (DEFINITE_LOCATION_FAILURE_PATTERN.test(text)) return true
 
-const reconcileNarrative = (value, { fallback = '' } = {}) => {
-  if (typeof value !== 'string' || !isDefiniteLocationFailureClause(value)) return value
-  const retained = splitNarrativeClauses(value).filter((clause) => !isDefiniteLocationFailureClause(clause))
+  // An AI-authored on-site requirement is itself invalid when the structured
+  // JD says the role is flexible. For an off-list candidate, remove that claim
+  // instead of converting it into a definite location failure.
+  return (workMode === 'hybrid' || workMode === 'remote')
+    && (ONSITE_WORK_MODE_PATTERN.test(text) || FLEXIBLE_LOCATION_UNCERTAINTY_PATTERN.test(text))
+}
+
+const replaceFalseOnsiteWorkMode = (value, workMode) => {
+  if (typeof value !== 'string' || (workMode !== 'hybrid' && workMode !== 'remote')) return value
+  const label = workMode === 'hybrid' ? 'hybrid' : 'remote'
+  return value.replace(/\bon[ -]?site\b/gi, (match, offset, source) => {
+    const prefix = source.slice(Math.max(0, offset - 12), offset)
+    return /\bnot\s+$/i.test(prefix) ? match : label
+  })
+}
+
+const reconcileNarrative = (value, { fallback = '', workMode = 'unspecified' } = {}) => {
+  if (typeof value !== 'string' || !isDefiniteLocationFailureClause(value, { workMode })) return value
+  const retained = splitNarrativeClauses(value)
+    .filter((clause) => !isDefiniteLocationFailureClause(clause, { workMode }))
   return retained.join(' ').trim() || fallback
 }
 
-const reconcileNarrativeArray = (value) => {
+const reconcileNarrativeArray = (value, options = {}) => {
   if (!Array.isArray(value)) return value
   return value
-    .map((entry) => reconcileNarrative(entry))
+    .map((entry) => reconcileNarrative(entry, options))
     .filter((entry) => typeof entry !== 'string' || entry.trim())
+}
+
+const mapCandidateNarrativeFields = (candidate, mapper) => {
+  const stringFields = ['summary', 'summaryFull', 'recommendation', 'recommendationFull']
+  const arrayFields = [
+    'strengths',
+    'strengthsFull',
+    'matchedSkills',
+    'matchedRequirementsFull',
+    'missingSkills',
+    'missingRequirementsFull',
+    'considerations',
+    'concerns',
+    'risksOrGapsFull',
+  ]
+
+  for (const field of stringFields) {
+    if (typeof candidate?.[field] === 'string') candidate[field] = mapper(candidate[field])
+  }
+  for (const field of arrayFields) {
+    if (Array.isArray(candidate?.[field])) candidate[field] = candidate[field].map(mapper).filter(Boolean)
+  }
+
+  if (candidate?.matchScore && typeof candidate.matchScore === 'object' && !Array.isArray(candidate.matchScore)) {
+    if (typeof candidate.matchScore.reason === 'string') candidate.matchScore.reason = mapper(candidate.matchScore.reason)
+    const breakdown = candidate.matchScore.breakdown
+    if (breakdown && typeof breakdown === 'object' && !Array.isArray(breakdown)) {
+      for (const key of Object.keys(breakdown)) {
+        if (/location/i.test(key) && typeof breakdown[key] === 'string') breakdown[key] = mapper(breakdown[key])
+      }
+    }
+  }
+
+  const fit = candidate?.fit_assessment
+  if (fit && typeof fit === 'object' && !Array.isArray(fit)) {
+    for (const field of ['rationale']) {
+      if (typeof fit[field] === 'string') fit[field] = mapper(fit[field])
+    }
+    for (const field of ['matched_requirements', 'missing_requirements', 'risks_or_gaps', 'notes']) {
+      if (Array.isArray(fit[field])) fit[field] = fit[field].map(mapper).filter(Boolean)
+    }
+  }
+
+  return candidate
 }
 
 export function reconcileCandidateLocationAlignment(candidate = {}, context = {}) {
   const alignment = evaluateLocationAlignment(candidate, context)
+  if (alignment.work_mode === 'hybrid' && alignment.classification === 'match') {
+    return mapCandidateNarrativeFields(structuredClone(candidate), (value) => (
+      replaceFalseOnsiteWorkMode(value, alignment.work_mode)
+    ))
+  }
+
   if (alignment.classification !== 'unknown') return candidate
 
   const next = structuredClone(candidate)
+  const narrativeOptions = { workMode: alignment.work_mode }
   const fit = next?.fit_assessment && typeof next.fit_assessment === 'object' && !Array.isArray(next.fit_assessment)
     ? next.fit_assessment
     : null
 
   if (fit) {
-    fit.missing_requirements = reconcileNarrativeArray(fit.missing_requirements)
-    fit.risks_or_gaps = reconcileNarrativeArray(fit.risks_or_gaps)
-    fit.notes = reconcileNarrativeArray(fit.notes)
+    fit.matched_requirements = reconcileNarrativeArray(fit.matched_requirements, narrativeOptions)
+    fit.missing_requirements = reconcileNarrativeArray(fit.missing_requirements, narrativeOptions)
+    fit.risks_or_gaps = reconcileNarrativeArray(fit.risks_or_gaps, narrativeOptions)
+    fit.notes = reconcileNarrativeArray(fit.notes, narrativeOptions)
     fit.rationale = reconcileNarrative(fit.rationale, {
       fallback: 'Location compatibility is unclear from the available information.',
+      ...narrativeOptions,
     })
     if (fit.location_match_score !== undefined) fit.location_match_score = null
   }
 
-  next.considerations = reconcileNarrativeArray(next.considerations)
+  for (const field of [
+    'strengths',
+    'strengthsFull',
+    'matchedSkills',
+    'matchedRequirementsFull',
+    'missingSkills',
+    'missingRequirementsFull',
+    'considerations',
+    'concerns',
+    'risksOrGapsFull',
+  ]) {
+    if (Array.isArray(next[field])) next[field] = reconcileNarrativeArray(next[field], narrativeOptions)
+  }
   next.recommendation = reconcileNarrative(next.recommendation, {
     fallback: 'Confirm location and work-mode compatibility during screening.',
+    ...narrativeOptions,
+  })
+  next.recommendationFull = reconcileNarrative(next.recommendationFull, {
+    fallback: 'Confirm location and work-mode compatibility during screening.',
+    ...narrativeOptions,
   })
 
   if (next?.matchScore && typeof next.matchScore === 'object' && !Array.isArray(next.matchScore)) {
     next.matchScore.reason = reconcileNarrative(next.matchScore.reason, {
       fallback: 'Location compatibility is unclear from the available information.',
+      ...narrativeOptions,
     })
+    const breakdown = next.matchScore.breakdown
+    if (breakdown && typeof breakdown === 'object' && !Array.isArray(breakdown)) {
+      for (const key of Object.keys(breakdown)) {
+        if (/location/i.test(key) && typeof breakdown[key] === 'string') {
+          breakdown[key] = reconcileNarrative(breakdown[key], {
+            fallback: 'Location compatibility is unknown for the flexible work mode.',
+            ...narrativeOptions,
+          })
+        }
+      }
+    }
   }
 
   return next
