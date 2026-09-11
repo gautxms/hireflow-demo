@@ -2,10 +2,10 @@ import { formatResumeQuotaResetDate, getResumeAllowanceTone } from '../utils/res
 
 export default function ResumeAllowanceCard({ status, quota }) {
   if (status === 'loading') {
-    return <article className="resume-allowance resume-allowance--loading" aria-busy="true"><h2>Resume allowance</h2><p>Loading allowance…</p></article>
+    return <article className="resume-allowance resume-allowance--loading" aria-busy="true"><div className="resume-allowance__summary"><h2>Resume allowance</h2><p className="resume-allowance__status">Loading allowance…</p></div></article>
   }
   if (status !== 'success' || !quota) {
-    return <article className="resume-allowance resume-allowance--unavailable"><h2>Resume allowance</h2><p>Allowance temporarily unavailable.</p></article>
+    return <article className="resume-allowance resume-allowance--unavailable"><div className="resume-allowance__summary"><h2>Resume allowance</h2><p className="resume-allowance__status">Allowance temporarily unavailable.</p></div></article>
   }
 
   const tone = getResumeAllowanceTone(quota)
@@ -23,13 +23,14 @@ export default function ResumeAllowanceCard({ status, quota }) {
 
   return (
     <article className={`resume-allowance resume-allowance--${tone}`} aria-labelledby="resume-allowance-title">
-      <div className="resume-allowance__header">
-        <div><h2 id="resume-allowance-title">Resume allowance</h2><p className="resume-allowance__value">{quota.available} of {quota.limit} available</p></div>
-        {resetDate ? <p className="resume-allowance__reset">Resets on {resetDate}</p> : null}
+      <div className="resume-allowance__summary">
+        <h2 id="resume-allowance-title">Resume allowance</h2>
+        <p className="resume-allowance__value">{quota.available} of {quota.limit} available</p>
       </div>
       <div className="resume-allowance__track" role="progressbar" aria-label={`${quota.used} of ${quota.limit} resume analyses used; ${quota.available} currently available`} aria-valuemin="0" aria-valuemax={quota.limit} aria-valuenow={Math.min(quota.used, quota.limit)}>
         <span className="resume-allowance__fill" style={{ width: `${progress}%` }} />
       </div>
+      {resetDate ? <p className="resume-allowance__reset">Resets on {resetDate}</p> : null}
       {detail ? <p className="resume-allowance__detail">{detail}{resetDate && tone === 'warning' ? ` Resets on ${resetDate}.` : ''}</p> : null}
     </article>
   )
