@@ -8,6 +8,8 @@ import { applyJobDescriptionScoringMode, buildJobDescriptionContext, isTerminalJ
 import { SCORING_MODE_FIXTURES } from '../jobs/__fixtures__/scoringModeFixtures.js'
 import { normalizeQueueCounts } from '../routes/admin/health.js'
 import { redactValue } from '../routes/admin/logs.js'
+import { reconcileCandidateLocationAlignment } from '../utils/locationAlignment.js'
+import { buildPromptWithJobDescription } from './aiResumeAnalysisService.js'
 
 test('chunk assembly validator rejects missing, duplicate, and out-of-order gaps', () => {
   assert.equal(hasCompleteChunkSet([0, 1, 2], 3), true)
@@ -76,6 +78,46 @@ test('job description context includes manual JD fields when provided', () => {
   assert.equal(normalized.experienceMin, 4)
   assert.equal(normalized.experienceMax, 7)
   assert.equal(normalized.employmentType, 'Hybrid')
+  assert.equal(normalized.workMode, 'hybrid')
+})
+
+test('job description context preserves labelled Hybrid mode independently from legacy employment type', () => {
+  const normalized = buildJobDescriptionContext({
+    id: 'jd-hybrid-production',
+    title: 'Account Executive - Mid-Market B2B SaaS',
+    description: 'Work mode:\nHybrid\nLocation: Austin, TX',
+    requirements: '4-7 years professional sales experience',
+    location: 'Austin, TX',
+    employment_type: 'On-site',
+  })
+  const candidate = {
+    location: 'Seattle, WA',
+    score: 72,
+    concerns: ['Location mismatch: Seattle, WA vs. Austin, TX on-site requirement.'],
+    matchScore: {
+      score: 72,
+      reason: 'Strong sales evidence. Geographic mismatch (Seattle vs. Austin on-site) reduces fit.',
+    },
+    fit_assessment: {
+      overall_fit_score: 72,
+      location_match_score: 0,
+      risks_or_gaps: ['Location mismatch: Seattle, WA vs. Austin, TX on-site requirement.'],
+    },
+  }
+
+  const reconciled = reconcileCandidateLocationAlignment(candidate, normalized)
+  const prompt = buildPromptWithJobDescription('Base prompt', normalized)
+
+  assert.equal(normalized.employmentType, 'On-site')
+  assert.equal(normalized.workMode, 'hybrid')
+  assert.match(prompt, /Work Mode: hybrid/)
+  assert.doesNotMatch(prompt, /Work Mode: On-site/)
+  assert.deepEqual(reconciled.concerns, [])
+  assert.deepEqual(reconciled.fit_assessment.risks_or_gaps, [])
+  assert.equal(reconciled.fit_assessment.location_match_score, null)
+  assert.equal(reconciled.score, 72)
+  assert.equal(reconciled.matchScore.score, 72)
+  assert.equal(reconciled.fit_assessment.overall_fit_score, 72)
 })
 
 test('job description context carries deterministic required, preferred, and alternative semantics', () => {

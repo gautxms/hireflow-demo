@@ -395,7 +395,7 @@ function replaceConflictingTotalYears(value, originalYears, canonicalYears) {
       (_match, prefix, unit) => `${prefix}${canonical} ${formatYearUnit(unit, canonicalYears)}`,
     )
     .replace(
-      new RegExp(`\\b((?:(?:significant|material|overall|total|professional)\\s+)?(?:experience|tenure)\\s+(?:gap|shortfall)\\s*:\\s*)${numberPattern}\\s*(years?|yrs?)(?=\\s*(?:vs\\.?|versus|compared\\s+(?:with|to))\\s+)`, 'gi'),
+      new RegExp(`\\b((?:(?:significant|material|overall|total|professional)\\s+)?(?:experience|tenure)\\s+(?:gap|shortfall)\\s*:\\s*)${numberPattern}\\s*(years?|yrs?)(?=\\s*(?:actual\\s+)?(?:vs\\.?|versus|compared\\s+(?:with|to))\\s+)`, 'gi'),
       (_match, prefix, unit) => `${prefix}${canonical} ${formatYearUnit(unit, canonicalYears)}`,
     )
     .replace(careerStagePattern, (match, prefix, unit, descriptor) => (

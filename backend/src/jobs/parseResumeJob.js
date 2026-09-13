@@ -44,7 +44,7 @@ import {
 } from '../services/v3ShadowScoringService.js'
 import { evaluateExperienceRange } from '../utils/experienceRange.js'
 import { buildRequirementSemantics, reconcileCandidateRequirementSemantics } from '../utils/requirementSemantics.js'
-import { reconcileCandidateLocationAlignment } from '../utils/locationAlignment.js'
+import { reconcileCandidateLocationAlignment, resolveJobWorkMode } from '../utils/locationAlignment.js'
 import {
   consumeResumeQuotaAllocation,
   releaseResumeQuotaAllocation,
@@ -1120,6 +1120,7 @@ function buildSafeJobDescriptionFingerprintSource(jobDescriptionContext = null) 
     skills: Array.isArray(jobDescriptionContext.skills) ? jobDescriptionContext.skills : [],
     experienceYears: jobDescriptionContext.experienceYears ?? null,
     location: jobDescriptionContext.location || null,
+    workMode: jobDescriptionContext.workMode || null,
     employmentType: jobDescriptionContext.employmentType || null,
     fileText: jobDescriptionContext.fileTextAvailable ? (jobDescriptionContext.fileText || null) : null,
   }
@@ -1760,7 +1761,8 @@ export function buildJobDescriptionContext(row) {
     experienceMin: normalizeNullableNumber(row.experience_min ?? row.experience_years),
     experienceMax: normalizeNullableNumber(row.experience_max ?? row.experience_years),
     location: normalizeString(row.location),
-    employmentType: normalizeString(row.employment_type ?? row.employmentType ?? row.work_mode ?? row.workMode),
+    workMode: normalizeString(row.work_mode ?? row.workMode),
+    employmentType: normalizeString(row.employment_type ?? row.employmentType),
     salaryMin: normalizeNullableNumber(row.salary_min),
     salaryMax: normalizeNullableNumber(row.salary_max),
     salaryCurrency: normalizeString(row.salary_currency) || 'USD',
@@ -1769,6 +1771,7 @@ export function buildJobDescriptionContext(row) {
     source: fileText ? 'file_text' : hasFile ? 'manual_fields_file_fallback' : 'manual_fields',
     fileTextAvailable: Boolean(fileText),
   }
+  normalized.workMode = resolveJobWorkMode(normalized)
   normalized.requirementSemantics = buildRequirementSemantics(normalized)
 
   const hasManualContext = Boolean(

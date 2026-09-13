@@ -20,7 +20,8 @@ const WORK_MODE_TOKENS = new Set([
 const LOCATION_REFERENCE_PATTERN = /\b(?:location|located|based|city|remote|hybrid|on[ -]?site|relocat(?:e|ion)|geograph(?:y|ic|ical))\b/i
 const DEFINITE_LOCATION_FAILURE_PATTERN = /\b(?:location\s+mismatch|geograph(?:ic|ical)\s+mismatch|incompatible\s+location|location\s+incompatib(?:le|ility)|not\s+(?:location\s+)?eligible|does\s+not\s+meet\s+(?:the\s+)?location|fails?\s+(?:the\s+)?location|outside\s+(?:the\s+)?required\s+location|cannot\s+(?:work|commute)|unable\s+to\s+(?:work|commute)|must\s+relocate|relocation\s+required|penali[sz](?:e|ed|ing)\s+(?:the\s+)?candidate\s+for\s+location)\b/i
 const ONSITE_WORK_MODE_PATTERN = /\bon[ -]?site\b/i
-const FLEXIBLE_LOCATION_UNCERTAINTY_PATTERN = /\b(?:no\s+(?:indication\s+of\s+)?(?:willingness|ability)?\s*(?:or\s+ability\s+)?to\s+relocate|no\s+relocation\s+signal|relocation[^.!?;]{0,100}(?:not\s+(?:stated|provided)|must\s+be\s+confirmed))\b/i
+const FLEXIBLE_LOCATION_UNCERTAINTY_PATTERN = /\b(?:no\s+(?:indication\s+of\s+)?(?:willingness|ability)?\s*(?:or\s+ability\s+)?to\s+relocate|no\s+relocation\s+signal|no\s+relocation(?:\s+or\s+remote\s+work\s+flexibility)?\s+(?:indication|evidence|indicated)|relocation[^.!?;]{0,100}(?:not\s+(?:stated|provided)|must\s+be\s+confirmed))\b/i
+const LABELED_WORK_MODE_PATTERN = /\b(?:work\s*mode|working\s+arrangement|work\s+arrangement|workplace\s+(?:mode|model|type)|work\s+setup)\b\s*(?:[:=]|-|\bis\b)?\s*(remote|hybrid|on[ -]?site)\b/i
 
 const normalizeWorkModeValue = (value) => {
   const normalized = normalizeText(value)
@@ -31,14 +32,44 @@ const normalizeWorkModeValue = (value) => {
   return null
 }
 
+const resolveLabeledWorkMode = (context = {}) => {
+  for (const value of [
+    context?.description,
+    context?.requirements,
+    context?.responsibilities,
+    context?.additionalInfo,
+    context?.additional_info,
+    context?.fileText,
+    context?.file_text,
+  ]) {
+    const match = normalizeText(value).replace(/[*_`]/g, '').match(LABELED_WORK_MODE_PATTERN)
+    const mode = normalizeWorkModeValue(match?.[1])
+    if (mode) return mode
+  }
+  return null
+}
+
 export function resolveJobWorkMode(context = {}) {
-  const explicitValues = [
+  // Dedicated work-mode fields are authoritative. A strongly labelled value
+  // in trusted JD content comes next because the legacy employment_type field
+  // has historically represented both employment type and work mode.
+  const dedicatedValues = [
     context?.workMode,
     context?.work_mode,
+  ]
+  for (const value of dedicatedValues) {
+    const mode = normalizeWorkModeValue(value)
+    if (mode) return mode
+  }
+
+  const labeledMode = resolveLabeledWorkMode(context)
+  if (labeledMode) return labeledMode
+
+  const legacyValues = [
     context?.employmentType,
     context?.employment_type,
   ]
-  for (const value of explicitValues) {
+  for (const value of legacyValues) {
     const mode = normalizeWorkModeValue(value)
     if (mode) return mode
   }
