@@ -8,12 +8,25 @@ import {
   resolveJobWorkMode,
 } from './locationAlignment.js'
 
-test('resolves explicit work mode before location text and normalizes supported values', () => {
+test('resolves dedicated and labelled work mode before legacy employment type', () => {
   assert.equal(resolveJobWorkMode({ employmentType: 'Remote', location: 'Austin' }), 'remote')
   assert.equal(resolveJobWorkMode({ workMode: 'Hybrid', location: 'Remote' }), 'hybrid')
+  assert.equal(resolveJobWorkMode({
+    employmentType: 'On-site',
+    description: 'Work mode:\n**Hybrid**',
+  }), 'hybrid')
+  assert.equal(resolveJobWorkMode({
+    workMode: 'Remote',
+    employmentType: 'On-site',
+    description: 'Work mode: Hybrid',
+  }), 'remote')
   assert.equal(resolveJobWorkMode({ employment_type: 'on-site' }), 'on_site')
   assert.equal(resolveJobWorkMode({ location: 'Bengaluru / Remote Hybrid' }), 'hybrid')
   assert.equal(resolveJobWorkMode({ employmentType: 'full-time', location: 'Austin' }), 'unspecified')
+  assert.equal(resolveJobWorkMode({
+    employmentType: 'full-time',
+    description: 'Experience with hybrid cloud infrastructure is preferred.',
+  }), 'unspecified')
 })
 
 test('listed city matches while flexible off-list city remains unknown', () => {
@@ -142,11 +155,14 @@ test('hybrid off-list candidate removes false onsite penalties from every visibl
   const candidate = {
     location: 'Seattle, WA',
     score: 68,
-    concerns: ['Strong discovery skills.', 'Geographic mismatch: Seattle vs. Austin on-site requirement.'],
+    concerns: [
+      'Strong discovery skills.',
+      'Geographic mismatch: Seattle vs. Austin on-site requirement; no relocation or remote work flexibility indicated.',
+    ],
     considerations: ['Geographic mismatch: based in Seattle; role requires on-site presence in Austin.'],
     missingSkills: ['On-site work location: candidate is in Seattle; role requires Austin.'],
     missingRequirementsFull: ['On-site work location: candidate is in Seattle; role requires Austin on-site presence.'],
-    risksOrGapsFull: ['Location mismatch (Seattle vs. Austin on-site requirement).'],
+    risksOrGapsFull: ['Location mismatch (Seattle vs. Austin on-site requirement); no relocation indication in resume.'],
     recommendationFull: 'Strong SaaS seller. Geographic mismatch (Seattle vs. Austin on-site) reduces fit.',
     matchScore: {
       score: 68,
@@ -160,7 +176,7 @@ test('hybrid off-list candidate removes false onsite penalties from every visibl
       overall_fit_score: 68,
       location_match_score: 0,
       missing_requirements: ['On-site work location: candidate is in Seattle; role requires Austin on-site presence.'],
-      risks_or_gaps: ['Geographic mismatch: Seattle vs. Austin on-site requirement.'],
+      risks_or_gaps: ['Geographic mismatch: Seattle vs. Austin on-site requirement; no relocation indication in resume.'],
       notes: [
         'Location barrier is material for on-site Austin role unless relocation is feasible.',
         'Relocation or commute feasibility to Austin not stated.',

@@ -1382,7 +1382,7 @@ export function buildPromptWithJobDescription(systemPrompt, jobDescriptionContex
         `- Skills: ${formatArray(jdContext?.skills) || 'Not provided'}`,
         `- Experience Years: ${formatScalar(jdContext?.experienceYears) || 'Not provided'}`,
         `- Location: ${formatScalar(jdContext?.location) || 'Not provided'}`,
-        `- Work Mode: ${formatScalar(jdContext?.employmentType ?? jdContext?.workMode) || 'Not provided'}`,
+        `- Work Mode: ${formatScalar(jdContext?.workMode ?? jdContext?.employmentType) || 'Not provided'}`,
         `- Source: ${formatScalar(jdContext?.source) || 'manual_fields'}`,
       ].join('\n')
     : `- Missing reason: ${formatScalar(jdContext?.missingReason) || 'job_description_missing'}`
@@ -1820,7 +1820,7 @@ function buildAiScoringContractV2SeparateShadowPrompt({ resumeText, jobDescripti
     `Skills: ${formatArray(jd.skills) || 'Not provided'}`,
     `Experience Years: ${formatScalar(jd.experienceYears) || 'Not provided'}`,
     `Location: ${formatScalar(jd.location) || 'Not provided'}`,
-    `Work Mode: ${formatScalar(jd.employmentType ?? jd.workMode) || 'Not provided'}`,
+    `Work Mode: ${formatScalar(jd.workMode ?? jd.employmentType) || 'Not provided'}`,
     requirementSemantics,
     formatLocationAlignmentForPrompt(jd),
     '',

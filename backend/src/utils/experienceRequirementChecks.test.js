@@ -329,7 +329,7 @@ test('corrects stale Liam and Noah sales-year claims while retaining the AE gap 
       canonicalYears: 3.2,
       totalMonths: 38,
       expectedTotalStatus: 'not_met',
-      stalePattern: /(?:has|with)\s+~?1\s+year|1\s+year\s+(?:total|consumer|combined|vs)/i,
+      stalePattern: /(?:has|with)\s+~?1\s+year|1\s+year\s+(?:total|consumer|combined|actual|vs)/i,
       entries: [
         { title: 'Sales Associate', start_date: '2024-08', end_date: null, description: 'Sold consumer mobile plans.' },
         { title: 'Customer Service & Sales Representative', start_date: '2023-06', end_date: '2024-07', description: 'Recommended add-on services.' },
@@ -340,7 +340,7 @@ test('corrects stale Liam and Noah sales-year claims while retaining the AE gap 
       ],
       reason: 'Noah has 1 year of consumer retail and inbound service sales experience, well below the required 4-7 years.',
       breakdown: '12/100 (1 year vs. 4-7 required)',
-      risk: 'Significant experience gap: 1 year vs. 4–7 years required; candidate is early-career and lacks enterprise sales maturity.',
+      risk: 'Significant experience gap: 1 year actual vs. 4–7 years required; candidate is early-career and lacks enterprise sales maturity.',
       rationale: 'Noah Bennett is an entry-level candidate with 1 year of consumer retail and inbound call center experience. While he demonstrates basic objection handling and needs discovery, he lacks the 4–7 years of quota-carrying B2B SaaS sales experience required.',
       aeGap: 'At least 2 years in a quota-carrying Account Executive role; candidate has none.',
     },

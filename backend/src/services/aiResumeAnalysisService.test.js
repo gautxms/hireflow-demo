@@ -40,9 +40,12 @@ test('buildPromptWithJobDescription prevents ambiguous Hybrid location from beco
     hasContext: true,
     title: 'Software Development Engineer',
     location: 'Bengaluru/Hyderabad/Pune',
-    employmentType: 'Hybrid',
+    workMode: 'hybrid',
+    employmentType: 'On-site',
   })
 
+  assert.match(prompt, /Work Mode: hybrid/)
+  assert.doesNotMatch(prompt, /Work Mode: On-site/)
   assert.match(prompt, /Work mode: hybrid/)
   assert.match(prompt, /do not turn ambiguous Remote or Hybrid compatibility into a definite failure/i)
   assert.match(prompt, /Do not infer willingness to relocate, commute, or work remotely/i)
@@ -1369,12 +1372,14 @@ test('AI scoring contract v2 prompt keeps off-list Hybrid location compatibility
       hasContext: true,
       title: 'SDE',
       location: 'Bengaluru/Hyderabad/Pune',
-      employmentType: 'Hybrid',
+      workMode: 'Hybrid',
+      employmentType: 'On-site',
     },
   })
 
   assert.match(prompt, /Location: Bengaluru\/Hyderabad\/Pune/)
   assert.match(prompt, /Work Mode: Hybrid/)
+  assert.doesNotMatch(prompt, /Work Mode: On-site/)
   assert.match(prompt, /off-list candidate city as unknown/i)
   assert.match(prompt, /Do not infer willingness to relocate, commute, or work remotely/i)
 })
