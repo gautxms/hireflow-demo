@@ -415,6 +415,10 @@ function replaceConflictingSubjectYears(value, originalYears, canonicalYears, ch
     'gi',
   )
   const barePattern = new RegExp(`(?<![\\d.])\\b${numberPattern}\\s*\\+?\\s*(years?|yrs?)\\b`, 'gi')
+  const unitlessRangePattern = new RegExp(
+    `^\\s*${numberPattern}\\s+(?:years?\\s+)?of\\s+(\\d+(?:\\.\\d+)?\\s*(?:[-–—]|to)\\s*\\d+(?:\\.\\d+)?)\\s*(?:years?\\s*)?(required|target|range)?(?:\\s*\\([^)]*%\\))?`,
+    'i',
+  )
 
   return splitNarrativeSentences(value).map((sentence) => {
     const related = assumeExperienceContext || checks.some((check) => textRelatesToCheck(sentence, check))
@@ -427,7 +431,12 @@ function replaceConflictingSubjectYears(value, originalYears, canonicalYears, ch
       return `${canonical} ${formatYearUnit(unit, canonicalYears)}`
     }
     const contextual = sentence.replace(contextualPattern, replaceCandidateDuration)
-    return assumeExperienceContext ? contextual.replace(barePattern, replaceCandidateDuration) : contextual
+    if (!assumeExperienceContext) return contextual
+    const withUnitlessRangeCorrected = contextual.replace(
+      unitlessRangePattern,
+      (_match, range, qualifier) => `${canonical} years of ${range}${qualifier ? ` ${qualifier}` : ''}`,
+    )
+    return withUnitlessRangeCorrected.replace(barePattern, replaceCandidateDuration)
   }).join(' ').trim()
 }
 

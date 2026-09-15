@@ -339,7 +339,7 @@ test('corrects stale Liam and Noah sales-year claims while retaining the AE gap 
         { entry_index: 1, start_date: '2023-06', end_date: '2024-07', duration_months: 13 },
       ],
       reason: 'Noah has 1 year of consumer retail and inbound service sales experience, well below the required 4-7 years.',
-      breakdown: '12/100 (1 year vs. 4-7 required)',
+      breakdown: '1 of 4–7 required (12%)',
       risk: 'Significant experience gap: 1 year actual vs. 4–7 years required; candidate is early-career and lacks enterprise sales maturity.',
       rationale: 'Noah Bennett is an entry-level candidate with 1 year of consumer retail and inbound call center experience. While he demonstrates basic objection handling and needs discovery, he lacks the 4–7 years of quota-carrying B2B SaaS sales experience required.',
       aeGap: 'At least 2 years in a quota-carrying Account Executive role; candidate has none.',
@@ -427,6 +427,9 @@ test('corrects stale Liam and Noah sales-year claims while retaining the AE gap 
       assert.equal(result.candidate.matchScore.score, 32.4)
       assert.equal(result.candidate.matchScore.score_out_of_ten, 3.2)
       assert.equal(result.candidate.fit_assessment.overall_fit_score, 32.4)
+      if (scenario.name === 'Noah Example') {
+        assert.equal(result.candidate.matchScore.breakdown.years_of_experience_fit, '3.2 years of 4–7 required')
+      }
     })
   }
 })

@@ -96,8 +96,8 @@ test('unknown flexible alignment removes only definite location-failure clauses'
 
   assert.deepEqual(candidate, before)
   assert.deepEqual(reconciled.fit_assessment.missing_requirements, ['Kubernetes experience is missing.'])
-  assert.deepEqual(reconciled.fit_assessment.risks_or_gaps, ['Candidate is based in Kochi'])
-  assert.deepEqual(reconciled.fit_assessment.notes, ['Confirm willingness to relocate.'])
+  assert.deepEqual(reconciled.fit_assessment.risks_or_gaps, [])
+  assert.deepEqual(reconciled.fit_assessment.notes, [])
   assert.equal(reconciled.fit_assessment.rationale, 'The candidate meets the API requirements.')
   assert.equal(reconciled.fit_assessment.location_match_score, null)
   assert.equal(reconciled.recommendation, 'Proceed based on backend depth.')
@@ -195,7 +195,7 @@ test('hybrid off-list candidate removes false onsite penalties from every visibl
   assert.deepEqual(reconciled.concerns, ['Strong discovery skills.'])
   assert.deepEqual(reconciled.matchScore.breakdown, {
     skills_match: 82,
-    location_alignment: 'Location compatibility is unknown for the flexible work mode.',
+    location_alignment: 'Location compatibility is unknown for the hybrid work mode; confirm attendance and geographic requirements during screening.',
   })
   assert.equal(reconciled.fit_assessment.location_match_score, null)
   assert.equal(reconciled.score, 68)
@@ -223,6 +223,96 @@ test('hybrid reconciliation leaves internal model diagnostics intact', () => {
     'location_mismatch_onsite_constraint',
   ])
   assert.deepEqual(reconciled.fit_assessment.risks_or_gaps, [])
+})
+
+test('unknown hybrid alignment neutralizes production-shaped location leaks without changing scores', () => {
+  const candidate = {
+    location: 'Seattle, WA',
+    score: 76,
+    considerations: [
+      'Strong sales fundamentals.',
+      'Role located in Austin, TX with hybrid work mode; relocation willingness not provided.',
+    ],
+    concerns: ['Geographic location is a practical consideration for this hybrid role.'],
+    missingSkills: ['Geographic location: Seattle, WA vs. Austin, TX; relocation willingness unknown'],
+    missingRequirementsFull: ['Geographic location: Seattle, WA vs. Austin, TX; relocation willingness unknown'],
+    risksOrGapsFull: ['Location is also misaligned (Seattle vs. Austin).'],
+    recommendationFull: 'Strong SaaS seller. Geographic location (Seattle vs. Austin) is a practical consideration for a hybrid role.',
+    matchScore: {
+      score: 76,
+      score_out_of_ten: 7.6,
+      reason: 'Strong SaaS seller with relevant closing experience.',
+      breakdown: {
+        skill_match: 'Strong',
+        location_match: 'Weak — Seattle, WA vs. Austin, TX; relocation unknown',
+        geographic_fit: 'Mismatch',
+      },
+    },
+    fit_assessment: {
+      overall_fit_score: 76,
+      location_match_score: 0,
+      missing_requirements: ['Geographic location: Seattle, WA vs. Austin, TX; relocation willingness unknown'],
+      risks_or_gaps: ['Location is also misaligned (Seattle vs. Austin).'],
+      notes: [
+        'Recommend probing relocation/commute feasibility in interview.',
+        'Promotion trajectory is strong.',
+      ],
+      rationale: 'The candidate meets the sales requirements. Geographic location (Seattle vs. Austin) is a practical consideration for a hybrid role.',
+    },
+  }
+
+  const reconciled = reconcileCandidateLocationAlignment(candidate, {
+    location: 'Austin, TX',
+    workMode: 'Hybrid',
+  })
+  const neutral = 'Location compatibility is unknown for the hybrid work mode; confirm attendance and geographic requirements during screening.'
+
+  assert.deepEqual(reconciled.considerations, ['Strong sales fundamentals.'])
+  assert.deepEqual(reconciled.concerns, [])
+  assert.deepEqual(reconciled.missingSkills, [])
+  assert.deepEqual(reconciled.missingRequirementsFull, [])
+  assert.deepEqual(reconciled.risksOrGapsFull, [])
+  assert.equal(reconciled.recommendationFull, 'Strong SaaS seller.')
+  assert.deepEqual(reconciled.matchScore.breakdown, {
+    skill_match: 'Strong',
+    location_match: neutral,
+    geographic_fit: neutral,
+  })
+  assert.deepEqual(reconciled.fit_assessment.missing_requirements, [])
+  assert.deepEqual(reconciled.fit_assessment.risks_or_gaps, [])
+  assert.deepEqual(reconciled.fit_assessment.notes, ['Promotion trajectory is strong.'])
+  assert.equal(reconciled.fit_assessment.rationale, 'The candidate meets the sales requirements.')
+  assert.equal(reconciled.fit_assessment.location_match_score, null)
+  assert.equal(reconciled.score, 76)
+  assert.equal(reconciled.matchScore.score, 76)
+  assert.equal(reconciled.matchScore.score_out_of_ten, 7.6)
+  assert.equal(reconciled.fit_assessment.overall_fit_score, 76)
+})
+
+test('unknown hybrid alignment removes unsupported distance estimates while preserving hybrid-cloud skills', () => {
+  const candidate = {
+    location: 'San Antonio, TX',
+    considerations: [
+      'Location is 45 miles from Austin; hybrid work mode not explicitly confirmed.',
+      'Designed hybrid cloud infrastructure for enterprise customers.',
+    ],
+    matchScore: {
+      breakdown: {
+        location_fit: 'San Antonio vs. Austin; hybrid compatibility unknown (45%)',
+      },
+    },
+  }
+
+  const reconciled = reconcileCandidateLocationAlignment(candidate, {
+    location: 'Austin, TX',
+    workMode: 'Hybrid',
+  })
+
+  assert.deepEqual(reconciled.considerations, [
+    'Designed hybrid cloud infrastructure for enterprise customers.',
+  ])
+  assert.doesNotMatch(reconciled.matchScore.breakdown.location_fit, /45\s*(?:miles|%)/i)
+  assert.match(reconciled.matchScore.breakdown.location_fit, /compatibility is unknown/i)
 })
 
 test('prompt semantics describe unknown flexible compatibility without inventing relocation intent', () => {
