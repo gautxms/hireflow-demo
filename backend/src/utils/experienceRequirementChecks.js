@@ -326,13 +326,30 @@ function isSalesOnlyCheck(check) {
     && groups[0][0] === 'sales'
 }
 
+function isQuotaCarryingAeCheck(check) {
+  const groups = Array.isArray(check?.subject_token_groups) && check.subject_token_groups.length > 0
+    ? check.subject_token_groups
+    : [check?.subject_tokens]
+  return groups.some((group) => (
+    Array.isArray(group)
+    && group.includes('quota')
+    && group.includes('account')
+    && group.includes('executive')
+  ))
+}
+
 function textRelatesToCheck(value, check) {
   const text = normalizeComparable(value)
-  if (!text || !DURATION_REFERENCE_PATTERN.test(text)) return false
+  if (!text) return false
+  const quotaTenureClaim = isQuotaCarryingAeCheck(check)
+    && /\bquota\b/.test(text)
+    && /\b(?:experience|tenure|minimums?|requirements?|thresholds?)\b/.test(text)
+  if (!DURATION_REFERENCE_PATTERN.test(text) && !quotaTenureClaim) return false
   if (check.scope === 'total') {
     return /\b(?:total|overall|professional|work)\s+(?:experience|tenure)\b/.test(text)
       || /\b(?:candidate|they|he|she)\s+(?:has|have|brings?|offers?)\s+\d+(?:\.\d+)?\s*\+?\s*(?:years?|yrs?|months?|mos?)\s+(?:of\s+)?experience\b/.test(text)
   }
+  if (quotaTenureClaim) return true
   // A broad professional-sales check must not consume a distinct AE-tenure
   // requirement just because its explanation also contains the word "sales".
   if (isSalesOnlyCheck(check)
@@ -355,6 +372,19 @@ function splitNarrativeSentences(value) {
   return sentences
 }
 
+function replaceQuotaThresholdClaim(sentence, check) {
+  if (check?.status !== 'not_met' || !isQuotaCarryingAeCheck(check)) return null
+  const statement = canonicalRequirementStatement(check).replace(/\.$/, '')
+  const tenureMinimumPattern = /\bmeets?\s+years?\s+and\s+quota[\s-]+carrying\s+tenure\s+minimums?\b/i
+  if (tenureMinimumPattern.test(sentence)) return sentence.replace(tenureMinimumPattern, statement)
+  const coreThresholdPattern = /\b(the\s+candidate|candidate|they|he|she|[a-z][a-z.'-]*)\s+meets?\s+core\s+experience\s+thresholds\s*\([^)]*\bquota[\s-]+carrying\b[^)]*\)(?:\s+and\s+(demonstrates)\b)?/i
+  if (!coreThresholdPattern.test(sentence)) return null
+  return sentence.replace(coreThresholdPattern, (_match, subject, continuation) => {
+    const corrected = `${subject} has ${statement.replace(' does not meet', ', which does not meet')}`
+    return continuation ? `${corrected}. ${subject} ${continuation}` : corrected
+  })
+}
+
 function reconcileContradictoryNarrative(value, checks) {
   if (typeof value !== 'string') return value
   const output = []
@@ -365,7 +395,9 @@ function reconcileContradictoryNarrative(value, checks) {
         ? POSITIVE_REQUIREMENT_PATTERN.test(sentence)
         : NEGATIVE_REQUIREMENT_PATTERN.test(sentence)
     })
-    const replacement = conflict ? canonicalRequirementStatement(conflict) : sentence
+    const replacement = conflict
+      ? replaceQuotaThresholdClaim(sentence, conflict) || canonicalRequirementStatement(conflict)
+      : sentence
     if (!output.some((entry) => normalizeComparable(entry) === normalizeComparable(replacement))) output.push(replacement)
   }
   return output.join(' ').trim()
@@ -419,8 +451,27 @@ function replaceConflictingSubjectYears(value, originalYears, canonicalYears, ch
     `^\\s*${numberPattern}\\s+(?:years?\\s+)?of\\s+(\\d+(?:\\.\\d+)?\\s*(?:[-–—]|to)\\s*\\d+(?:\\.\\d+)?)\\s*(?:years?\\s*)?(required|target|range)?(?:\\s*\\([^)]*%\\))?`,
     'i',
   )
+  const statusRangePattern = new RegExp(
+    `\\b(?:below|meets?|within|above|outside)\\s+(?:the\\s+)?requirement\\s*\\(\\s*${numberPattern}\\s*(?:years?\\s*)?(?:vs\\.?|versus)\\s*(\\d+(?:\\.\\d+)?\\s*(?:[-–—]|to)\\s*\\d+(?:\\.\\d+)?)\\s*(?:years?\\s*)?required\\s*\\)`,
+    'i',
+  )
+  const withStatusRangeCorrected = assumeExperienceContext
+    ? value.replace(
+      statusRangePattern,
+      (_match, range) => {
+        const [minimum, maximum] = range.split(/\s*(?:[-–—]|to)\s*/i).map(Number)
+        let label = 'Experience comparison'
+        if (Number.isFinite(minimum) && Number.isFinite(maximum)) {
+          if (canonicalYears < minimum) label = 'Below requirement'
+          else if (canonicalYears > maximum) label = 'Above requirement'
+          else label = 'Meets requirement'
+        }
+        return `${label} (${canonical} years vs. ${range} years required)`
+      },
+    )
+    : value
 
-  return splitNarrativeSentences(value).map((sentence) => {
+  return splitNarrativeSentences(withStatusRangeCorrected).map((sentence) => {
     const related = assumeExperienceContext || checks.some((check) => textRelatesToCheck(sentence, check))
     if (!related) return sentence
     const replaceCandidateDuration = (match, unit, offset, source) => {
@@ -440,8 +491,38 @@ function replaceConflictingSubjectYears(value, originalYears, canonicalYears, ch
   }).join(' ').trim()
 }
 
-function reconcileNarrativeValue(value, { originalYears, canonicalYears, checks, assumeExperienceContext = false }) {
-  const correctedYears = replaceConflictingTotalYears(value, originalYears, canonicalYears)
+function currentRoleDurationMonths(candidate) {
+  const entries = Array.isArray(candidate?.experience_entries) ? candidate.experience_entries : []
+  const facts = Array.isArray(candidate?.experience_facts_v1?.entry_facts)
+    ? candidate.experience_facts_v1.entry_facts
+    : []
+  const candidates = facts.filter((fact) => {
+    const entryIndex = Number(fact?.entry_index)
+    const entry = Number.isInteger(entryIndex) ? entries[entryIndex] : null
+    return fact?.is_current === true || (entry && entry.end_date == null)
+  })
+  if (candidates.length !== 1) return null
+  const months = Number(candidates[0]?.duration_months)
+  return Number.isFinite(months) && months >= 0 ? months : null
+}
+
+function replaceConflictingCurrentRoleMonths(value, currentRoleMonths) {
+  if (typeof value !== 'string' || currentRoleMonths === null) return value
+  return value.replace(
+    /\b(current\s+(?:role|position|job)\s*\(\s*)\d+(?:\.\d+)?\s*months?(\s*\))/gi,
+    (_match, prefix, suffix) => `${prefix}${formatMonths(currentRoleMonths)}${suffix}`,
+  )
+}
+
+function reconcileNarrativeValue(value, {
+  originalYears,
+  canonicalYears,
+  checks,
+  currentRoleMonths = null,
+  assumeExperienceContext = false,
+}) {
+  const correctedRoleMonths = replaceConflictingCurrentRoleMonths(value, currentRoleMonths)
+  const correctedYears = replaceConflictingTotalYears(correctedRoleMonths, originalYears, canonicalYears)
   const correctedSubjectYears = replaceConflictingSubjectYears(
     correctedYears,
     originalYears,
@@ -509,7 +590,12 @@ function reconcileRequirementArrays(candidate, checks) {
 }
 
 function reconcileCandidateNarratives(candidate, { originalYears, canonicalYears, checks }) {
-  const options = { originalYears, canonicalYears, checks }
+  const options = {
+    originalYears,
+    canonicalYears,
+    checks,
+    currentRoleMonths: currentRoleDurationMonths(candidate),
+  }
   const next = structuredClone(candidate)
 
   for (const field of ['strengths', 'considerations', 'concerns', 'matchedRequirementsFull', 'missingRequirementsFull', 'risksOrGapsFull', 'matchedSkills', 'missingSkills']) {

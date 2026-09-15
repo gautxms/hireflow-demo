@@ -434,6 +434,144 @@ test('corrects stale Liam and Noah sales-year claims while retaining the AE gap 
   }
 })
 
+test('corrects the latest Daniel threshold shorthand while preserving unrelated evidence and scores', () => {
+  const candidate = buildHighConfidenceCandidate({
+    matchScore: {
+      score: 60.5,
+      score_out_of_ten: 6.1,
+      reason: '18 months of dated closing or quota-carrying AE experience does not meet the 24 months requirement.',
+      breakdown: {
+        experience_match: '70% - Meets years and quota-carrying tenure minimums; SMB background is below mid-market expectation.',
+      },
+    },
+    fit_assessment: {
+      overall_fit_score: 60.5,
+      matched_requirements: [],
+      missing_requirements: [],
+      risks_or_gaps: [],
+      rationale: 'Daniel meets core experience thresholds (4.5 years total, 18 months quota-carrying) and demonstrates strong HubSpot proficiency, quota attainment, and full-cycle sales skills. Location is an exact match.',
+      notes: [],
+    },
+  })
+
+  const result = applyCanonicalExperienceFactsToCandidate(candidate, COMPOUND_SALES_CONTEXT)
+
+  assert.doesNotMatch(result.candidate.matchScore.breakdown.experience_match, /meets years and quota-carrying tenure minimums/i)
+  assert.match(result.candidate.matchScore.breakdown.experience_match, /18 months[^.]+does not meet[^.]+24 months/i)
+  assert.match(result.candidate.matchScore.breakdown.experience_match, /SMB background is below mid-market expectation/i)
+  assert.doesNotMatch(result.candidate.fit_assessment.rationale, /meets core experience thresholds/i)
+  assert.match(result.candidate.fit_assessment.rationale, /^Daniel has 18 months[^.]+which does not meet[^.]+\. Daniel demonstrates/i)
+  assert.match(result.candidate.fit_assessment.rationale, /strong HubSpot proficiency/i)
+  assert.match(result.candidate.fit_assessment.rationale, /Location is an exact match/i)
+  assert.equal(result.candidate.score, 60.5)
+  assert.equal(result.candidate.matchScore.score, 60.5)
+  assert.equal(result.candidate.matchScore.score_out_of_ten, 6.1)
+  assert.equal(result.candidate.fit_assessment.overall_fit_score, 60.5)
+})
+
+test('corrects the latest Liam unitless range comparison and its status label', () => {
+  const candidate = buildHighConfidenceCandidate({
+    name: 'Liam Foster',
+    years_experience: 3,
+    score: 33.9,
+    experience_entries: [
+      { title: 'Sales Supervisor', start_date: '2024-04', end_date: null, description: 'Led a retail team.' },
+      { title: 'Sales Associate', start_date: '2022-06', end_date: '2024-03', description: 'Assisted retail customers.' },
+    ],
+    experience_facts_v1: {
+      version: 'experience_facts_v1',
+      status: 'computed',
+      confidence: 'high',
+      total_months: 50,
+      total_years: 4.2,
+      entry_facts: [
+        { entry_index: 0, start_date: '2024-04', end_date: '2026-09', is_current: true, duration_months: 29 },
+        { entry_index: 1, start_date: '2022-06', end_date: '2024-03', is_current: false, duration_months: 21 },
+      ],
+    },
+    matchScore: {
+      score: 33.9,
+      score_out_of_ten: 3.4,
+      reason: 'Candidate has 4.2 years of retail consumer sales experience.',
+      breakdown: { years_of_experience_fit: 'Below requirement (3 vs. 4-7 years required)' },
+    },
+    fit_assessment: {
+      overall_fit_score: 33.9,
+      matched_requirements: [],
+      missing_requirements: [],
+      risks_or_gaps: [],
+      rationale: '50 months of dated professional sales experience meets the 48 months requirement.',
+      notes: [],
+    },
+  })
+
+  const result = applyCanonicalExperienceFactsToCandidate(candidate, COMPOUND_SALES_CONTEXT)
+
+  assert.equal(result.candidate.matchScore.breakdown.years_of_experience_fit, 'Meets requirement (4.2 years vs. 4-7 years required)')
+  assert.equal(result.candidate.score, 33.9)
+  assert.equal(result.candidate.matchScore.score, 33.9)
+  assert.equal(result.candidate.matchScore.score_out_of_ten, 3.4)
+  assert.equal(result.candidate.fit_assessment.overall_fit_score, 33.9)
+})
+
+test('derives an above-range experience label from the corrected numeric value', () => {
+  const candidate = buildHighConfidenceCandidate({
+    years_experience: 6,
+    experience_facts_v1: {
+      version: 'experience_facts_v1',
+      status: 'computed',
+      confidence: 'high',
+      total_months: 96,
+      total_years: 8,
+      entry_facts: [],
+    },
+    matchScore: {
+      score: 60.5,
+      score_out_of_ten: 6.1,
+      breakdown: { years_of_experience_fit: 'Meets requirement (6 vs. 4-7 years required)' },
+    },
+  })
+
+  const result = applyCanonicalExperienceFactsToCandidate(candidate, COMPOUND_SALES_CONTEXT)
+
+  assert.equal(result.candidate.matchScore.breakdown.years_of_experience_fit, 'Above requirement (8 years vs. 4-7 years required)')
+})
+
+test('corrects Noah current-role month tenure from the high-confidence dated entry', () => {
+  const candidate = buildHighConfidenceCandidate({
+    name: 'Noah Bennett',
+    years_experience: 1,
+    experience_entries: [
+      { title: 'Sales Associate', start_date: '2024-08', end_date: null, description: 'Sold consumer mobile plans.' },
+      { title: 'Customer Service & Sales Representative', start_date: '2023-06', end_date: '2024-07', description: 'Recommended add-on services.' },
+    ],
+    experience_facts_v1: {
+      version: 'experience_facts_v1',
+      status: 'computed',
+      confidence: 'high',
+      total_months: 38,
+      total_years: 3.2,
+      entry_facts: [
+        { entry_index: 0, start_date: '2024-08', end_date: '2026-09', is_current: true, duration_months: 25 },
+        { entry_index: 1, start_date: '2023-06', end_date: '2024-07', is_current: false, duration_months: 13 },
+      ],
+    },
+    considerations: [
+      'Limited tenure in current role (3 months) and previous role (13 months); career stability and depth should be reviewed.',
+    ],
+  })
+
+  const result = applyCanonicalExperienceFactsToCandidate(candidate, COMPOUND_SALES_CONTEXT)
+
+  assert.equal(
+    result.candidate.considerations[0],
+    'Limited tenure in current role (25 months) and previous role (13 months); career stability and depth should be reviewed.',
+  )
+  assert.equal(result.candidate.score, 60.5)
+  assert.equal(result.candidate.matchScore.score, 60.5)
+  assert.equal(result.candidate.fit_assessment.overall_fit_score, 60.5)
+})
+
 test('uses canonical total years consistently without rewriting skill-specific tenure', () => {
   const candidate = buildHighConfidenceCandidate({
     years_experience: 4,
