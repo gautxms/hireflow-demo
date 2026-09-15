@@ -94,13 +94,20 @@ test('job description context preserves labelled Hybrid mode independently from 
     location: 'Seattle, WA',
     score: 72,
     concerns: ['Location mismatch: Seattle, WA vs. Austin, TX on-site requirement.'],
+    considerations: ['Role located in Austin, TX with hybrid work mode; relocation willingness not provided.'],
+    missingRequirementsFull: ['Geographic location: Seattle, WA vs. Austin, TX; relocation willingness unknown'],
     matchScore: {
       score: 72,
       reason: 'Strong sales evidence. Geographic mismatch (Seattle vs. Austin on-site) reduces fit.',
+      breakdown: {
+        skills_match: 'Strong',
+        location_match: 'Weak — Seattle, WA vs. Austin, TX; relocation unknown',
+      },
     },
     fit_assessment: {
       overall_fit_score: 72,
       location_match_score: 0,
+      missing_requirements: ['Geographic location: Seattle, WA vs. Austin, TX; relocation willingness unknown'],
       risks_or_gaps: ['Location mismatch: Seattle, WA vs. Austin, TX on-site requirement.'],
     },
   }
@@ -113,7 +120,14 @@ test('job description context preserves labelled Hybrid mode independently from 
   assert.match(prompt, /Work Mode: hybrid/)
   assert.doesNotMatch(prompt, /Work Mode: On-site/)
   assert.deepEqual(reconciled.concerns, [])
+  assert.deepEqual(reconciled.considerations, [])
+  assert.deepEqual(reconciled.missingRequirementsFull, [])
+  assert.deepEqual(reconciled.fit_assessment.missing_requirements, [])
   assert.deepEqual(reconciled.fit_assessment.risks_or_gaps, [])
+  assert.deepEqual(reconciled.matchScore.breakdown, {
+    skills_match: 'Strong',
+    location_match: 'Location compatibility is unknown for the hybrid work mode; confirm attendance and geographic requirements during screening.',
+  })
   assert.equal(reconciled.fit_assessment.location_match_score, null)
   assert.equal(reconciled.score, 72)
   assert.equal(reconciled.matchScore.score, 72)

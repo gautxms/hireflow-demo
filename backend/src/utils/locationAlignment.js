@@ -21,6 +21,11 @@ const LOCATION_REFERENCE_PATTERN = /\b(?:location|located|based|city|remote|hybr
 const DEFINITE_LOCATION_FAILURE_PATTERN = /\b(?:location\s+mismatch|geograph(?:ic|ical)\s+mismatch|incompatible\s+location|location\s+incompatib(?:le|ility)|not\s+(?:location\s+)?eligible|does\s+not\s+meet\s+(?:the\s+)?location|fails?\s+(?:the\s+)?location|outside\s+(?:the\s+)?required\s+location|cannot\s+(?:work|commute)|unable\s+to\s+(?:work|commute)|must\s+relocate|relocation\s+required|penali[sz](?:e|ed|ing)\s+(?:the\s+)?candidate\s+for\s+location)\b/i
 const ONSITE_WORK_MODE_PATTERN = /\bon[ -]?site\b/i
 const FLEXIBLE_LOCATION_UNCERTAINTY_PATTERN = /\b(?:no\s+(?:indication\s+of\s+)?(?:willingness|ability)?\s*(?:or\s+ability\s+)?to\s+relocate|no\s+relocation\s+signal|no\s+relocation(?:\s+or\s+remote\s+work\s+flexibility)?\s+(?:indication|evidence|indicated)|relocation[^.!?;]{0,100}(?:not\s+(?:stated|provided)|must\s+be\s+confirmed))\b/i
+const FLEXIBLE_LOCATION_SUBJECT_PATTERN = /\b(?:location|located|geograph(?:y|ic|ical)|relocat(?:e|ion|ing)|commut(?:e|ing)|work\s*mode|work\s+arrangement)\b/i
+const CANDIDATE_BASED_IN_PATTERN = /\b(?:candidate|applicant|they|he|she)\s+(?:is\s+|are\s+)?based\s+in\b/i
+const FLEXIBLE_WORK_MODE_PATTERN = /\b(?:remote|hybrid|on[ -]?site)\b/i
+const FLEXIBLE_WORK_MODE_CONTEXT_PATTERN = /\b(?:role|work|mode|arrangement|presence|compatib(?:le|ility)|availab(?:le|ility)|requirement)\b/i
+const LOCATION_BREAKDOWN_KEY_PATTERN = /(?:location|geograph|relocat|commut|work.?mode)/i
 const LABELED_WORK_MODE_PATTERN = /\b(?:work\s*mode|working\s+arrangement|work\s+arrangement|workplace\s+(?:mode|model|type)|work\s+setup)\b\s*(?:[:=]|-|\bis\b)?\s*(remote|hybrid|on[ -]?site)\b/i
 
 const normalizeWorkModeValue = (value) => {
@@ -138,6 +143,21 @@ const isDefiniteLocationFailureClause = (value, { workMode = 'unspecified' } = {
     && (ONSITE_WORK_MODE_PATTERN.test(text) || FLEXIBLE_LOCATION_UNCERTAINTY_PATTERN.test(text))
 }
 
+const isFlexibleWorkMode = (workMode) => workMode === 'hybrid' || workMode === 'remote'
+
+const isFlexibleLocationNarrativeClause = (value, { workMode = 'unspecified' } = {}) => {
+  if (!isFlexibleWorkMode(workMode)) return false
+  const text = String(value ?? '')
+  return FLEXIBLE_LOCATION_SUBJECT_PATTERN.test(text)
+    || CANDIDATE_BASED_IN_PATTERN.test(text)
+    || (FLEXIBLE_WORK_MODE_PATTERN.test(text) && FLEXIBLE_WORK_MODE_CONTEXT_PATTERN.test(text))
+}
+
+const neutralLocationStatement = (workMode) => {
+  const label = workMode === 'remote' ? 'remote' : 'hybrid'
+  return `Location compatibility is unknown for the ${label} work mode; confirm attendance and geographic requirements during screening.`
+}
+
 const replaceFalseOnsiteWorkMode = (value, workMode) => {
   if (typeof value !== 'string' || (workMode !== 'hybrid' && workMode !== 'remote')) return value
   const label = workMode === 'hybrid' ? 'hybrid' : 'remote'
@@ -147,10 +167,18 @@ const replaceFalseOnsiteWorkMode = (value, workMode) => {
   })
 }
 
-const reconcileNarrative = (value, { fallback = '', workMode = 'unspecified' } = {}) => {
-  if (typeof value !== 'string' || !isDefiniteLocationFailureClause(value, { workMode })) return value
+const reconcileNarrative = (value, {
+  fallback = '',
+  workMode = 'unspecified',
+  removeUnknownFlexibleLocation = false,
+} = {}) => {
+  if (typeof value !== 'string') return value
+  const options = { workMode }
+  const shouldRemove = (clause) => isDefiniteLocationFailureClause(clause, options)
+    || (removeUnknownFlexibleLocation && isFlexibleLocationNarrativeClause(clause, options))
+  if (!shouldRemove(value)) return value
   const retained = splitNarrativeClauses(value)
-    .filter((clause) => !isDefiniteLocationFailureClause(clause, { workMode }))
+    .filter((clause) => !shouldRemove(clause))
   return retained.join(' ').trim() || fallback
 }
 
@@ -216,7 +244,10 @@ export function reconcileCandidateLocationAlignment(candidate = {}, context = {}
   if (alignment.classification !== 'unknown') return candidate
 
   const next = structuredClone(candidate)
-  const narrativeOptions = { workMode: alignment.work_mode }
+  const narrativeOptions = {
+    workMode: alignment.work_mode,
+    removeUnknownFlexibleLocation: isFlexibleWorkMode(alignment.work_mode),
+  }
   const fit = next?.fit_assessment && typeof next.fit_assessment === 'object' && !Array.isArray(next.fit_assessment)
     ? next.fit_assessment
     : null
@@ -263,11 +294,10 @@ export function reconcileCandidateLocationAlignment(candidate = {}, context = {}
     const breakdown = next.matchScore.breakdown
     if (breakdown && typeof breakdown === 'object' && !Array.isArray(breakdown)) {
       for (const key of Object.keys(breakdown)) {
-        if (/location/i.test(key) && typeof breakdown[key] === 'string') {
-          breakdown[key] = reconcileNarrative(breakdown[key], {
-            fallback: 'Location compatibility is unknown for the flexible work mode.',
-            ...narrativeOptions,
-          })
+        if (LOCATION_BREAKDOWN_KEY_PATTERN.test(key) && isFlexibleWorkMode(alignment.work_mode)) {
+          breakdown[key] = neutralLocationStatement(alignment.work_mode)
+        } else if (/location/i.test(key) && typeof breakdown[key] === 'string') {
+          breakdown[key] = reconcileNarrative(breakdown[key], narrativeOptions)
         }
       }
     }
