@@ -312,29 +312,21 @@ function buildAiScoringContractV2VisibleApplyAllowlistDiagnostic({ userId, analy
   }
 }
 
-const AI_SCORING_CONTRACT_V2_VISIBLE_CONFIDENCE_RANK = Object.freeze({
-  low: 1,
-  medium: 2,
-  high: 3,
-})
+const AI_SCORING_CONTRACT_V2_VISIBLE_COMPONENT_FIELDS = Object.freeze([
+  'skills_match_score',
+  'relevant_experience_score',
+  'education_relevance_score',
+  'seniority_progression_score',
+])
 
-function normalizeConfiguredV2VisibleApplyMinimumConfidence(value) {
-  const normalized = String(value || '').trim().toLowerCase()
-  return AI_SCORING_CONTRACT_V2_VISIBLE_CONFIDENCE_RANK[normalized] ? normalized : 'high'
+function isValidAiScoringContractV2Score(value) {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 100
 }
 
-function normalizeV2VisibleApplyContractConfidence(value) {
-  const normalized = String(value || '').trim().toLowerCase()
-  return AI_SCORING_CONTRACT_V2_VISIBLE_CONFIDENCE_RANK[normalized] ? normalized : null
-}
-
-function confidenceMeetsMinimum(confidence, minimumConfidence) {
-  const normalizedConfidence = normalizeV2VisibleApplyContractConfidence(confidence)
-  const normalizedMinimum = normalizeConfiguredV2VisibleApplyMinimumConfidence(minimumConfidence)
-
-  if (!normalizedConfidence) return false
-
-  return AI_SCORING_CONTRACT_V2_VISIBLE_CONFIDENCE_RANK[normalizedConfidence] >= AI_SCORING_CONTRACT_V2_VISIBLE_CONFIDENCE_RANK[normalizedMinimum]
+function hasValidAiScoringContractV2VisibleComponents(contract) {
+  return AI_SCORING_CONTRACT_V2_VISIBLE_COMPONENT_FIELDS.every((field) => (
+    isValidAiScoringContractV2Score(contract?.[field])
+  ))
 }
 
 function resolveCandidateMatchScoreValue(candidate = {}) {
@@ -414,6 +406,8 @@ function applyAiScoringContractV2VisibleScoreToCandidate(candidate, { appliedSco
       applied_score: appliedScore,
       applied_at: new Date().toISOString(),
       reason,
+      score_source: 'weighted_total_score_recomputed',
+      selection_policy: 'validated_recomputed_score',
       contract_version: candidate?.ai_scoring_contract_v2?.scoring_contract_version || null,
     },
   }
@@ -450,7 +444,6 @@ export function applyAiScoringContractV2VisibleScoreExperiment({
   const allUsersEnabled = allowlistDiagnostic.all_users_enabled
   const allowlistMatched = allowlistDiagnostic.allowlist_matched
   const eligibleForVisibleApply = allowlistDiagnostic.eligible_for_visible_apply
-  const minimumConfidence = normalizeConfiguredV2VisibleApplyMinimumConfidence(env.AI_SCORING_CONTRACT_V2_VISIBLE_APPLY_MIN_CONFIDENCE || 'high')
 
   return candidates.map((candidate) => {
     let skipReason = null
@@ -459,7 +452,7 @@ export function applyAiScoringContractV2VisibleScoreExperiment({
     const contract = candidate?.ai_scoring_contract_v2 && typeof candidate.ai_scoring_contract_v2 === 'object' && !Array.isArray(candidate.ai_scoring_contract_v2)
       ? candidate.ai_scoring_contract_v2
       : null
-    const v2Score = resolveNumericScore(contract?.weighted_total_score_recomputed)
+    const v2Score = contract?.weighted_total_score_recomputed
 
     try {
       if (!enabled) skipReason = 'disabled'
@@ -467,8 +460,8 @@ export function applyAiScoringContractV2VisibleScoreExperiment({
       else if (!contract) skipReason = 'v2_missing'
       else if (contract.scoring_contract_version !== 'ai_jd_fit_rubric_v2') skipReason = 'contract_version_mismatch'
       else if (contract.has_job_description_context !== true) skipReason = 'missing_job_description_context'
-      else if (v2Score === null || v2Score < 0 || v2Score > 100) skipReason = 'invalid_v2_score'
-      else if (!confidenceMeetsMinimum(contract.score_confidence, minimumConfidence)) skipReason = 'confidence_below_minimum'
+      else if (!hasValidAiScoringContractV2VisibleComponents(contract)) skipReason = 'invalid_v2_components'
+      else if (!isValidAiScoringContractV2Score(v2Score)) skipReason = 'invalid_v2_score'
       else {
         appliedCandidate = applyAiScoringContractV2VisibleScoreToCandidate(candidate, {
           appliedScore: v2Score,
