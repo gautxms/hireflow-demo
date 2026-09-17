@@ -199,6 +199,26 @@ test('remote United States compatibility replaces unknown location breakdown wit
   assert.doesNotMatch(JSON.stringify(reconciled), /compatibility is unknown/i)
 })
 
+test('remote United States reconciliation removes orphaned country fragments from requirement arrays', () => {
+  const candidate = {
+    location: 'Denver, CO',
+    matchedSkills: ['United States)', 'SQL'],
+    matchedRequirementsFull: ['United States)', 'REST API troubleshooting'],
+    fit_assessment: {
+      matched_requirements: ['United States)', 'Project planning'],
+    },
+  }
+
+  const reconciled = reconcileCandidateLocationAlignment(candidate, {
+    location: 'United States',
+    workMode: 'Remote',
+  })
+
+  assert.deepEqual(reconciled.matchedSkills, ['SQL'])
+  assert.deepEqual(reconciled.matchedRequirementsFull, ['REST API troubleshooting'])
+  assert.deepEqual(reconciled.fit_assessment.matched_requirements, ['Project planning'])
+})
+
 test('hybrid off-list candidate removes false onsite penalties from every visible narrative surface', () => {
   const candidate = {
     location: 'Seattle, WA',

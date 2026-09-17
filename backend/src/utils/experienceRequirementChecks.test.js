@@ -623,6 +623,68 @@ test('canonicalizes a rounded summary tenure to total dated career experience', 
   assert.equal(result.candidate.summaryFull, 'Customer-facing professional with 7.9 years of experience in B2B software.')
 })
 
+test('canonicalizes rounded totals, broad career recommendations, and approximate current-role years', () => {
+  const candidate = buildHighConfidenceCandidate({
+    name: 'Evan Brooks',
+    years_experience: 2,
+    summary: 'Support professional with 3.7 years of experience maintaining CRM data.',
+    recommendationFull: 'Evan has 2 years of support and sales operations experience, not the required implementation background.',
+    considerations: ['Current role tenure is ~1.8 years; implementation ownership remains limited.'],
+    experience_entries: [
+      { title: 'Support Operations Coordinator', start_date: '2024-07', end_date: null },
+      { title: 'Sales Operations Assistant', start_date: '2023-01', end_date: '2024-06' },
+    ],
+    experience_facts_v1: {
+      version: 'experience_facts_v1',
+      status: 'computed',
+      confidence: 'high',
+      total_months: 43,
+      total_years: 3.6,
+      entry_facts: [
+        { entry_index: 0, is_current: true, duration_months: 26 },
+        { entry_index: 1, is_current: false, duration_months: 17 },
+      ],
+    },
+  })
+
+  const result = applyCanonicalExperienceFactsToCandidate(candidate, COMPOUND_SALES_CONTEXT)
+
+  assert.equal(result.candidate.summary, 'Support professional with 3.6 years of experience maintaining CRM data.')
+  assert.equal(result.candidate.recommendationFull, 'Evan has 3.6 years of support and sales operations experience, not the required implementation background.')
+  assert.deepEqual(result.candidate.considerations, [
+    'Current role tenure is 2.2 years; implementation ownership remains limited.',
+  ])
+})
+
+test('canonicalizes rounded total years inside matched evidence and V2 confidence reasoning', () => {
+  const candidate = buildHighConfidenceCandidate({
+    name: 'Carlos Rivera',
+    years_experience: 6,
+    matchedSkills: ['4–7 years customer-facing B2B SaaS experience (6.1 years total)'],
+    ai_scoring_contract_v2: {
+      score_confidence_reason: 'Candidate meets total career experience floor (6.1 years) and has 6.1 years of B2B SaaS experience.',
+    },
+    experience_facts_v1: {
+      version: 'experience_facts_v1',
+      status: 'computed',
+      confidence: 'high',
+      total_months: 95,
+      total_years: 7.9,
+      entry_facts: [],
+    },
+  })
+
+  const result = applyCanonicalExperienceFactsToCandidate(candidate, COMPOUND_SALES_CONTEXT)
+
+  assert.deepEqual(result.candidate.matchedSkills, [
+    '4–7 years customer-facing B2B SaaS experience (7.9 years total)',
+  ])
+  assert.equal(
+    result.candidate.ai_scoring_contract_v2.score_confidence_reason,
+    'Candidate meets total career experience floor (7.9 years) and has 7.9 years of B2B SaaS experience.',
+  )
+})
+
 test('uses canonical total years consistently without rewriting skill-specific tenure', () => {
   const candidate = buildHighConfidenceCandidate({
     years_experience: 4,

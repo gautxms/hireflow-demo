@@ -1767,7 +1767,10 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
   ].filter((fact) => hasRenderableContent(fact.value) && !String(fact.value).toLowerCase().includes('unavailable'))
   const allSkillsVisible = showAllDrawerSkills ? detailVm.allSkills : detailVm.allSkills.slice(0, 12)
   const hasCollapsedSkills = detailVm.allSkills.length > allSkillsVisible.length
-  const detailTags = candidateTags[expandedCandidateKey] || []
+  const detailTags = Array.from(new Set([
+    ...(candidateTags[expandedCandidateKey] || []),
+    ...(detailVm.tags || []),
+  ]))
   if (!hasSelectedJob) detailVm.hasRecommendedAction = false
   const shouldRenderRecommendedAction = Boolean(detailVm.hasRecommendedAction && detailVm.recommendationText)
 

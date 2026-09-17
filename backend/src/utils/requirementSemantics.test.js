@@ -152,3 +152,76 @@ test('a covered preferred alternative group does not create a gap for every unse
   assert.deepEqual(reconciled.fit_assessment.missing_requirements, [])
   assert.equal(reconciled.preferredGaps, undefined)
 })
+
+test('covered tool alternatives are removed from concerns and risk fields', () => {
+  const semantics = buildRequirementSemantics({
+    requirements: [
+      'Experience with Jira or Asana is required.',
+      'Experience with Salesforce or HubSpot is required.',
+    ].join('\n'),
+  })
+  const candidate = {
+    skills_flat: ['Jira', 'Salesforce', 'Asana', 'HubSpot'],
+    concerns: [
+      'No explicit mention of Asana or HubSpot hands-on use, though the resume shows familiarity with both tools.',
+    ],
+    risksOrGapsFull: [
+      'No Asana or Salesforce experience; however, Jira and HubSpot alternatives satisfy the requirements.',
+    ],
+    fit_assessment: {
+      risks_or_gaps: ['HubSpot experience is missing, but Salesforce is present.'],
+      notes: [],
+    },
+  }
+
+  const reconciled = reconcileCandidateRequirementSemantics(candidate, semantics)
+
+  assert.deepEqual(reconciled.concerns, [])
+  assert.deepEqual(reconciled.risksOrGapsFull, [])
+  assert.deepEqual(reconciled.fit_assessment.risks_or_gaps, [])
+})
+
+test('generic domain-transfer warnings are removed when they do not name a required target domain', () => {
+  const candidate = {
+    considerations: [
+      'All SaaS experience is in HR/workflow domain; transferability to other mid-market verticals is unvalidated.',
+      'Current role tenure should be discussed.',
+    ],
+    fit_assessment: {
+      risks_or_gaps: [
+        'Transferability to other industry domains is unclear.',
+        'No ETL tooling is documented.',
+      ],
+    },
+  }
+
+  const reconciled = reconcileCandidateRequirementSemantics(candidate, { required: [], preferred: [], alternativeGroups: [] })
+
+  assert.deepEqual(reconciled.considerations, ['Current role tenure should be discussed.'])
+  assert.deepEqual(reconciled.fit_assessment.risks_or_gaps, ['No ETL tooling is documented.'])
+})
+
+test('explicit implementation ownership gaps remove broad SaaS-tenure implementation claims', () => {
+  const candidate = {
+    matchedSkills: [
+      'At least 2 years implementing B2B SaaS products (6+ years in SaaS)',
+      'Salesforce experience',
+    ],
+    matchedRequirementsFull: [
+      'At least 2 years implementing B2B SaaS products (6+ years in SaaS)',
+    ],
+    missingRequirementsFull: [
+      'No evidence of implementation ownership from kickoff through go-live.',
+    ],
+    fit_assessment: {
+      matched_requirements: ['At least 2 years implementing B2B SaaS products (6+ years in SaaS)'],
+      missing_requirements: ['Implementation ownership is not demonstrated.'],
+    },
+  }
+
+  const reconciled = reconcileCandidateRequirementSemantics(candidate, { required: [], preferred: [], alternativeGroups: [] })
+
+  assert.deepEqual(reconciled.matchedSkills, ['Salesforce experience'])
+  assert.deepEqual(reconciled.matchedRequirementsFull, [])
+  assert.deepEqual(reconciled.fit_assessment.matched_requirements, [])
+})

@@ -173,7 +173,9 @@ test('candidate tag state uses the same canonical identity as cards and the deta
     /const selectedWithResume = selectedCandidates[\s\S]*key: resolveCandidateKey\(candidate\)/,
   )
   assert.match(candidateResultsSource, /const cardTags = candidateTags\[candidateKey\] \|\| \[\]/)
-  assert.match(candidateResultsSource, /const detailTags = candidateTags\[expandedCandidateKey\] \|\| \[\]/)
+  assert.match(candidateResultsSource, /const detailTags = Array\.from\(new Set\(\[/)
+  assert.match(candidateResultsSource, /\.\.\.\(candidateTags\[expandedCandidateKey\] \|\| \[\]\)/)
+  assert.match(candidateResultsSource, /\.\.\.\(detailVm\.tags \|\| \[\]\)/)
   assert.match(candidateResultsSource, /row\?\.resumeId \|\| row\?\.resume_id/)
   assert.doesNotMatch(candidateResultsSource, /current\.push\(candidate\._bulkKey\)/)
   assert.doesNotMatch(candidateResultsSource, /key: candidate\._bulkKey/)
