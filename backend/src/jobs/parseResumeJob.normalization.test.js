@@ -355,6 +355,48 @@ test('in-range reconciliation handles observed name and range wording while pres
   assert.equal(normalized.recommendation, 'Interview for API design and Kubernetes depth.')
 })
 
+test('in-range reconciliation corrects positive evidence and breakdown wording to canonical years', () => {
+  const candidate = {
+    name: 'Maya Patel',
+    years_experience: 6.4,
+    experience_facts_apply_metadata: { original_years_experience: 6.5 },
+    matchedSkills: ['6.5 years in customer-facing implementation (exceeds 4-7 year range)'],
+    matchedRequirementsFull: ['6.5 years of professional services experience exceeds the 4-7 year requirement'],
+    matchScore: {
+      reason: 'Maya has 6.5 years of experience and exceeds the 4-7 year range.',
+      breakdown: { experience_alignment: 'Exceeds requirement (6.5 vs 4-7 years)' },
+    },
+    fit_assessment: {
+      matched_requirements: ['6.5 years in implementation meets the 4-7 year range'],
+    },
+  }
+
+  const normalized = reconcileCandidateExperienceRange(candidate, { experienceMin: 4, experienceMax: 7 })
+
+  assert.deepEqual(normalized.matchedSkills, ['6.4 years in customer-facing implementation (meets 4-7 year range)'])
+  assert.deepEqual(normalized.matchedRequirementsFull, ['6.4 years of professional services experience meets the 4-7 year requirement'])
+  assert.equal(normalized.matchScore.reason, 'Maya has 6.4 years of experience and meets the 4-7 year range.')
+  assert.equal(normalized.matchScore.breakdown.experience_alignment, 'Meets requirement (6.4 vs 4-7 years)')
+  assert.deepEqual(normalized.fit_assessment.matched_requirements, ['6.4 years in implementation meets the 4-7 year range'])
+})
+
+test('above-range reconciliation uses canonical total years in experience breakdowns', () => {
+  const candidate = {
+    name: 'Carlos Rivera',
+    years_experience: 7.9,
+    experience_facts_apply_metadata: { original_years_experience: 6 },
+    matchScore: {
+      reason: 'Carlos has extensive customer-facing SaaS experience.',
+      breakdown: { years_of_experience_match: 'Met (6.1 vs. 4-7 required)' },
+    },
+  }
+
+  const normalized = reconcileCandidateExperienceRange(candidate, { experienceMin: 4, experienceMax: 7 })
+
+  assert.equal(normalized.experience_range.classification, 'above_range')
+  assert.equal(normalized.matchScore.breakdown.years_of_experience_match, 'Above range (7.9 vs. 4-7 required)')
+})
+
 test('removing a false total-experience clause does not remove a legitimate skill gap from deterministic scoring', () => {
   const candidate = {
     name: 'Aanya Mehta',

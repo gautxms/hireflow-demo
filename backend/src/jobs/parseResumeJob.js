@@ -1567,23 +1567,80 @@ function reconcileConflictingExperienceText(value, conflicts) {
   return retained.join(' ').replace(/\s+/g, ' ').trim()
 }
 
+function reconcileSupportedExperienceRangeText(value, evaluation, candidate = {}) {
+  if (typeof value !== 'string') return value
+  const { minimumYears, maximumYears, candidateYears, classification } = evaluation
+  if (minimumYears === null || maximumYears === null || candidateYears === null) return value
+
+  const rangeSource = `${escapeRegex(minimumYears)}\\s*(?:-|\\u2013|\\u2014|to)\\s*${escapeRegex(maximumYears)}(?:\\s*-?\\s*(?:years?|yrs?))?`
+  const rangeReference = new RegExp(`\\b${rangeSource}(?:\\s+(?:range|requirement|required))?\\b`, 'i')
+  if (!rangeReference.test(value)) return value
+
+  const canonicalYears = String(candidateYears)
+  const originalYearsValue = Number(candidate?.experience_facts_apply_metadata?.original_years_experience)
+  let next = value
+  if (Number.isFinite(originalYearsValue) && originalYearsValue !== candidateYears) {
+    const originalYears = escapeRegex(originalYearsValue)
+    next = next.replace(
+      new RegExp(`\\b${originalYears}(?:\\.0)?(?=\\s*\\+?\\s*(?:years?|yrs?)\\b)`, 'gi'),
+      canonicalYears,
+    )
+  }
+  next = next.replace(
+    new RegExp(`\\b\\d+(?:\\.\\d+)?(?=\\s*(?:years?\\s*)?(?:vs\\.?|versus)\\s*${rangeSource})`, 'gi'),
+    canonicalYears,
+  )
+
+  if (classification === 'within_range') {
+    next = next
+      .replace(/\bExceeds requirement(?=\s*\()/gi, 'Meets requirement')
+      .replace(new RegExp(`\\bexceeding(?=\\s+(?:the\\s+)?${rangeSource})`, 'gi'), 'meeting')
+      .replace(new RegExp(`\\bexceeds?(?=\\s+(?:the\\s+)?${rangeSource})`, 'gi'), 'meets')
+  } else if (classification === 'above_range') {
+    next = next
+      .replace(/\bMeets requirement(?=\s*\()/gi, 'Above requirement')
+      .replace(/\bMet(?=\s*\()/gi, 'Above range')
+      .replace(new RegExp(`\\b(?:meets?|within)(?=\\s+(?:the\\s+)?${rangeSource})`, 'gi'), 'is above')
+  } else if (classification === 'below_range') {
+    next = next
+      .replace(/\bMeets requirement(?=\s*\()/gi, 'Below requirement')
+      .replace(new RegExp(`\\b(?:meets?|within)(?=\\s+(?:the\\s+)?${rangeSource})`, 'gi'), 'is below')
+  }
+  return next
+}
+
 function reconcileCandidateExperienceRange(candidate, jobDescriptionContext) {
   const evaluation = evaluateExperienceRange(candidate?.years_experience, {
     min: jobDescriptionContext?.experienceMin,
     max: jobDescriptionContext?.experienceMax,
   })
   const next = { ...candidate, experience_range: evaluation }
-  if (evaluation.classification !== 'within_range') return next
 
-  const conflicts = (value) => CONFLICTING_IN_RANGE_EXPERIENCE_TEXT.test(String(value || ''))
+  const conflicts = (value) => evaluation.classification === 'within_range'
+    && CONFLICTING_IN_RANGE_EXPERIENCE_TEXT.test(String(value || ''))
     && CONFLICTING_IN_RANGE_JUDGMENT.test(String(value || ''))
     && explicitlyComparesTotalYearsToBoundary(value, evaluation, candidate?.name)
   const reconcileArray = (values) => Array.isArray(values)
     ? values.map((entry) => reconcileConflictingExperienceText(entry, conflicts)).filter(Boolean)
     : values
+  const reconcileSupportedArray = (values) => Array.isArray(values)
+    ? values.map((entry) => reconcileSupportedExperienceRangeText(entry, evaluation, candidate)).filter(Boolean)
+    : values
   const fit = candidate?.fit_assessment
+  const matchScore = candidate?.matchScore
+  const matchScoreIsObject = matchScore && typeof matchScore === 'object' && !Array.isArray(matchScore)
+  const breakdown = matchScoreIsObject && matchScore.breakdown && typeof matchScore.breakdown === 'object' && !Array.isArray(matchScore.breakdown)
+    ? Object.fromEntries(Object.entries(matchScore.breakdown).map(([key, value]) => [
+        key,
+        /(?:experience|tenure|years?)/i.test(key.replace(/_/g, ' '))
+          ? reconcileSupportedExperienceRangeText(value, evaluation, candidate)
+          : value,
+      ]))
+    : matchScore?.breakdown
   return {
     ...next,
+    matchedSkills: reconcileSupportedArray(candidate?.matchedSkills),
+    matchedRequirementsFull: reconcileSupportedArray(candidate?.matchedRequirementsFull),
     considerations: reconcileArray(candidate?.considerations),
     concerns: reconcileArray(candidate?.concerns),
     missingSkills: reconcileArray(candidate?.missingSkills),
@@ -1591,11 +1648,17 @@ function reconcileCandidateExperienceRange(candidate, jobDescriptionContext) {
     risksOrGapsFull: reconcileArray(candidate?.risksOrGapsFull),
     fit_assessment: fit ? {
       ...fit,
+      matched_requirements: reconcileSupportedArray(fit.matched_requirements),
       missing_requirements: reconcileArray(fit.missing_requirements),
       risks_or_gaps: reconcileArray(fit.risks_or_gaps),
       notes: reconcileArray(fit.notes),
       rationale: reconcileConflictingExperienceText(fit.rationale, conflicts),
     } : fit,
+    matchScore: matchScoreIsObject ? {
+      ...matchScore,
+      reason: reconcileSupportedExperienceRangeText(matchScore.reason, evaluation, candidate),
+      breakdown,
+    } : candidate?.matchScore,
     recommendation: reconcileConflictingExperienceText(candidate?.recommendation, conflicts),
     recommendationFull: reconcileConflictingExperienceText(candidate?.recommendationFull, conflicts),
   }

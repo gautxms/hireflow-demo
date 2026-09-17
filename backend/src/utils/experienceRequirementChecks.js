@@ -508,9 +508,26 @@ function currentRoleDurationMonths(candidate) {
 
 function replaceConflictingCurrentRoleMonths(value, currentRoleMonths) {
   if (typeof value !== 'string' || currentRoleMonths === null) return value
+  return value
+    .replace(
+      /\b(current\s+(?:role|position|job)\s*\(\s*)\d+(?:\.\d+)?\s*months?(\s*\))/gi,
+      (_match, prefix, suffix) => `${prefix}${formatMonths(currentRoleMonths)}${suffix}`,
+    )
+    .replace(
+      /\b((?:recent|current)\s+(?:role|position|job)\s+(?:tenure|duration)\s*\(\s*)\d+(?:\.\d+)?\s*months?(\s+(?:at|with)\s+[^)]+)?(\s*\))/gi,
+      (_match, prefix, employer, suffix) => `${prefix}${formatMonths(currentRoleMonths)}${employer || ''}${suffix}`,
+    )
+}
+
+function replaceNearOriginalSummaryYears(value, originalYears, canonicalYears) {
+  if (typeof value !== 'string' || originalYears === null || canonicalYears === null || originalYears === canonicalYears) return value
   return value.replace(
-    /\b(current\s+(?:role|position|job)\s*\(\s*)\d+(?:\.\d+)?\s*months?(\s*\))/gi,
-    (_match, prefix, suffix) => `${prefix}${formatMonths(currentRoleMonths)}${suffix}`,
+    /\b(\d+(?:\.\d+)?)\s*\+?\s*(years?|yrs?)\s+of\s+experience\b/gi,
+    (match, reportedValue, unit) => {
+      const reportedYears = Number(reportedValue)
+      if (!Number.isFinite(reportedYears) || Math.abs(reportedYears - originalYears) > 0.2) return match
+      return `${formatYears(canonicalYears)} ${formatYearUnit(unit, canonicalYears)} of experience`
+    },
   )
 }
 
@@ -520,9 +537,13 @@ function reconcileNarrativeValue(value, {
   checks,
   currentRoleMonths = null,
   assumeExperienceContext = false,
+  canonicalizeSummaryYears = false,
 }) {
   const correctedRoleMonths = replaceConflictingCurrentRoleMonths(value, currentRoleMonths)
-  const correctedYears = replaceConflictingTotalYears(correctedRoleMonths, originalYears, canonicalYears)
+  const correctedSummaryYears = canonicalizeSummaryYears
+    ? replaceNearOriginalSummaryYears(correctedRoleMonths, originalYears, canonicalYears)
+    : correctedRoleMonths
+  const correctedYears = replaceConflictingTotalYears(correctedSummaryYears, originalYears, canonicalYears)
   const correctedSubjectYears = replaceConflictingSubjectYears(
     correctedYears,
     originalYears,
@@ -602,7 +623,12 @@ function reconcileCandidateNarratives(candidate, { originalYears, canonicalYears
     if (Array.isArray(next[field])) next[field] = reconcileNarrativeArray(next[field], options)
   }
   for (const field of ['summary', 'summaryFull', 'strengthsFull', 'recommendation', 'recommendationFull']) {
-    if (typeof next[field] === 'string') next[field] = reconcileNarrativeValue(next[field], options)
+    if (typeof next[field] === 'string') {
+      next[field] = reconcileNarrativeValue(next[field], {
+        ...options,
+        canonicalizeSummaryYears: field === 'summary' || field === 'summaryFull',
+      })
+    }
   }
 
   if (next.matchScore && typeof next.matchScore === 'object' && !Array.isArray(next.matchScore)) {
