@@ -326,6 +326,30 @@ export function resolveFilterableSkills(candidate = {}) {
   return Array.from(deduped.values())
 }
 
+export function resolveCandidateAllSkills(candidate = {}) {
+  const explicitFlatSkills = []
+  collectSkillsFromValue(candidate?.skills_flat, (skill) => explicitFlatSkills.push(skill))
+  if (explicitFlatSkills.length > 0) {
+    return resolveFilterableSkills({ skills: explicitFlatSkills })
+  }
+
+  return resolveFilterableSkills({
+    skills: candidate?.skills,
+    skills_structured: candidate?.skills_structured,
+    technical_skills: candidate?.technical_skills,
+    soft_skills: candidate?.soft_skills,
+    tools_and_platforms: candidate?.tools_and_platforms,
+    methodologies: candidate?.methodologies,
+    domain_expertise: candidate?.domain_expertise,
+    languages: candidate?.languages,
+    frameworks: candidate?.frameworks,
+    databases: candidate?.databases,
+    cloud: candidate?.cloud,
+    cloud_platforms: candidate?.cloud_platforms,
+    bi_tools: candidate?.bi_tools,
+  })
+}
+
 export function resolveCandidateYears(candidate = {}) {
   const candidates = [
     candidate?.years_experience,
@@ -958,7 +982,9 @@ export function sanitizeExpandedCandidate(candidate = {}) {
     email: toDisplayText(source.email, ''),
     years_experience: toDisplayText(source.years_experience, ''),
     skills: Array.isArray(source.skills) ? source.skills : (typeof source.skills === 'string' ? source.skills : []),
+    skills_flat: toStringArray(source.skills_flat),
     top_skills: toStringArray(source.top_skills),
+    tags: toStringArray(source.tags),
     strengths: toAiDisplayArray(source.strengths),
     achievements: toAiDisplayArray(source.achievements),
     considerations: toAiDisplayArray(source.considerations || source.risks_or_gaps || source.concerns),
@@ -1079,7 +1105,7 @@ export function buildExpandedCandidateDrawerViewModel(rawCandidate) {
       candidate?.missingSkills,
       pickFullerArrayValue(candidate?.missingRequirementsFull, candidate?.mustHaveSkillsFull, candidate?.missingSkillsFull, candidate?.displayText?.missingRequirements?.full, candidate?.displayText?.missingSkills?.full, candidate?.rawDisplayFields?.missingRequirements, candidate?.rawDisplayFields?.missingSkills, candidate?.fit_assessment?.missing, candidate?.mustHaveSkills, candidate?.missingSkills),
     )
-    const allSkills = resolveFilterableSkills(candidate)
+    const allSkills = resolveCandidateAllSkills(candidate)
       .map((entry) => cleanAiTextForDisplay(entry, ''))
       .filter(Boolean)
 
@@ -1111,6 +1137,7 @@ export function buildExpandedCandidateDrawerViewModel(rawCandidate) {
       matchedSkills,
       missingSkills,
       allSkills,
+      tags: candidate.tags,
       totalSkills: matchedSkills.length + missingSkills.length,
       resumeFileLabel: buildResumeFileIdentity(candidate, 'Resume unavailable').filename,
       email: toDisplayText(candidate.email, ''),
@@ -1144,6 +1171,7 @@ export function buildExpandedCandidateDrawerViewModel(rawCandidate) {
       matchedSkills: [],
       missingSkills: [],
       allSkills: [],
+      tags: [],
       totalSkills: 0,
       resumeFileLabel: 'Resume unavailable',
       email: '',

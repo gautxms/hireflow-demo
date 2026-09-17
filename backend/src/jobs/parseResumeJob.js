@@ -417,6 +417,15 @@ function applyAiScoringContractV2VisibleScoreToCandidate(candidate, { appliedSco
     score: appliedScore,
     score_out_of_ten: roundVisibleScoreOutOfTen(appliedScore),
   }
+  const existingBreakdown = nextCandidate.matchScore.breakdown
+  if (existingBreakdown && typeof existingBreakdown === 'object' && !Array.isArray(existingBreakdown)) {
+    nextCandidate.matchScore.breakdown = Object.fromEntries(
+      Object.entries(existingBreakdown).map(([key, value]) => {
+        if (!/^overall(?:_score|_match)?$/i.test(key) || typeof value !== 'string') return [key, value]
+        return [key, value.replace(/^\s*\d+(?:\.\d+)?\s*\/\s*100\b/, `${appliedScore}/100`)]
+      }),
+    )
+  }
 
   nextCandidate.fit_assessment = {
     ...(candidate?.fit_assessment && typeof candidate.fit_assessment === 'object' && !Array.isArray(candidate.fit_assessment) ? candidate.fit_assessment : {}),
@@ -1593,9 +1602,14 @@ function reconcileSupportedExperienceRangeText(value, evaluation, candidate = {}
 
   if (classification === 'within_range') {
     next = next
+      .replace(/\bExceeds range(?=\s*\()/gi, 'Within range')
       .replace(/\bExceeds requirement(?=\s*\()/gi, 'Meets requirement')
       .replace(new RegExp(`\\bexceeding(?=\\s+(?:the\\s+)?${rangeSource})`, 'gi'), 'meeting')
       .replace(new RegExp(`\\bexceeds?(?=\\s+(?:the\\s+)?${rangeSource})`, 'gi'), 'meets')
+      .replace(
+        new RegExp(`\\b(?:well|significantly|slightly)\\s+above\\s+(?:the\\s+)?${rangeSource}`, 'gi'),
+        `within the ${minimumYears}-${maximumYears} year`,
+      )
   } else if (classification === 'above_range') {
     next = next
       .replace(/\bMeets requirement(?=\s*\()/gi, 'Above requirement')
@@ -1609,6 +1623,19 @@ function reconcileSupportedExperienceRangeText(value, evaluation, candidate = {}
   return next
 }
 
+function reconcileGenericExperienceRangeText(value, evaluation) {
+  if (typeof value !== 'string' || evaluation?.classification !== 'within_range') return value
+  return value
+    .replace(
+      /\b(?:significantly|well|slightly)\s+exceeds?(?:\s+the)?\s+experience\s+range\b/gi,
+      'is within the experience range',
+    )
+    .replace(
+      /\b(?:is\s+)?above(?:\s+the)?\s+experience\s+range\b/gi,
+      'is within the experience range',
+    )
+}
+
 function reconcileCandidateExperienceRange(candidate, jobDescriptionContext) {
   const evaluation = evaluateExperienceRange(candidate?.years_experience, {
     min: jobDescriptionContext?.experienceMin,
@@ -1620,11 +1647,22 @@ function reconcileCandidateExperienceRange(candidate, jobDescriptionContext) {
     && CONFLICTING_IN_RANGE_EXPERIENCE_TEXT.test(String(value || ''))
     && CONFLICTING_IN_RANGE_JUDGMENT.test(String(value || ''))
     && explicitlyComparesTotalYearsToBoundary(value, evaluation, candidate?.name)
+  const reconcileNegativeText = (value) => {
+    const removed = reconcileConflictingExperienceText(value, conflicts)
+    if (removed !== value) return removed
+    return reconcileGenericExperienceRangeText(
+      reconcileSupportedExperienceRangeText(value, evaluation, candidate),
+      evaluation,
+    )
+  }
   const reconcileArray = (values) => Array.isArray(values)
-    ? values.map((entry) => reconcileConflictingExperienceText(entry, conflicts)).filter(Boolean)
+    ? values.map((entry) => reconcileNegativeText(entry)).filter(Boolean)
     : values
   const reconcileSupportedArray = (values) => Array.isArray(values)
-    ? values.map((entry) => reconcileSupportedExperienceRangeText(entry, evaluation, candidate)).filter(Boolean)
+    ? values.map((entry) => reconcileGenericExperienceRangeText(
+        reconcileSupportedExperienceRangeText(entry, evaluation, candidate),
+        evaluation,
+      )).filter(Boolean)
     : values
   const fit = candidate?.fit_assessment
   const matchScore = candidate?.matchScore
@@ -1633,12 +1671,23 @@ function reconcileCandidateExperienceRange(candidate, jobDescriptionContext) {
     ? Object.fromEntries(Object.entries(matchScore.breakdown).map(([key, value]) => [
         key,
         /(?:experience|tenure|years?)/i.test(key.replace(/_/g, ' '))
-          ? reconcileSupportedExperienceRangeText(value, evaluation, candidate)
+          ? reconcileGenericExperienceRangeText(
+              reconcileSupportedExperienceRangeText(value, evaluation, candidate),
+              evaluation,
+            )
           : value,
       ]))
     : matchScore?.breakdown
   return {
     ...next,
+    summary: reconcileGenericExperienceRangeText(
+      reconcileSupportedExperienceRangeText(candidate?.summary, evaluation, candidate),
+      evaluation,
+    ),
+    summaryFull: reconcileGenericExperienceRangeText(
+      reconcileSupportedExperienceRangeText(candidate?.summaryFull, evaluation, candidate),
+      evaluation,
+    ),
     matchedSkills: reconcileSupportedArray(candidate?.matchedSkills),
     matchedRequirementsFull: reconcileSupportedArray(candidate?.matchedRequirementsFull),
     considerations: reconcileArray(candidate?.considerations),
@@ -1652,15 +1701,18 @@ function reconcileCandidateExperienceRange(candidate, jobDescriptionContext) {
       missing_requirements: reconcileArray(fit.missing_requirements),
       risks_or_gaps: reconcileArray(fit.risks_or_gaps),
       notes: reconcileArray(fit.notes),
-      rationale: reconcileConflictingExperienceText(fit.rationale, conflicts),
+      rationale: reconcileNegativeText(fit.rationale),
     } : fit,
     matchScore: matchScoreIsObject ? {
       ...matchScore,
-      reason: reconcileSupportedExperienceRangeText(matchScore.reason, evaluation, candidate),
+      reason: reconcileGenericExperienceRangeText(
+        reconcileSupportedExperienceRangeText(matchScore.reason, evaluation, candidate),
+        evaluation,
+      ),
       breakdown,
     } : candidate?.matchScore,
-    recommendation: reconcileConflictingExperienceText(candidate?.recommendation, conflicts),
-    recommendationFull: reconcileConflictingExperienceText(candidate?.recommendationFull, conflicts),
+    recommendation: reconcileNegativeText(candidate?.recommendation),
+    recommendationFull: reconcileNegativeText(candidate?.recommendationFull),
   }
 }
 

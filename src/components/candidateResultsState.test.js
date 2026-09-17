@@ -22,6 +22,7 @@ import {
   buildScoreBreakdownRows,
   cleanAiTextForDisplay,
   resolveCandidateYears,
+  resolveCandidateAllSkills,
   resolveFilterableSkills,
   sortCandidatesForResults,
 } from './candidateResultsState.js'
@@ -505,7 +506,7 @@ test('buildExpandedCandidateDrawerViewModel derives low confidence from numeric 
   assert.equal(vm.confidenceLabel, 'Low confidence')
 })
 
-test('buildExpandedCandidateDrawerViewModel exposes recommendation, skill gaps, and all skills from existing candidate data', async () => {
+test('buildExpandedCandidateDrawerViewModel exposes recommendation, skill gaps, explicit skills, and tags', async () => {
   const { buildExpandedCandidateDrawerViewModel } = await import('./candidateResultsState.js')
   const vm = buildExpandedCandidateDrawerViewModel({
     recommendation: 'Proceed to interview panel.',
@@ -513,6 +514,7 @@ test('buildExpandedCandidateDrawerViewModel exposes recommendation, skill gaps, 
     skills: ['Node.js'],
     skills_flat: ['TypeScript'],
     skills_structured: { methodologies: ['Agile'] },
+    tags: ['B2B SaaS', 'Implementation'],
     matchedSkills: ['5 years of implementation experience'],
     mustHaveSkills: ['System Design'],
     missingSkills: ['GraphQL'],
@@ -521,9 +523,24 @@ test('buildExpandedCandidateDrawerViewModel exposes recommendation, skill gaps, 
 
   assert.equal(vm.recommendationText, 'Proceed to interview panel.')
   assert.deepEqual(vm.missingSkills, ['System Design', 'GraphQL', 'Leadership communication'])
-  assert.deepEqual(vm.allSkills, ['React', 'TypeScript', 'Node.js', 'Agile'])
+  assert.deepEqual(vm.allSkills, ['TypeScript'])
+  assert.deepEqual(vm.tags, ['B2B SaaS', 'Implementation'])
   assert.equal(vm.allSkills.includes('5 years of implementation experience'), false)
   assert.equal(vm.allSkills.includes('System Design'), false)
+})
+
+test('resolveCandidateAllSkills excludes synthesized top-skill labels', () => {
+  assert.deepEqual(resolveCandidateAllSkills({
+    top_skills: ['Data Migration & SQL', 'Jira & Salesforce'],
+    skills_flat: ['Data migration', 'SQL', 'Jira', 'Salesforce'],
+    skills_structured: { methodologies: ['Data migration'] },
+  }), ['Data migration', 'SQL', 'Jira', 'Salesforce'])
+
+  assert.deepEqual(resolveCandidateAllSkills({
+    top_skills: ['Composite label'],
+    skills: ['Node.js'],
+    skills_structured: { methodologies: ['Agile'] },
+  }), ['Node.js', 'Agile'])
 })
 
 test('buildExpandedCandidateDrawerViewModel hides recommendation when identical to AI reasoning', async () => {

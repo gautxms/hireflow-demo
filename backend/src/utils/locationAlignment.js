@@ -28,6 +28,7 @@ const FLEXIBLE_WORK_MODE_CONTEXT_PATTERN = /\b(?:role|work|mode|arrangement|pres
 const LOCATION_BREAKDOWN_KEY_PATTERN = /(?:location|geograph|relocat|commut|work.?mode)/i
 const LABELED_WORK_MODE_PATTERN = /\b(?:work\s*mode|working\s+arrangement|work\s+arrangement|workplace\s+(?:mode|model|type)|work\s+setup)\b\s*(?:[:=]|-|\bis\b)?\s*(remote|hybrid|on[ -]?site)\b/i
 const UNITED_STATES_SCOPE_PATTERN = /\b(?:united states(?: of america)?|u\.?s\.?(?:a\.?)?)\b/i
+const ORPHANED_LOCATION_FRAGMENT_PATTERN = /^\s*(?:united states(?: of america)?|u\.?s\.?(?:a\.?)?)[\s)\]}.:,;-]*$/i
 const US_STATE_ABBREVIATIONS = new Set([
   'al', 'ak', 'az', 'ar', 'ca', 'co', 'ct', 'de', 'fl', 'ga', 'hi', 'id', 'il', 'in', 'ia', 'ks', 'ky', 'la', 'me', 'md', 'ma', 'mi', 'mn', 'ms', 'mo', 'mt', 'ne', 'nv', 'nh', 'nj', 'nm', 'ny', 'nc', 'nd', 'oh', 'ok', 'or', 'pa', 'ri', 'sc', 'sd', 'tn', 'tx', 'ut', 'vt', 'va', 'wa', 'wv', 'wi', 'wy', 'dc',
 ])
@@ -202,7 +203,8 @@ const reconcileNarrativeArray = (value, options = {}) => {
   if (!Array.isArray(value)) return value
   return value
     .map((entry) => reconcileNarrative(entry, options))
-    .filter((entry) => typeof entry !== 'string' || entry.trim())
+    .filter((entry) => typeof entry !== 'string'
+      || (entry.trim() && !ORPHANED_LOCATION_FRAGMENT_PATTERN.test(entry)))
 }
 
 const mapCandidateNarrativeFields = (candidate, mapper) => {
@@ -223,7 +225,11 @@ const mapCandidateNarrativeFields = (candidate, mapper) => {
     if (typeof candidate?.[field] === 'string') candidate[field] = mapper(candidate[field])
   }
   for (const field of arrayFields) {
-    if (Array.isArray(candidate?.[field])) candidate[field] = candidate[field].map(mapper).filter(Boolean)
+    if (Array.isArray(candidate?.[field])) {
+      candidate[field] = candidate[field]
+        .map(mapper)
+        .filter((entry) => Boolean(entry) && (typeof entry !== 'string' || !ORPHANED_LOCATION_FRAGMENT_PATTERN.test(entry)))
+    }
   }
 
   if (candidate?.matchScore && typeof candidate.matchScore === 'object' && !Array.isArray(candidate.matchScore)) {
@@ -242,7 +248,11 @@ const mapCandidateNarrativeFields = (candidate, mapper) => {
       if (typeof fit[field] === 'string') fit[field] = mapper(fit[field])
     }
     for (const field of ['matched_requirements', 'missing_requirements', 'risks_or_gaps', 'notes']) {
-      if (Array.isArray(fit[field])) fit[field] = fit[field].map(mapper).filter(Boolean)
+      if (Array.isArray(fit[field])) {
+        fit[field] = fit[field]
+          .map(mapper)
+          .filter((entry) => Boolean(entry) && (typeof entry !== 'string' || !ORPHANED_LOCATION_FRAGMENT_PATTERN.test(entry)))
+      }
     }
   }
 

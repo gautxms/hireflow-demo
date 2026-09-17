@@ -412,6 +412,10 @@ function replaceConflictingTotalYears(value, originalYears, canonicalYears) {
     `\\b((?:entry[-\\s]+level|early[-\\s]+career|junior|mid[-\\s]+level|senior)\\s+candidate\\s+with\\s+)${numberPattern}\\s*(years?|yrs?)\\s+of\\s+((?:(?:[a-z0-9+#.-]+)\\s+){0,8}experience)\\b`,
     'gi',
   )
+  const careerBackgroundDurationPattern = new RegExp(
+    `\\b${numberPattern}\\s*\\+?\\s*(years?|yrs?)\\s+of\\s+((?:(?:[a-z0-9+#.-]+)\\s+){0,8}experience)\\b`,
+    'gi',
+  )
 
   return value
     .replace(
@@ -435,6 +439,44 @@ function replaceConflictingTotalYears(value, originalYears, canonicalYears) {
         ? `${prefix}${canonical} ${formatYearUnit(unit, canonicalYears)} of ${descriptor}`
         : match
     ))
+    .replace(careerBackgroundDurationPattern, (match, unit, descriptor) => (
+      CAREER_BACKGROUND_PATTERN.test(descriptor)
+        ? `${canonical} ${formatYearUnit(unit, canonicalYears)} of ${descriptor}`
+        : match
+    ))
+}
+
+function replaceNearOriginalTotalYears(value, originalYears, canonicalYears) {
+  if (typeof value !== 'string' || originalYears === null || canonicalYears === null || originalYears === canonicalYears) return value
+  const canonical = formatYears(canonicalYears)
+  const isReplaceable = (reportedValue) => {
+    const reportedYears = Number(reportedValue)
+    return Number.isFinite(reportedYears)
+      && (Math.abs(reportedYears - originalYears) <= 0.2 || Math.abs(reportedYears - canonicalYears) <= 0.2)
+  }
+  const replaceDuration = (match, reportedValue, unit, prefix = '', suffix = '') => (
+    isReplaceable(reportedValue)
+      ? `${prefix}${canonical} ${formatYearUnit(unit, canonicalYears)}${suffix}`
+      : match
+  )
+
+  return value
+    .replace(
+      /\b(\d+(?:\.\d+)?)\s*\+?\s*(years?|yrs?)\s+(total|overall)\b/gi,
+      (match, reportedValue, unit, qualifier) => replaceDuration(match, reportedValue, unit, '', ` ${qualifier}`),
+    )
+    .replace(
+      /\b((?:total|overall|cumulative|professional|work|career)\s+(?:professional\s+|work\s+)?(?:experience|tenure)\b[^.\n]{0,60}?)(\d+(?:\.\d+)?)\s*\+?\s*(years?|yrs?)\b/gi,
+      (match, prefix, reportedValue, unit) => replaceDuration(match, reportedValue, unit, prefix),
+    )
+    .replace(
+      /\b(\d+(?:\.\d+)?)\s*\+?\s*(years?|yrs?)\s+of\s+((?:(?:[a-z0-9+#.-]+)\s+){0,8}experience)\b/gi,
+      (match, reportedValue, unit, descriptor) => (
+        CAREER_BACKGROUND_PATTERN.test(descriptor)
+          ? replaceDuration(match, reportedValue, unit, '', ` of ${descriptor}`)
+          : match
+      ),
+    )
 }
 
 function replaceConflictingSubjectYears(value, originalYears, canonicalYears, checks, assumeExperienceContext = false) {
@@ -508,6 +550,7 @@ function currentRoleDurationMonths(candidate) {
 
 function replaceConflictingCurrentRoleMonths(value, currentRoleMonths) {
   if (typeof value !== 'string' || currentRoleMonths === null) return value
+  const currentRoleYears = formatYears(currentRoleMonths / 12)
   return value
     .replace(
       /\b(current\s+(?:role|position|job)\s*\(\s*)\d+(?:\.\d+)?\s*months?(\s*\))/gi,
@@ -517,6 +560,10 @@ function replaceConflictingCurrentRoleMonths(value, currentRoleMonths) {
       /\b((?:recent|current)\s+(?:role|position|job)\s+(?:tenure|duration)\s*\(\s*)\d+(?:\.\d+)?\s*months?(\s+(?:at|with)\s+[^)]+)?(\s*\))/gi,
       (_match, prefix, employer, suffix) => `${prefix}${formatMonths(currentRoleMonths)}${employer || ''}${suffix}`,
     )
+    .replace(
+      /\b((?:recent|current)\s+(?:role|position|job)\s+(?:tenure|duration)\s+(?:is|of|:)?\s*)(?:~|about\s+|approximately\s+|approx\.?\s*)?\d+(?:\.\d+)?\s*years?\b/gi,
+      (_match, prefix) => `${prefix}${currentRoleYears} years`,
+    )
 }
 
 function replaceNearOriginalSummaryYears(value, originalYears, canonicalYears) {
@@ -525,7 +572,8 @@ function replaceNearOriginalSummaryYears(value, originalYears, canonicalYears) {
     /\b(\d+(?:\.\d+)?)\s*\+?\s*(years?|yrs?)\s+of\s+experience\b/gi,
     (match, reportedValue, unit) => {
       const reportedYears = Number(reportedValue)
-      if (!Number.isFinite(reportedYears) || Math.abs(reportedYears - originalYears) > 0.2) return match
+      if (!Number.isFinite(reportedYears)
+        || (Math.abs(reportedYears - originalYears) > 0.2 && Math.abs(reportedYears - canonicalYears) > 0.2)) return match
       return `${formatYears(canonicalYears)} ${formatYearUnit(unit, canonicalYears)} of experience`
     },
   )
@@ -543,7 +591,8 @@ function reconcileNarrativeValue(value, {
   const correctedSummaryYears = canonicalizeSummaryYears
     ? replaceNearOriginalSummaryYears(correctedRoleMonths, originalYears, canonicalYears)
     : correctedRoleMonths
-  const correctedYears = replaceConflictingTotalYears(correctedSummaryYears, originalYears, canonicalYears)
+  const correctedRoundedYears = replaceNearOriginalTotalYears(correctedSummaryYears, originalYears, canonicalYears)
+  const correctedYears = replaceConflictingTotalYears(correctedRoundedYears, originalYears, canonicalYears)
   const correctedSubjectYears = replaceConflictingSubjectYears(
     correctedYears,
     originalYears,
@@ -654,6 +703,15 @@ function reconcileCandidateNarratives(candidate, { originalYears, canonicalYears
     }
     if (typeof next.fit_assessment.rationale === 'string') {
       next.fit_assessment.rationale = reconcileNarrativeValue(next.fit_assessment.rationale, options)
+    }
+  }
+
+  if (next.ai_scoring_contract_v2 && typeof next.ai_scoring_contract_v2 === 'object' && !Array.isArray(next.ai_scoring_contract_v2)) {
+    if (typeof next.ai_scoring_contract_v2.score_confidence_reason === 'string') {
+      next.ai_scoring_contract_v2.score_confidence_reason = reconcileNarrativeValue(
+        next.ai_scoring_contract_v2.score_confidence_reason,
+        { ...options, assumeExperienceContext: true },
+      )
     }
   }
 

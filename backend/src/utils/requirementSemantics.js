@@ -235,6 +235,36 @@ function classifyMissingEntry(entry, semantics, coveredGroups) {
   return { disposition: 'keep', text }
 }
 
+const GENERIC_DOMAIN_TRANSFER_RISK_PATTERN = /\btransferability\b[^.!?;]{0,120}\b(?:unvalidated|unclear|unknown|not\s+(?:validated|demonstrated))\b/i
+const GENERIC_DOMAIN_TARGET_PATTERN = /\b(?:other|different|new)\b[^.!?;]{0,80}\b(?:domains?|verticals?|industr(?:y|ies))\b/i
+const ALTERNATIVE_ABSENCE_PATTERN = /\b(?:no|lacks?|missing|without|not\s+(?:mentioned|evidenced|demonstrated)|no\s+explicit\s+mention)\b/i
+const IMPLEMENTATION_DURATION_CLAIM_PATTERN = /\b(?:at\s+least\s+)?\d+(?:\.\d+)?\s*\+?\s*years?\b[^.!?;]{0,100}\bimplement(?:ing|ation)\b|\bimplementing\b[^.!?;]{0,100}\b\d+(?:\.\d+)?\s*\+?\s*years?\b/i
+const IMPLEMENTATION_OWNERSHIP_GAP_PATTERN = /\b(?:no\s+evidence|zero|does\s+not\s+own|did\s+not\s+own|not\s+demonstrated|no\s+demonstrated|limited\s+hands-on|not\s+hands-on)\b[^.!?;]{0,140}\bimplement(?:ing|ation)\b|\bimplement(?:ing|ation)\b[^.!?;]{0,140}\b(?:not\s+evidenced|not\s+demonstrated|does\s+not\s+own|did\s+not\s+own|zero)\b/i
+
+function isUnsupportedGenericDomainTransferClaim(value) {
+  const text = normalizeWhitespace(value)
+  return GENERIC_DOMAIN_TRANSFER_RISK_PATTERN.test(text) && GENERIC_DOMAIN_TARGET_PATTERN.test(text)
+}
+
+function isCoveredAlternativeAbsence(value, coveredGroups) {
+  const text = normalizeWhitespace(value)
+  return ALTERNATIVE_ABSENCE_PATTERN.test(text)
+    && coveredGroups.some((group) => group.some((option) => optionAppearsInText(option, text)))
+}
+
+function removeContradictoryImplementationMatches(values, candidate) {
+  if (!Array.isArray(values)) return values
+  const negativeEvidence = [
+    ...(Array.isArray(candidate?.missingSkills) ? candidate.missingSkills : []),
+    ...(Array.isArray(candidate?.missingRequirementsFull) ? candidate.missingRequirementsFull : []),
+    ...(Array.isArray(candidate?.fit_assessment?.missing_requirements) ? candidate.fit_assessment.missing_requirements : []),
+    ...(Array.isArray(candidate?.experience) ? candidate.experience : []),
+    ...(Array.isArray(candidate?.experience_entries) ? candidate.experience_entries.map((entry) => entry?.description) : []),
+  ].filter(Boolean).join(' ')
+  if (!IMPLEMENTATION_OWNERSHIP_GAP_PATTERN.test(negativeEvidence)) return values
+  return values.filter((entry) => typeof entry !== 'string' || !IMPLEMENTATION_DURATION_CLAIM_PATTERN.test(entry))
+}
+
 export function reconcileCandidateRequirementSemantics(candidate = {}, semantics = {}) {
   if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) return candidate
   const normalizedSemantics = {
@@ -242,15 +272,16 @@ export function reconcileCandidateRequirementSemantics(candidate = {}, semantics
     preferred: Array.isArray(semantics.preferred) ? semantics.preferred : [],
     alternativeGroups: Array.isArray(semantics.alternativeGroups) ? semantics.alternativeGroups : [],
   }
-  if (normalizedSemantics.preferred.length === 0 && normalizedSemantics.alternativeGroups.length === 0) return candidate
-
   const positiveText = candidatePositiveEvidence(candidate)
   const coveredGroups = findCoveredAlternativeGroups(normalizedSemantics, positiveText)
   const preferredGaps = []
-  const reconcileArray = (values) => {
+  const reconcileArray = (values, { movePreferred = true, cleanRiskClaims = false } = {}) => {
     if (!Array.isArray(values)) return values
     return values.flatMap((entry) => {
       if (typeof entry !== 'string') return [entry]
+      if (cleanRiskClaims && (isUnsupportedGenericDomainTransferClaim(entry) || isCoveredAlternativeAbsence(entry, coveredGroups))) {
+        return []
+      }
       const clauses = entry
         .split(/(?:;|(?<=[.!?])\s+|,\s+(?=(?:but|however|while|whereas)\b))/i)
         .map((clause) => clause.trim().replace(/^(?:but|however|while|whereas)\s+/i, ''))
@@ -258,9 +289,11 @@ export function reconcileCandidateRequirementSemantics(candidate = {}, semantics
       const classified = clauses.map((clause) => classifyMissingEntry(clause, normalizedSemantics, coveredGroups))
       if (classified.every(({ disposition }) => disposition === 'keep')) return [entry]
       for (const result of classified) {
-        if (result.disposition === 'preferred') preferredGaps.push(result.text)
+        if (movePreferred && result.disposition === 'preferred') preferredGaps.push(result.text)
       }
-      return classified.filter(({ disposition }) => disposition === 'keep').map(({ text }) => text)
+      return classified
+        .filter(({ disposition }) => disposition === 'keep' || (!movePreferred && disposition === 'preferred'))
+        .map(({ text }) => text)
     })
   }
 
@@ -274,12 +307,25 @@ export function reconcileCandidateRequirementSemantics(candidate = {}, semantics
   const nextFit = fit ? {
     ...fit,
     missing_requirements: reconcileArray(fit.missing_requirements),
+    risks_or_gaps: reconcileArray(fit.risks_or_gaps, { movePreferred: false, cleanRiskClaims: true }),
+    notes: reconcileArray(fit.notes, { movePreferred: false, cleanRiskClaims: true }),
   } : fit
   const nextCandidate = {
     ...candidate,
     missingSkills: reconcileArray(candidate.missingSkills),
     missingRequirementsFull: reconcileArray(candidate.missingRequirementsFull),
+    concerns: reconcileArray(candidate.concerns, { movePreferred: false, cleanRiskClaims: true }),
+    considerations: reconcileArray(candidate.considerations, { movePreferred: false, cleanRiskClaims: true }),
+    risksOrGapsFull: reconcileArray(candidate.risksOrGapsFull, { movePreferred: false, cleanRiskClaims: true }),
     fit_assessment: nextFit,
+  }
+  nextCandidate.matchedSkills = removeContradictoryImplementationMatches(candidate.matchedSkills, nextCandidate)
+  nextCandidate.matchedRequirementsFull = removeContradictoryImplementationMatches(candidate.matchedRequirementsFull, nextCandidate)
+  if (nextFit) {
+    nextCandidate.fit_assessment = {
+      ...nextFit,
+      matched_requirements: removeContradictoryImplementationMatches(fit.matched_requirements, nextCandidate),
+    }
   }
   const allPreferredGaps = uniqueSemanticStrings([...existingPreferred, ...preferredGaps])
   if (allPreferredGaps.length > 0) {

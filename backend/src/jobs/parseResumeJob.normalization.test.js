@@ -46,7 +46,15 @@ function buildV2VisibleScoreCandidate(overrides = {}) {
     email: 'candidate@example.com',
     phone: '+1 555 0100',
     score: 78,
-    matchScore: { score: 78, score_out_of_ten: 7.8, reason: 'Original reasoning remains.' },
+    matchScore: {
+      score: 78,
+      score_out_of_ten: 7.8,
+      reason: 'Original reasoning remains.',
+      breakdown: {
+        overall: '78/100 – Original visible score',
+        skill_match: '90/100 – Original component score',
+      },
+    },
     fit_assessment: { overall_fit_score: 78, matched_requirements: ['Node.js'], missing_requirements: ['Kubernetes'] },
     ai_scoring_contract_v2: {
       scoring_contract_version: 'ai_jd_fit_rubric_v2',
@@ -378,6 +386,45 @@ test('in-range reconciliation corrects positive evidence and breakdown wording t
   assert.equal(normalized.matchScore.reason, 'Maya has 6.4 years of experience and meets the 4-7 year range.')
   assert.equal(normalized.matchScore.breakdown.experience_alignment, 'Meets requirement (6.4 vs 4-7 years)')
   assert.deepEqual(normalized.fit_assessment.matched_requirements, ['6.4 years in implementation meets the 4-7 year range'])
+})
+
+test('in-range reconciliation fixes boundary and generic range claims across visible narrative fields', () => {
+  const candidate = {
+    name: 'Maya Patel',
+    years_experience: 6.4,
+    experience_facts_apply_metadata: { original_years_experience: 6.5 },
+    recommendationFull: 'Maya has 6.5 years of experience, exceeding the 4-7 year requirement.',
+    matchScore: {
+      reason: 'Maya has 6.5 years of experience and meets the 4-7 year range.',
+      breakdown: { years_of_experience_match: 'Exceeds range (6.5 vs. 4-7 required)' },
+    },
+    fit_assessment: {
+      notes: ['Candidate significantly exceeds experience range and demonstrates strong delivery ownership.'],
+      rationale: 'Maya has 6.5 years of experience, well above the 4-7 year target.',
+    },
+  }
+
+  const normalized = reconcileCandidateExperienceRange(candidate, { experienceMin: 4, experienceMax: 7 })
+
+  assert.equal(normalized.recommendationFull, 'Maya has 6.4 years of experience, meeting the 4-7 year requirement.')
+  assert.equal(normalized.matchScore.breakdown.years_of_experience_match, 'Within range (6.4 vs. 4-7 required)')
+  assert.deepEqual(normalized.fit_assessment.notes, [
+    'Candidate is within the experience range and demonstrates strong delivery ownership.',
+  ])
+  assert.equal(normalized.fit_assessment.rationale, 'Maya has 6.4 years of experience, within the 4-7 year target.')
+})
+
+test('upper experience boundary is inclusive in breakdown wording', () => {
+  const normalized = reconcileCandidateExperienceRange({
+    name: 'Nina Thompson',
+    years_experience: 7,
+    matchScore: {
+      breakdown: { years_of_experience_match: 'Exceeds range (7 vs. 4-7 required)' },
+    },
+  }, { experienceMin: 4, experienceMax: 7 })
+
+  assert.equal(normalized.experience_range.classification, 'within_range')
+  assert.equal(normalized.matchScore.breakdown.years_of_experience_match, 'Within range (7 vs. 4-7 required)')
 })
 
 test('above-range reconciliation uses canonical total years in experience breakdowns', () => {
@@ -772,6 +819,8 @@ test('v2 visible score experiment applies high-confidence allowlisted score cons
   assert.equal(candidate.matchScore.score, 87.7)
   assert.equal(candidate.matchScore.score_out_of_ten, 8.8)
   assert.equal(candidate.matchScore.reason, 'Original reasoning remains.')
+  assert.equal(candidate.matchScore.breakdown.overall, '87.7/100 – Original visible score')
+  assert.equal(candidate.matchScore.breakdown.skill_match, '90/100 – Original component score')
   assert.equal(candidate.fit_assessment.overall_fit_score, 87.7)
   assert.deepEqual(candidate.fit_assessment.matched_requirements, ['Node.js'])
   assert.deepEqual(candidate.fit_assessment.missing_requirements, ['Kubernetes'])
