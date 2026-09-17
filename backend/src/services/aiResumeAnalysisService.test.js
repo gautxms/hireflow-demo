@@ -64,6 +64,22 @@ test('buildPromptWithJobDescription tells the production analyzer not to make pr
   assert.match(prompt, /preferred items are not mandatory failures/i)
 })
 
+test('buildPromptWithJobDescription enforces inclusive ranges and distinct experience scopes', () => {
+  const prompt = buildPromptWithJobDescription('Base prompt', {
+    hasContext: true,
+    title: 'Implementation Consultant',
+    experienceYears: '4-7 years',
+    location: 'United States',
+    workMode: 'Remote',
+  })
+
+  assert.match(prompt, /experience-range bounds as inclusive/i)
+  assert.match(prompt, /total career experience, relevant\/domain experience, subject-specific experience, and current-role tenure distinct/i)
+  assert.match(prompt, /Do not create a domain-transfer risk/i)
+  assert.match(prompt, /partial credit for adjacent customer-facing B2B SaaS work/i)
+  assert.match(prompt, /remote role scoped to the United States/i)
+})
+
 test('buildPromptWithJobDescription includes MISSING block and reason when no JD exists', () => {
   const prompt = buildPromptWithJobDescription('Base prompt', {
     hasContext: false,
@@ -1384,6 +1400,25 @@ test('AI scoring contract v2 prompt keeps off-list Hybrid location compatibility
   assert.match(prompt, /Do not infer willingness to relocate, commute, or work remotely/i)
 })
 
+test('AI scoring contract v2 prompt carries experience and preferred-domain accuracy rules', () => {
+  const { buildAiScoringContractV2SeparateShadowPrompt } = __testables
+  const prompt = buildAiScoringContractV2SeparateShadowPrompt({
+    resumeText: 'Customer success manager in B2B SaaS.',
+    jobDescriptionContext: {
+      hasContext: true,
+      title: 'Implementation Consultant',
+      experienceYears: '4-7 years',
+      location: 'United States',
+      workMode: 'Remote',
+    },
+  })
+
+  assert.match(prompt, /Experience ranges are inclusive/i)
+  assert.match(prompt, /partial credit for adjacent customer-facing B2B SaaS work/i)
+  assert.match(prompt, /Do not create a domain-transfer risk/i)
+  assert.match(prompt, /remote role scoped to the United States/i)
+})
+
 
 
 test('CandidateExperience ignores free-form experience entries and leaves unknown total years uncapped', () => {
@@ -1447,6 +1482,28 @@ test('normalizeAiScoringContractV2 calibrates below-minimum experience shadow to
   assert.equal(candidate.matchScore.score, 52)
   assert.equal(candidate.fit_assessment.overall_fit_score, 52)
   assert.equal(candidate.verdict, 'Maybe')
+})
+
+test('normalizeAiScoringContractV2 caps below-minimum candidates with very low relevant experience', () => {
+  const { normalizeAiScoringContractV2 } = __testables
+  const normalized = normalizeAiScoringContractV2({
+    skills_match_score: 52,
+    relevant_experience_score: 28,
+    education_relevance_score: 55,
+    seniority_progression_score: 22,
+    weighted_total_score: 39.1,
+    score_confidence: 'high',
+  }, {
+    hasJobDescriptionContext: true,
+    jobDescriptionContext: { hasContext: true, experienceYears: '4-7 years' },
+    candidate: { years_experience: 3.6 },
+  })
+
+  assert.equal(normalized.weighted_total_score_recomputed, 35)
+  assert.equal(
+    normalized.scoring_anomalies.includes('below_minimum_and_low_relevant_experience_weighted_total_capped'),
+    true,
+  )
 })
 
 test('normalizeAiScoringContractV2 keeps strong aligned above-minimum shadow fixture high', () => {

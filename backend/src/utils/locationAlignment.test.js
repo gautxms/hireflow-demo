@@ -60,6 +60,22 @@ test('remote evidence is compatible with remote work while onsite mismatch stays
   ).classification, 'mismatch')
 })
 
+test('United States city and state is compatible with a remote United States role', () => {
+  assert.deepEqual(
+    evaluateLocationAlignment(
+      { location: 'Chicago, IL' },
+      { location: 'Remote — United States', workMode: 'Remote' },
+    ),
+    {
+      classification: 'remote_compatible',
+      score: 95,
+      candidate_location_available: true,
+      jd_location_available: true,
+      work_mode: 'remote',
+    },
+  )
+})
+
 test('sharing a state token does not make different cities an exact match', () => {
   const result = evaluateLocationAlignment(
     { location: 'Houston, TX' },
@@ -149,6 +165,38 @@ test('hybrid city match corrects false onsite wording across visible result fiel
   assert.equal(reconciled.matchScore.score, 60.5)
   assert.equal(reconciled.fit_assessment.overall_fit_score, 60.5)
   assert.match(JSON.stringify(candidate), /on-site/i)
+})
+
+test('remote United States compatibility replaces unknown location breakdown without changing fit score', () => {
+  const candidate = {
+    location: 'Chicago, IL',
+    score: 91.3,
+    matchScore: {
+      score: 91.3,
+      reason: 'Strong implementation fit. Location compatibility is unknown for the remote work mode.',
+      breakdown: {
+        skill_match: 'Strong',
+        location_match: 'Location compatibility is unknown for the remote work mode.',
+      },
+    },
+    fit_assessment: {
+      overall_fit_score: 91.3,
+      location_match_score: 50,
+      notes: ['Confirm remote location compatibility during screening.'],
+    },
+  }
+
+  const reconciled = reconcileCandidateLocationAlignment(candidate, {
+    location: 'Remote — United States',
+    workMode: 'Remote',
+  })
+
+  assert.equal(reconciled.score, 91.3)
+  assert.equal(reconciled.matchScore.score, 91.3)
+  assert.equal(reconciled.fit_assessment.overall_fit_score, 91.3)
+  assert.equal(reconciled.fit_assessment.location_match_score, 95)
+  assert.match(reconciled.matchScore.breakdown.location_match, /Compatible/i)
+  assert.doesNotMatch(JSON.stringify(reconciled), /compatibility is unknown/i)
 })
 
 test('hybrid off-list candidate removes false onsite penalties from every visible narrative surface', () => {
@@ -320,4 +368,5 @@ test('prompt semantics describe unknown flexible compatibility without inventing
   assert.match(prompt, /Work mode: hybrid/)
   assert.match(prompt, /off-list candidate location is unknown/i)
   assert.match(prompt, /Do not infer willingness to relocate/i)
+  assert.match(prompt, /remote role scoped to the United States/i)
 })

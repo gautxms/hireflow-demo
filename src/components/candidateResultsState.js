@@ -1079,15 +1079,9 @@ export function buildExpandedCandidateDrawerViewModel(rawCandidate) {
       candidate?.missingSkills,
       pickFullerArrayValue(candidate?.missingRequirementsFull, candidate?.mustHaveSkillsFull, candidate?.missingSkillsFull, candidate?.displayText?.missingRequirements?.full, candidate?.displayText?.missingSkills?.full, candidate?.rawDisplayFields?.missingRequirements, candidate?.rawDisplayFields?.missingSkills, candidate?.fit_assessment?.missing, candidate?.mustHaveSkills, candidate?.missingSkills),
     )
-    const allSkills = [...new Set([
-      ...(Array.isArray(candidate?.allSkillsFull) ? candidate.allSkillsFull : []),
-      ...(Array.isArray(candidate?.displayText?.allSkills?.full) ? candidate.displayText.allSkills.full : []),
-      ...(Array.isArray(candidate?.rawDisplayFields?.allSkills) ? candidate.rawDisplayFields.allSkills : []),
-      ...(Array.isArray(candidate?.top_skills) ? candidate.top_skills : []),
-      ...(Array.isArray(candidate?.skills) ? candidate.skills : []),
-      ...(Array.isArray(candidate?.matchedSkills) ? candidate.matchedSkills : []),
-      ...(Array.isArray(candidate?.mustHaveSkills) ? candidate.mustHaveSkills : []),
-    ].map((e)=>cleanAiTextForDisplay(e,'')).filter(Boolean))]
+    const allSkills = resolveFilterableSkills(candidate)
+      .map((entry) => cleanAiTextForDisplay(entry, ''))
+      .filter(Boolean)
 
     const initials = toDisplayText(candidate.name, 'NA').split(' ').map((p)=>p[0]||'').join('').slice(0,2).toUpperCase() || 'NA'
     return {

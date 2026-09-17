@@ -27,6 +27,10 @@ const FLEXIBLE_WORK_MODE_PATTERN = /\b(?:remote|hybrid|on[ -]?site)\b/i
 const FLEXIBLE_WORK_MODE_CONTEXT_PATTERN = /\b(?:role|work|mode|arrangement|presence|compatib(?:le|ility)|availab(?:le|ility)|requirement)\b/i
 const LOCATION_BREAKDOWN_KEY_PATTERN = /(?:location|geograph|relocat|commut|work.?mode)/i
 const LABELED_WORK_MODE_PATTERN = /\b(?:work\s*mode|working\s+arrangement|work\s+arrangement|workplace\s+(?:mode|model|type)|work\s+setup)\b\s*(?:[:=]|-|\bis\b)?\s*(remote|hybrid|on[ -]?site)\b/i
+const UNITED_STATES_SCOPE_PATTERN = /\b(?:united states(?: of america)?|u\.?s\.?(?:a\.?)?)\b/i
+const US_STATE_ABBREVIATIONS = new Set([
+  'al', 'ak', 'az', 'ar', 'ca', 'co', 'ct', 'de', 'fl', 'ga', 'hi', 'id', 'il', 'in', 'ia', 'ks', 'ky', 'la', 'me', 'md', 'ma', 'mi', 'mn', 'ms', 'mo', 'mt', 'ne', 'nv', 'nh', 'nj', 'nm', 'ny', 'nc', 'nd', 'oh', 'ok', 'or', 'pa', 'ri', 'sc', 'sd', 'tn', 'tx', 'ut', 'vt', 'va', 'wa', 'wv', 'wi', 'wy', 'dc',
+])
 
 const normalizeWorkModeValue = (value) => {
   const normalized = normalizeText(value)
@@ -92,6 +96,15 @@ const locationTokenMatches = (candidateLocation, jdLocation) => tokenizeJdLocati
     || candidateLocation.startsWith(`${token},`)
     || candidateLocation.includes(` ${token} `))
 
+const isUnitedStatesScope = (value) => UNITED_STATES_SCOPE_PATTERN.test(String(value || ''))
+
+const isClearlyUnitedStatesLocation = (value) => {
+  const location = normalizeText(value)
+  if (isUnitedStatesScope(location)) return true
+  const stateMatch = location.match(/,\s*([a-z]{2})(?:\s+\d{5}(?:-\d{4})?)?\s*$/i)
+  return Boolean(stateMatch && US_STATE_ABBREVIATIONS.has(stateMatch[1].toLowerCase()))
+}
+
 export function evaluateLocationAlignment(candidate = {}, context = {}) {
   const candidateLocation = normalizeText(candidate?.location)
   const jdLocation = normalizeText(context?.location)
@@ -114,6 +127,9 @@ export function evaluateLocationAlignment(candidate = {}, context = {}) {
   }
 
   const candidateSaysRemote = /\bremote\b/.test(candidateLocation)
+  if (workMode === 'remote' && isUnitedStatesScope(jdLocation) && isClearlyUnitedStatesLocation(candidateLocation)) {
+    return { ...result, classification: 'remote_compatible', score: 95 }
+  }
   if (workMode === 'remote' && candidateSaysRemote) {
     return { ...result, classification: 'remote_compatible', score: 80 }
   }
@@ -241,6 +257,30 @@ export function reconcileCandidateLocationAlignment(candidate = {}, context = {}
     ))
   }
 
+  if (alignment.classification === 'remote_compatible') {
+    const narrativeOptions = {
+      workMode: alignment.work_mode,
+      removeUnknownFlexibleLocation: true,
+    }
+    const next = mapCandidateNarrativeFields(structuredClone(candidate), (value) => (
+      reconcileNarrative(value, narrativeOptions)
+    ))
+    const fit = next?.fit_assessment
+    if (fit && typeof fit === 'object' && !Array.isArray(fit) && fit.location_match_score !== undefined) {
+      fit.location_match_score = alignment.score
+    }
+    const breakdown = next?.matchScore?.breakdown
+    if (breakdown && typeof breakdown === 'object' && !Array.isArray(breakdown)) {
+      const statement = alignment.score === 95
+        ? 'Compatible — candidate is located in the United States for a remote United States role.'
+        : 'Compatible — resume location supports the role’s remote work mode.'
+      for (const key of Object.keys(breakdown)) {
+        if (LOCATION_BREAKDOWN_KEY_PATTERN.test(key)) breakdown[key] = statement
+      }
+    }
+    return next
+  }
+
   if (alignment.classification !== 'unknown') return candidate
 
   const next = structuredClone(candidate)
@@ -312,6 +352,7 @@ export function formatLocationAlignmentForPrompt(context = {}) {
     'Deterministic location semantics:',
     `- Work mode: ${workMode}`,
     '- A listed-location match is positive evidence.',
+    '- For a Remote role scoped to the United States, a clearly United States candidate location is compatible evidence, not unknown.',
     '- For Remote or Hybrid roles, an off-list candidate location is unknown unless the JD and resume explicitly establish incompatibility; do not call it a mismatch, failure, or disqualifier.',
     '- Do not infer willingness to relocate, commute, or work remotely from a city alone.',
   ].join('\n')

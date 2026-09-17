@@ -572,6 +572,57 @@ test('corrects Noah current-role month tenure from the high-confidence dated ent
   assert.equal(result.candidate.fit_assessment.overall_fit_score, 60.5)
 })
 
+test('corrects named recent-role tenure from the high-confidence dated entry', () => {
+  const candidate = buildHighConfidenceCandidate({
+    name: 'Jordan Lee',
+    years_experience: 5,
+    experience_entries: [
+      { title: 'Implementation Manager', company: 'LedgerLoop', start_date: '2023-04', end_date: null },
+      { title: 'Onboarding Specialist', company: 'Summit', start_date: '2021-05', end_date: '2023-03' },
+    ],
+    experience_facts_v1: {
+      version: 'experience_facts_v1',
+      status: 'computed',
+      confidence: 'high',
+      total_months: 63,
+      total_years: 5.3,
+      entry_facts: [
+        { entry_index: 0, is_current: true, duration_months: 41 },
+        { entry_index: 1, is_current: false, duration_months: 22 },
+      ],
+    },
+    concerns: ['Recent role tenure (20 months at LedgerLoop) limits visibility into sustained customer leadership.'],
+  })
+
+  const result = applyCanonicalExperienceFactsToCandidate(candidate, COMPOUND_SALES_CONTEXT)
+
+  assert.deepEqual(result.candidate.concerns, [
+    'Recent role tenure (41 months at LedgerLoop) limits visibility into sustained customer leadership.',
+  ])
+})
+
+test('canonicalizes a rounded summary tenure to total dated career experience', () => {
+  const candidate = buildHighConfidenceCandidate({
+    name: 'Carlos Rivera',
+    years_experience: 6,
+    summary: 'B2B SaaS customer success manager with 6.1 years of experience supporting onboarding and renewals.',
+    summaryFull: 'Customer-facing professional with 6.1 years of experience in B2B software.',
+    experience_facts_v1: {
+      version: 'experience_facts_v1',
+      status: 'computed',
+      confidence: 'high',
+      total_months: 95,
+      total_years: 7.9,
+      entry_facts: [],
+    },
+  })
+
+  const result = applyCanonicalExperienceFactsToCandidate(candidate, COMPOUND_SALES_CONTEXT)
+
+  assert.equal(result.candidate.summary, 'B2B SaaS customer success manager with 7.9 years of experience supporting onboarding and renewals.')
+  assert.equal(result.candidate.summaryFull, 'Customer-facing professional with 7.9 years of experience in B2B software.')
+})
+
 test('uses canonical total years consistently without rewriting skill-specific tenure', () => {
   const candidate = buildHighConfidenceCandidate({
     years_experience: 4,

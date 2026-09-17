@@ -511,7 +511,9 @@ test('buildExpandedCandidateDrawerViewModel exposes recommendation, skill gaps, 
     recommendation: 'Proceed to interview panel.',
     top_skills: ['React'],
     skills: ['Node.js'],
-    matchedSkills: ['TypeScript'],
+    skills_flat: ['TypeScript'],
+    skills_structured: { methodologies: ['Agile'] },
+    matchedSkills: ['5 years of implementation experience'],
     mustHaveSkills: ['System Design'],
     missingSkills: ['GraphQL'],
     fit_assessment: { missing: ['Leadership communication'] },
@@ -519,7 +521,9 @@ test('buildExpandedCandidateDrawerViewModel exposes recommendation, skill gaps, 
 
   assert.equal(vm.recommendationText, 'Proceed to interview panel.')
   assert.deepEqual(vm.missingSkills, ['System Design', 'GraphQL', 'Leadership communication'])
-  assert.deepEqual(vm.allSkills, ['React', 'Node.js', 'TypeScript', 'System Design'])
+  assert.deepEqual(vm.allSkills, ['React', 'TypeScript', 'Node.js', 'Agile'])
+  assert.equal(vm.allSkills.includes('5 years of implementation experience'), false)
+  assert.equal(vm.allSkills.includes('System Design'), false)
 })
 
 test('buildExpandedCandidateDrawerViewModel hides recommendation when identical to AI reasoning', async () => {
