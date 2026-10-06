@@ -105,11 +105,11 @@ const HELP_ARTICLES = {
     {
       id: 10,
       title: 'Manage plans and subscription status',
-      desc: 'View current plan and change cadence',
+      desc: 'View your plan and manage renewal',
       content: [
         'Billing shows your current plan, status, renewal date, and next billing date.',
-        'You can switch between monthly and annual plans from Subscription Management.',
-        'Plan changes refresh billing details after confirmation.',
+        'To choose a different plan, cancel your current subscription. Access remains active until your paid period ends.',
+        'After the paid period ends, return to Pricing to select a plan and complete a new checkout. Returning subscribers do not receive another trial.',
       ],
     },
     {
@@ -307,7 +307,7 @@ export default function HelpPage({ onBack }) {
             </article>
             <article className="public-card">
               <h3 className="public-card-title">Billing and subscription support</h3>
-              <p className="public-card-copy">Visit Billing &amp; Plans for invoices, plan changes, cancellation flow, and billing support guidance.</p>
+              <p className="public-card-copy">Visit Billing &amp; Plans for invoices, cancellation, renewal, and billing support guidance.</p>
             </article>
           </div>
         </div>

@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import usePageSeo from '../hooks/usePageSeo'
 import BackButton from '../components/BackButton'
 import StatePattern from '../components/state/StatePattern'
 import API_BASE from '../config/api'
 import { canRenderBillingPage, resolveSubscriptionState } from '../utils/subscriptionState'
 import { syncCompletedCheckout } from '../utils/paddleSubscriptionSync'
-import { canShowCancelAction, getBillingMetadataRows, getBillingPlanAction, getBillingStatusLabel, getCancelActionLabel, getCancellationAccessMessage, getCancellationSuccessMessage, getPastDueBillingNotice, isRecoveryAdjustmentTerminal, shouldPollRecoveryAdjustment, shouldRenderBillingHistory } from './billingPageActions'
+import { canShowCancelAction, getBillingMetadataRows, getBillingStatusLabel, getCancelActionLabel, getCancellationAccessMessage, getCancellationSuccessMessage, getPastDueBillingNotice, isRecoveryAdjustmentTerminal, shouldPollRecoveryAdjustment, shouldRenderBillingHistory } from './billingPageActions'
 import '../styles/billing.css'
 import '../styles/checkout.css'
 
@@ -44,26 +44,6 @@ function formatDateTime(value) {
     : '—'
 }
 
-function isRetryablePreviewError(code) {
-  return code === 'PADDLE_SUBSCRIPTION_UPDATE_FAILED' || code === 'UNKNOWN'
-}
-
-function getSafeBillingMessage(payload, fallback = 'Unable to update plan') {
-  const messages = {
-    BILLING_CONFIG_MISSING: 'Billing is not configured for this plan change yet. Please contact support and mention missing Paddle price configuration.',
-    BILLING_PROVIDER_MISSING: 'We could not find a Paddle subscription for your account. Please contact support so we can update your plan safely.',
-    PAYMENT_FAILED_OR_ACTION_REQUIRED: 'Paddle could not apply this change because payment failed or needs action. Please update your payment method or contact support.',
-    PLAN_CHANGE_PAYMENT_FAILED_PRESERVED: 'The upgrade payment was declined. Your current plan and access remain unchanged.',
-    PADDLE_SUBSCRIPTION_UPDATE_FAILED: 'Paddle could not update your subscription right now. Please try again or contact support if this continues.',
-    PLAN_ALREADY_ACTIVE: 'You are already on that plan.',
-    PLAN_CHANGE_NOT_ALLOWED: 'This plan change is not available for your subscription. Please contact support.',
-    UNSUPPORTED_BILLING_ITEMS: 'Your subscription has recurring add-ons that need support-assisted plan changes. Please contact support so we can update your plan safely.',
-  }
-  return messages[payload?.code] || payload?.error || fallback
-}
-
-const PLAN_CONFIG_LABELS = { monthly: 'Monthly', annual: 'Annual' }
-
 const CANCEL_REASONS = [
   'Too expensive',
   'Missing key feature',
@@ -98,16 +78,9 @@ export default function BillingPage({ onNavigate = null }) {
   const [history, setHistory] = useState([])
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
-  const [planModalOpen, setPlanModalOpen] = useState(false)
   const [cancelModalOpen, setCancelModalOpen] = useState(false)
-  const [targetPlan, setTargetPlan] = useState('monthly')
   const [cancelReason, setCancelReason] = useState(CANCEL_REASONS[0])
   const [actionFeedback, setActionFeedback] = useState({ type: '', message: '' })
-  const [isChangingPlan, setIsChangingPlan] = useState(false)
-  const [isLoadingPreview, setIsLoadingPreview] = useState(false)
-  const [planPreview, setPlanPreview] = useState(null)
-  const [previewError, setPreviewError] = useState('')
-  const [previewErrorCode, setPreviewErrorCode] = useState('')
   const [isCancelling, setIsCancelling] = useState(false)
   const [isKeepingSubscription, setIsKeepingSubscription] = useState(false)
   const [recoveryPending, setRecoveryPending] = useState(() => (
@@ -118,11 +91,6 @@ export default function BillingPage({ onNavigate = null }) {
   const recoveryTimerRef = useRef(null)
   const recoveryAccessConfirmedRef = useRef(false)
   const [recoveryPollCycle, setRecoveryPollCycle] = useState(0)
-
-  const upgradeTestKey = useMemo(() => {
-    if (typeof window === 'undefined') return ''
-    return new URLSearchParams(window.location.search).get('upgradeTestKey') || ''
-  }, [])
 
   usePageSeo('Billing & Subscription', 'Manage your subscription, invoices, and billing settings.')
 
@@ -236,9 +204,6 @@ export default function BillingPage({ onNavigate = null }) {
 
   const subscriptionState = resolveSubscriptionState({ subscription })
   const canShowBillingPage = canRenderBillingPage(subscriptionState)
-  const hasVerifiedPreviewAmounts = planPreview?.hasVerifiedPreviewAmounts === true
-  const canConfirmPlanChange = !isChangingPlan && !isLoadingPreview && !previewError && hasVerifiedPreviewAmounts
-  const planAction = getBillingPlanAction(subscription?.plan, subscriptionState)
   const cancelActionLabel = getCancelActionLabel(subscription?.plan)
   const displayedStatusLabel = getBillingStatusLabel(subscriptionState, subscription, formatDate)
   const cancellationAccessMessage = getCancellationAccessMessage(subscriptionState, subscription, formatDate)
@@ -263,90 +228,6 @@ export default function BillingPage({ onNavigate = null }) {
     && !isFinalCancellation
     && !subscriptionState.isPastDue
     && subscriptionState.isActive
-
-  const switchingLabel = useMemo(() => {
-    if (!subscription) return ''
-    return targetPlan === 'annual' ? 'Upgrade to annual (prorated)' : 'Downgrade to monthly'
-  }, [subscription, targetPlan])
-
-  async function loadPlanPreview(nextPlan = targetPlan) {
-    setPlanPreview(null)
-    setPreviewError('')
-    setPreviewErrorCode('')
-    setIsLoadingPreview(true)
-
-    try {
-      const response = await fetch(`${API_BASE}/subscriptions/change-plan-preview`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          targetPlan: nextPlan,
-          ...(upgradeTestKey ? { upgradeTestKey } : {}),
-        }),
-      })
-      const payload = await response.json().catch(() => ({}))
-      if (!response.ok) {
-        setPreviewErrorCode(payload?.code || 'UNKNOWN')
-        throw new Error(getSafeBillingMessage(payload, 'Unable to load plan change preview'))
-      }
-      setPlanPreview(payload)
-    } catch (err) {
-      setPreviewError(err.message || 'Unable to load plan change preview')
-      setPreviewErrorCode((currentCode) => currentCode || 'UNKNOWN')
-    } finally {
-      setIsLoadingPreview(false)
-    }
-  }
-
-  async function openPlanModal(nextPlan) {
-    setActionFeedback({ type: '', message: '' })
-    setTargetPlan(nextPlan)
-    setPlanModalOpen(true)
-    await loadPlanPreview(nextPlan)
-  }
-
-  async function changePlan() {
-    if (isChangingPlan) return
-
-    try {
-      setIsChangingPlan(true)
-      setActionFeedback({ type: '', message: '' })
-      const response = await fetch(`${API_BASE}/subscriptions/change-plan`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          targetPlan,
-          ...(upgradeTestKey ? { upgradeTestKey } : {}),
-        }),
-      })
-
-      const payload = await response.json().catch(() => ({}))
-
-      if (!response.ok) {
-        const billingError = new Error(getSafeBillingMessage(payload))
-        billingError.code = payload?.code || 'UNKNOWN'
-        throw billingError
-      }
-
-      setPlanModalOpen(false)
-      setActionFeedback({ type: 'success', message: payload.message || 'Plan updated successfully.' })
-      await loadBilling()
-    } catch (err) {
-      if (err.code === 'PLAN_CHANGE_PAYMENT_FAILED_PRESERVED') {
-        setPlanModalOpen(false)
-        await loadBilling()
-      }
-      setActionFeedback({ type: 'error', message: err.message || 'Unable to update plan' })
-    } finally {
-      setIsChangingPlan(false)
-    }
-  }
 
   async function cancelSubscription() {
     if (isCancelling) return
@@ -509,11 +390,6 @@ export default function BillingPage({ onNavigate = null }) {
                   ) : subscriptionState.isPastDue ? (
                     <a className="hf-btn hf-btn--primary" href="/account/payment-method">Update payment &amp; pay now</a>
                   ) : null}
-                  {canShowStandardBillingActions && planAction?.isSelfServe ? (
-                    <button type="button" className="hf-btn hf-btn--primary" onClick={() => openPlanModal(planAction.targetPlan)}>
-                      {planAction.label}
-                    </button>
-                  ) : null}
                   {shouldShowCancelAction ? (
                     <button type="button" className="hf-btn hf-btn--destructive" onClick={() => { setActionFeedback({ type: '', message: '' }); setCancelModalOpen(true) }}>
                       {cancelActionLabel}
@@ -570,40 +446,10 @@ export default function BillingPage({ onNavigate = null }) {
         ) : null}
       </section>
 
-      {planModalOpen ? (
-        <Modal title="Confirm plan change" onClose={() => setPlanModalOpen(false)} isPending={isChangingPlan}>
-          <p>{switchingLabel}</p>
-          <div className="billing-modal__summary">
-            <p><span>Current plan</span>{subscription?.planLabel || subscriptionState.planLabel}</p>
-            <p><span>New plan</span>{PLAN_CONFIG_LABELS[targetPlan] || targetPlan}</p>
-            <p><span>Immediate charge / credit</span>{isLoadingPreview ? 'Loading…' : (hasVerifiedPreviewAmounts ? planPreview?.immediateAmountFormatted : 'Unable to verify billing amount.')}</p>
-            <p><span>Next billing</span>{isLoadingPreview ? 'Loading…' : (hasVerifiedPreviewAmounts ? `${planPreview?.nextBillingAmountFormatted} on ${formatDate(planPreview?.nextBillingDate || subscription?.nextBillingDate)}` : 'Unable to verify billing amount.')}</p>
-            <p><span>Payment method</span>{subscription?.paymentMethod || planPreview?.paymentMethod || 'Card on file'}</p>
-          </div>
-          <p className="billing-modal__muted">
-            Upgrades apply immediately with Paddle proration.
-          </p>
-          {previewError ? (
-            <div className="billing-modal__preview-error">
-              <p className="billing-page__feedback billing-page__feedback--error" role="alert">{previewError}</p>
-              {isRetryablePreviewError(previewErrorCode) ? (
-                <button type="button" className="hf-btn hf-btn--secondary" onClick={() => loadPlanPreview(targetPlan)} disabled={isLoadingPreview || isChangingPlan}>
-                  {isLoadingPreview ? 'Retrying preview…' : 'Retry preview'}
-                </button>
-              ) : null}
-            </div>
-          ) : null}
-          {actionFeedback.type === 'error' && actionFeedback.message ? <p className="billing-page__feedback billing-page__feedback--error" role="alert">{actionFeedback.message}</p> : null}
-          <div className="billing-modal__actions">
-            <button type="button" className="hf-btn hf-btn--secondary" onClick={() => setPlanModalOpen(false)} disabled={isChangingPlan}>Close</button>
-            <button type="button" className="hf-btn hf-btn--primary" onClick={changePlan} disabled={!canConfirmPlanChange}>{isChangingPlan ? 'Updating plan…' : 'Confirm'}</button>
-          </div>
-        </Modal>
-      ) : null}
-
       {cancelModalOpen ? (
         <Modal title="Cancel subscription" onClose={() => setCancelModalOpen(false)} isPending={isCancelling}>
           <p>If you cancel, access remains active through the end of your current billing period.</p>
+          <p>To choose a different plan, return after your current period ends and subscribe again at the price shown in checkout.</p>
           <p className="billing-modal__muted">Before you go: Contact support for a retention discount.</p>
           <label htmlFor="cancel-reason">Reason</label>
           <select id="cancel-reason" value={cancelReason} onChange={(event) => setCancelReason(event.target.value)} className="billing-modal__select" disabled={isCancelling}>

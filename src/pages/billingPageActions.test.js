@@ -1,23 +1,15 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { canShowCancelAction, getBillingMetadataRows, getBillingPlanAction, getBillingStatusLabel, getCancelActionLabel, getCancellationAccessMessage, getCancellationSuccessMessage, getPastDueBillingNotice, hasScheduledCancellation, isFinalCancellationBillingState, isPastDueBillingState, isRecoveryAdjustmentTerminal, shouldPollRecoveryAdjustment, shouldRenderBillingHistory } from './billingPageActions.js'
+import { canShowCancelAction, getBillingMetadataRows, getBillingStatusLabel, getCancelActionLabel, getCancellationAccessMessage, getCancellationSuccessMessage, getPastDueBillingNotice, hasScheduledCancellation, isFinalCancellationBillingState, isPastDueBillingState, isRecoveryAdjustmentTerminal, shouldPollRecoveryAdjustment, shouldRenderBillingHistory } from './billingPageActions.js'
 
 const NOW = new Date('2026-07-03T00:00:00Z')
-
-
-test('past_due monthly users do not see annual upgrade plan action', () => {
-  const subscriptionState = { isPastDue: true, canManageBilling: true, hasProviderSubscription: true }
-
-  assert.equal(getBillingPlanAction('monthly', subscriptionState), null)
-})
 
 
 test('payment_failed billing state is treated as past due and uses the compact support notice', () => {
   const subscriptionState = { rawStatus: 'payment_failed', canManageBilling: true, hasProviderSubscription: true }
 
   assert.equal(isPastDueBillingState(subscriptionState), true)
-  assert.equal(getBillingPlanAction('monthly', subscriptionState), null)
   assert.equal(getPastDueBillingNotice(), 'Paid workflow actions are read-only until the overdue payment succeeds. After payment, HireFlow confirms the next renewal date with Paddle.')
 })
 
@@ -25,7 +17,6 @@ test('past_due billing state shows payment-required support notice without a pri
   const subscriptionState = { isPastDue: true, canManageBilling: true, hasProviderSubscription: true }
 
   assert.equal(isPastDueBillingState(subscriptionState), true)
-  assert.equal(getBillingPlanAction('monthly', subscriptionState), null)
   assert.equal(getPastDueBillingNotice(), 'Paid workflow actions are read-only until the overdue payment succeeds. After payment, HireFlow confirms the next renewal date with Paddle.')
 })
 
@@ -114,31 +105,12 @@ test('payment_failed metadata matches past_due compact payment rows', () => {
   assert.equal(rows.some((row) => row.label === 'Workspace access'), false)
 })
 
-test('monthly billing users see annual upgrade as the self-serve plan action', () => {
-  const action = getBillingPlanAction('monthly', { isActive: true })
-
-  assert.equal(action.label, 'Upgrade to annual')
-  assert.equal(action.targetPlan, 'annual')
-  assert.equal(action.isSelfServe, true)
-})
-
-test('trialing and paused monthly users do not see annual upgrade', () => {
-  assert.equal(getBillingPlanAction('monthly', { isActive: false, isTrialing: true }), null)
-  assert.equal(getBillingPlanAction('monthly', { isActive: false, isPaused: true }), null)
-})
-
-test('annual billing users do not see a self-serve monthly downgrade action', () => {
-  const action = getBillingPlanAction('annual')
-
-  assert.equal(action, null)
-})
-
 test('scheduled cancellation still shows resume-support access note', () => {
   const subscriptionState = { statusLabel: 'Active', canManageBilling: true, isCanceled: false }
   const subscription = { plan: 'annual', status: 'active', cancelAtPeriodEnd: true, cancellationEffectiveAt: '2027-01-07T00:00:00Z' }
   const format = () => '1/7/2027'
 
-  assert.equal(getCancellationAccessMessage(subscriptionState, subscription, format, NOW), 'Cancellation scheduled. Your workspace remains fully available until 1/7/2027. You will not be charged again unless you keep the subscription.')
+  assert.equal(getCancellationAccessMessage(subscriptionState, subscription, format, NOW), 'Cancellation scheduled. Your workspace remains fully available until 1/7/2027. You will not be charged again unless you keep the subscription. After access ends, you can choose a new plan from Pricing.')
 })
 
 test('cancel action uses subscription copy for monthly and annual plans', () => {
@@ -230,7 +202,7 @@ test('scheduled cancellation hides cancel subscription and returns access messag
   const format = () => '1/7/2027'
 
   assert.equal(canShowCancelAction(subscriptionState, subscription, NOW), false)
-  assert.equal(getCancellationAccessMessage(subscriptionState, subscription, format, NOW), 'Cancellation scheduled. Your workspace remains fully available until 1/7/2027. You will not be charged again unless you keep the subscription.')
+  assert.equal(getCancellationAccessMessage(subscriptionState, subscription, format, NOW), 'Cancellation scheduled. Your workspace remains fully available until 1/7/2027. You will not be charged again unless you keep the subscription. After access ends, you can choose a new plan from Pricing.')
 })
 
 test('scheduled cancellation metadata omits misleading renewal date', () => {
@@ -261,7 +233,7 @@ test('scheduled subscription with future cancellation date shows active until st
 
   assert.equal(hasScheduledCancellation(subscriptionState, subscription, NOW), true)
   assert.equal(getBillingStatusLabel(subscriptionState, subscription, format, NOW), 'Access until 1/7/2027')
-  assert.equal(getCancellationAccessMessage(subscriptionState, subscription, format, NOW), 'Cancellation scheduled. Your workspace remains fully available until 1/7/2027. You will not be charged again unless you keep the subscription.')
+  assert.equal(getCancellationAccessMessage(subscriptionState, subscription, format, NOW), 'Cancellation scheduled. Your workspace remains fully available until 1/7/2027. You will not be charged again unless you keep the subscription. After access ends, you can choose a new plan from Pricing.')
   assert.equal(canShowCancelAction(subscriptionState, subscription, NOW), false)
 })
 
@@ -392,7 +364,9 @@ test('BillingPage offers state-specific keep, payment update, and subscribe-agai
   assert.match(source, /const canShowStandardBillingActions = !subscriptionState\.hasCancellationSignal[\s\S]*!hasScheduledCancellation[\s\S]*!isFinalCancellation[\s\S]*!subscriptionState\.isPastDue/)
   assert.match(source, /!subscriptionState\.isPastDue[\s\S]*&& subscriptionState\.isActive/)
   assert.match(source, /\{canShowStandardBillingActions \? \([\s\S]*Change payment method/)
-  assert.match(source, /\{canShowStandardBillingActions && planAction\?\.isSelfServe \? \(/)
+  assert.doesNotMatch(source, /\/subscriptions\/change-plan(?:-preview)?/)
+  assert.doesNotMatch(source, /Upgrade to annual|Confirm plan change/)
+  assert.match(source, /To choose a different plan, return after your current period ends and subscribe again/)
   assert.match(source, /isFinalCancellation \? 'Previous plan' : 'Current plan'/)
 })
 
@@ -416,11 +390,4 @@ test('BillingPage past_due no longer relies on a support email for payment recov
   assert.doesNotMatch(actionSource, /hello@hireflow\.dev/)
   assert.equal((pageSource.match(/pastDueBillingNotice/g) || []).length, 3)
   assert.equal((pageSource.match(/hello@hireflow\.dev/g) || []).length, 0)
-})
-
-test('BillingPage closes and refreshes after a declined upgrade preserves the current plan', () => {
-  const source = readFileSync(new URL('./BillingPage.jsx', import.meta.url), 'utf8')
-
-  assert.match(source, /PLAN_CHANGE_PAYMENT_FAILED_PRESERVED: 'The upgrade payment was declined\. Your current plan and access remain unchanged\.'/)
-  assert.match(source, /err\.code === 'PLAN_CHANGE_PAYMENT_FAILED_PRESERVED'[\s\S]*setPlanModalOpen\(false\)[\s\S]*await loadBilling\(\)/)
 })
