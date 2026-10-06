@@ -149,7 +149,7 @@ export const generalApiLimiterAuth = rateLimit({
 })
 
 function resolveUploadDailyLimit(req) {
-  return resolveMonthlyResumeAnalysisLimit(req.subscriptionStatus)
+  return resolveMonthlyResumeAnalysisLimit(req.subscriptionStatus, null, req.subscriptionQuotaContext?.plan)
 }
 
 export const uploadLimiter = rateLimit({

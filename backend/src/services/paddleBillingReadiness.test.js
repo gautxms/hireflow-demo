@@ -76,6 +76,13 @@ test('Sandbox and Production configurations are detected independently', () => {
   }), ['production', 'sandbox'])
 })
 
+test('tiered sandbox-only price configuration activates sandbox readiness', () => {
+  assert.deepEqual(getConfiguredPaddleEnvironments({
+    PADDLE_ENVIRONMENT: 'production',
+    PADDLE_SANDBOX_STARTER_MONTHLY_PRICE_ID: 'pri_starter_monthly',
+  }), ['production', 'sandbox'])
+})
+
 for (const [environment, environmentConfig] of [
   ['sandbox', {
     PADDLE_ENVIRONMENT: 'sandbox',

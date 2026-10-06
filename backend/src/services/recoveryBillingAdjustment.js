@@ -2,6 +2,7 @@ import crypto from 'node:crypto'
 import { pool, logErrorToDatabase } from '../db/client.js'
 import { resolvePaddleConfig } from '../config/paddle.js'
 import { inferPlanFromPaddlePayload } from './paddlePlanChangeRecovery.js'
+import { getPlanBillingInterval } from '../config/planCatalog.js'
 import { lockResumeQuotaForUser } from './resumeQuotaReservations.js'
 
 const TERMINAL = new Set(['confirmed', 'already_satisfied', 'manual_required', 'superseded'])
@@ -38,12 +39,13 @@ export function selectAuthoritativeCapture(payments = []) {
 
 export function addBillingInterval(capturedAt, plan) {
   const source = validDate(capturedAt)
-  if (!source || !['monthly', 'annual'].includes(plan)) return null
+  const interval = getPlanBillingInterval(plan)
+  if (!source || !interval) return null
   const year = source.getUTCFullYear()
   const month = source.getUTCMonth()
   const day = source.getUTCDate()
-  const targetYear = plan === 'annual' ? year + 1 : year + Math.floor((month + 1) / 12)
-  const targetMonth = plan === 'annual' ? month : (month + 1) % 12
+  const targetYear = interval === 'year' ? year + 1 : year + Math.floor((month + 1) / 12)
+  const targetMonth = interval === 'year' ? month : (month + 1) % 12
   const lastDay = new Date(Date.UTC(targetYear, targetMonth + 1, 0)).getUTCDate()
   const result = new Date(source)
   result.setUTCFullYear(targetYear, targetMonth, Math.min(day, lastDay))
@@ -64,7 +66,7 @@ function transactionHasRecurringIdentity(transaction) {
 }
 
 function transactionMatchesPlan(transaction, paddle, plan) {
-  const expectedInterval = plan === 'annual' ? 'year' : 'month'
+  const expectedInterval = getPlanBillingInterval(plan)
   const items = Array.isArray(transaction?.items) ? transaction.items : []
   return inferPlanFromPaddlePayload(transaction, paddle) === plan
     && items.some((item) => {

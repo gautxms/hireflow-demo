@@ -3,7 +3,8 @@ import { pool } from '../db/client.js'
 import { requireAuth } from '../middleware/authMiddleware.js'
 import { schemas, validateBody } from '../middleware/validation.js'
 import { generalApiLimiterAuth } from '../middleware/rateLimiter.js'
-import { resolvePaddleConfigForUser, resolvePaddleEnvironmentForUser } from '../config/paddle.js'
+import { planFromPaddlePriceId, resolvePaddleConfigForUser, resolvePaddleEnvironmentForUser } from '../config/paddle.js'
+import { PAID_PLAN_CODES } from '../config/planCatalog.js'
 import { inferPlanFromPaddlePayload } from '../services/paddlePlanChangeRecovery.js'
 import { reconcilePaddleSubscriptionState } from '../services/paddleSubscriptionReconciliation.js'
 import { normalizePaddleTimestamp } from '../utils/paddleTimestamps.js'
@@ -621,6 +622,9 @@ export async function updateCheckoutReservationStatus({
 
 export function validatePaddleCheckoutPlan({ plan, testKey, paddle, trialEligible = true }) {
   if (plan !== TEST_MONTHLY_PLAN) {
+    if (!PAID_PLAN_CODES.includes(plan)) {
+      return { ok: false, status: 400, error: 'Unknown subscription plan' }
+    }
     const priceId = trialEligible
       ? paddle.priceIdsByPlan[plan]
       : paddle.noTrialPriceIdsByPlan?.[plan]
@@ -631,6 +635,14 @@ export function validatePaddleCheckoutPlan({ plan, testKey, paddle, trialEligibl
         status: 503,
         error: 'Checkout for returning subscribers is not configured. Please contact support.',
       }
+    }
+
+    if (!priceId) {
+      return { ok: false, status: 503, error: 'Checkout for this plan is not configured. Please contact support.' }
+    }
+
+    if (planFromPaddlePriceId(priceId, paddle) !== plan) {
+      return { ok: false, status: 503, error: 'Checkout price configuration conflicts with another plan. Please contact support.' }
     }
 
     return {

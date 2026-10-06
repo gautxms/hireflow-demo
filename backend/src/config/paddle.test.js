@@ -1,10 +1,31 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
+  planFromPaddlePriceId,
   resolvePaddleConfig,
   resolvePaddleConfigForUser,
   resolvePaddleEnvironmentForUser,
 } from './paddle.js'
+import { TIERED_PLAN_CODES } from './planCatalog.js'
+
+test('sandbox tiered prices and no-trial variants remain isolated from production', () => {
+  const env = { PADDLE_ENVIRONMENT: 'production' }
+  for (const plan of TIERED_PLAN_CODES) {
+    env[`PADDLE_SANDBOX_${plan.toUpperCase()}_PRICE_ID`] = `pri_sb_${plan}_trial`
+    env[`PADDLE_SANDBOX_${plan.toUpperCase()}_NO_TRIAL_PRICE_ID`] = `pri_sb_${plan}_paid`
+  }
+
+  const sandbox = resolvePaddleConfig(env, 'sandbox')
+  const production = resolvePaddleConfig(env, 'production')
+  for (const plan of TIERED_PLAN_CODES) {
+    assert.equal(sandbox.priceIdsByPlan[plan], `pri_sb_${plan}_trial`)
+    assert.equal(sandbox.noTrialPriceIdsByPlan[plan], `pri_sb_${plan}_paid`)
+    assert.equal(planFromPaddlePriceId(`pri_sb_${plan}_trial`, sandbox), plan)
+    assert.equal(planFromPaddlePriceId(`pri_sb_${plan}_paid`, sandbox), plan)
+    assert.equal(production.priceIdsByPlan[plan], undefined)
+    assert.equal(planFromPaddlePriceId(`pri_sb_${plan}_paid`, production), null)
+  }
+})
 
 test('resolvePaddleConfig prefers sandbox variables when environment is sandbox', () => {
   const cfg = resolvePaddleConfig({

@@ -1,4 +1,5 @@
 import { normalizePaddleEnvironment, resolvePaddleConfig } from '../config/paddle.js'
+import { TIERED_PLAN_CODES } from '../config/planCatalog.js'
 import { verifyUtcTimestampContract } from '../db/utcTimestampContract.js'
 
 const DURABLE_WEBHOOK_INBOX_FLAG = 'PADDLE_DURABLE_WEBHOOK_INBOX_ENABLED'
@@ -20,6 +21,10 @@ const PADDLE_CONFIGURATION_SIGNALS = {
     'PADDLE_ANNUAL_PRICE_ID',
     'PADDLE_MONTHLY_NO_TRIAL_PRICE_ID',
     'PADDLE_ANNUAL_NO_TRIAL_PRICE_ID',
+    ...TIERED_PLAN_CODES.flatMap((plan) => [
+      `PADDLE_PRODUCTION_${plan.toUpperCase()}_PRICE_ID`,
+      `PADDLE_PRODUCTION_${plan.toUpperCase()}_NO_TRIAL_PRICE_ID`,
+    ]),
   ],
   sandbox: [
     'PADDLE_SANDBOX_API_KEY',
@@ -29,6 +34,10 @@ const PADDLE_CONFIGURATION_SIGNALS = {
     'PADDLE_SANDBOX_ANNUAL_PRICE_ID',
     'PADDLE_SANDBOX_MONTHLY_NO_TRIAL_PRICE_ID',
     'PADDLE_SANDBOX_ANNUAL_NO_TRIAL_PRICE_ID',
+    ...TIERED_PLAN_CODES.flatMap((plan) => [
+      `PADDLE_SANDBOX_${plan.toUpperCase()}_PRICE_ID`,
+      `PADDLE_SANDBOX_${plan.toUpperCase()}_NO_TRIAL_PRICE_ID`,
+    ]),
   ],
 }
 
