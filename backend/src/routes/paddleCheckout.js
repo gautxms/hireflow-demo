@@ -27,6 +27,25 @@ function normalizeStatus(value) {
   return String(value || '').trim().toLowerCase()
 }
 
+function safeProviderErrorText(value, maxLength = 300) {
+  if (typeof value !== 'string') return null
+  return value.replace(/[\w.+-]+@[\w.-]+\.[a-z]{2,}/gi, '[email]').slice(0, maxLength)
+}
+
+export function summarizePaddleCheckoutError(payload = {}) {
+  const error = payload?.error || {}
+  return {
+    providerErrorCode: safeProviderErrorText(error.code, 80),
+    providerErrorDetail: safeProviderErrorText(error.detail),
+    providerValidationErrors: Array.isArray(error.errors)
+      ? error.errors.slice(0, 8).map((item) => ({
+        field: safeProviderErrorText(item?.field, 100),
+        message: safeProviderErrorText(item?.message),
+      }))
+      : [],
+  }
+}
+
 function isFutureDate(value, now = new Date()) {
   if (!value) return false
   const date = new Date(value)
@@ -1256,8 +1275,11 @@ export async function createCheckout(req, res, logLabel = 'checkout') {
           userId: acquisition.user.id,
           environment: paddle.environment,
           reservationId: acquisition.reservation.id,
+          plan: acquisition.purchase.requestedPlan,
+          checkoutMode: acquisition.purchase.checkoutMode,
           providerStatusCode: paddleResponse.status,
           providerRequestId: paddlePayload?.meta?.request_id || null,
+          ...summarizePaddleCheckoutError(paddlePayload),
         })
         return res.status(502).json({ error: 'Failed to create Paddle transaction' })
       }

@@ -9,6 +9,7 @@ import {
   persistVerifiedCheckoutSubscription,
   resolveCheckoutSyncTransactionId,
   selectReturningCheckoutTransaction,
+  summarizePaddleCheckoutError,
   supersedeCheckoutReservation,
   transactionMatchesCheckoutReservation,
   validatePaddleCheckoutPlan,
@@ -16,6 +17,31 @@ import {
 import { reconcilePaddleSubscriptionState } from '../services/paddleSubscriptionReconciliation.js'
 import { markCheckoutReservationCompleted } from '../services/paddleCheckoutReservations.js'
 import { TIERED_PLAN_CODES } from '../config/planCatalog.js'
+
+test('Paddle validation diagnostics retain useful fields without logging customer emails', () => {
+  const summary = summarizePaddleCheckoutError({
+    error: {
+      code: 'invalid_field',
+      detail: 'Request for person@example.com does not pass validation.',
+      errors: [
+        { field: 'items[0].price_id', message: 'Price is invalid for person@example.com' },
+      ],
+    },
+  })
+
+  assert.deepEqual(summary, {
+    providerErrorCode: 'invalid_field',
+    providerErrorDetail: 'Request for [email] does not pass validation.',
+    providerValidationErrors: [
+      { field: 'items[0].price_id', message: 'Price is invalid for [email]' },
+    ],
+  })
+  assert.deepEqual(summarizePaddleCheckoutError({ error: { code: 'not_found' } }), {
+    providerErrorCode: 'not_found',
+    providerErrorDetail: null,
+    providerValidationErrors: [],
+  })
+})
 
 function checkoutReservationFixture() {
   const reservation = {
