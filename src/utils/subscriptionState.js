@@ -1,3 +1,5 @@
+import { getPlanDisplayLabel } from '../config/pricingPlans.js'
+
 const ACTIVE_STATUSES = new Set(['active'])
 const TRIALING_STATUSES = new Set(['trialing', 'trial'])
 const PAST_DUE_STATUSES = new Set(['past_due', 'past due', 'payment_failed'])
@@ -255,7 +257,7 @@ export function resolveSubscriptionState({ user = null, subscription = null, now
     rawStatus,
     statusLabel,
     plan,
-    planLabel: plan ? `${String(plan).charAt(0).toUpperCase()}${String(plan).slice(1)}` : 'No active subscription',
+    planLabel: plan ? getPlanDisplayLabel(plan) || String(plan) : 'No active subscription',
     isActive,
     isTrialing: trialing,
     isPastDue: pastDue,

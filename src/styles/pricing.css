@@ -88,8 +88,8 @@
   position: relative;
 }
 
-.pricing-card.is-selected {
-  border-color: rgba(200,255,0,0.3);
+.pricing-card.is-emphasized {
+  border-color: rgba(200,255,0,0.45);
 }
 
 .pricing-card__badge {

@@ -1,42 +1,16 @@
 import { useState } from 'react'
 import BackButton from '../components/BackButton'
+import { PRICING_TIERS } from '../config/pricingPlans'
 import '../styles/pricing.css'
 
 const PLAN_FEATURES = [
-  'AI resume analysis — up to 800 resumes/month',
   'AI-powered candidate screening',
   'Structured scoring signals',
   'Responsible AI and privacy-conscious workflows',
   'Email support',
 ]
 
-const PRICING = {
-  annual: {
-    id: 'annual',
-    name: 'Annual Plan',
-    badge: 'Best Value',
-    price: '$83.25',
-    period: '/month',
-    billing: 'Annual billing includes the same 800 resumes/month allowance, billed annually.',
-    savings: 'Save $189 per year compared to monthly',
-    trial: '7-day free trial, cancel anytime',
-    cta: 'Start Annual',
-  },
-  monthly: {
-    id: 'monthly',
-    name: 'Monthly Plan',
-    badge: null,
-    price: '$99',
-    period: '/month',
-    billing: 'Billed monthly',
-    savings: null,
-    trial: '7-day free trial, cancel anytime',
-    cta: 'Start Monthly',
-  },
-}
-
 const SHARED_PLAN_FEATURES = [
-  'Includes up to 800 resume analyses/month.',
   'AI-powered candidate screening to help surface stronger matches faster.',
   'Structured scoring signals designed to support more consistent shortlisting decisions.',
   'Bulk resume upload support so teams can process high-volume intake in fewer steps.',
@@ -55,15 +29,15 @@ const PRICING_FAQ = [
   },
   {
     question: 'How does billing work?',
-    answer: 'Hireflow offers two billing schedules: monthly billing at $99 per month, or annual billing at an effective $83.25 per month billed as $999 per year. The annual option is discounted compared with paying month-to-month for a full year. Your selected billing cadence is shown clearly during checkout so your finance or operations team can review totals before purchase.',
+    answer: 'Choose Starter, Growth, or Pro, then pay monthly or annually. Starter is $29/month or $290/year; Growth is $59/month or $590/year; Pro is $99/month or $999/year. You can review the total in Paddle before paying.',
   },
   {
     question: 'What happens when I reach my resume limit?',
-    answer: 'Each paid plan includes a monthly fair-use allowance of up to 800 resume analyses/month. That keeps plan terms clear for normal recruiting workflows while still supporting high-volume intake. If your organization has unique governance, procurement, or scale requirements, you can contact the team to discuss a tailored arrangement.',
+    answer: 'Starter includes 100, Growth 300, and Pro 800 resume analyses per month. Once you reach your plan limit, you can review existing work but cannot start another analysis until the allowance resets. To switch plans, cancel your current subscription and choose a new plan after its access ends.',
   },
   {
     question: 'Do you offer discounts for annual plans?',
-    answer: 'Annual plans include the same monthly fair-use allowance of up to 800 resume analyses/month. Annual billing gives you a discounted yearly price, and your resume allowance resets each calendar month.',
+    answer: 'Yes. Annual billing costs less than 12 monthly payments at the same tier. The resume analysis allowance remains monthly and resets each month, even with annual billing.',
   },
 ]
 
@@ -74,35 +48,40 @@ function navigate(pathname) {
   }
 }
 
-function PricingCard({ plan, selected, emphasized, onStartCheckout, loading, trialAvailable }) {
+function PricingCard({ tier, billing, onStartCheckout, trialAvailable }) {
+  const annual = billing === 'annual'
+  const planCode = annual ? tier.annualCode : tier.monthlyCode
+  const amount = annual ? tier.annualAmount : tier.monthlyAmount
+  const annualSavings = tier.monthlyAmount * 12 - tier.annualAmount
+
   return (
     <article
-      className={`pricing-card ${selected ? 'is-selected' : ''} ${emphasized ? 'is-emphasized' : ''}`}
-      aria-label={plan.name}
+      className={`pricing-card ${tier.id === 'growth' ? 'is-emphasized' : ''}`}
+      aria-label={`${tier.name} ${billing}`}
     >
-      {plan.badge && <span className="pricing-card__badge">{plan.badge}</span>}
+      {tier.id === 'growth' && <span className="pricing-card__badge">For growing teams</span>}
 
-      <h2 className="pricing-card__title">{plan.name}</h2>
+      <h2 className="pricing-card__title">{tier.name}</h2>
 
       <p className="pricing-card__price">
-        {plan.price}
-        <span className="pricing-card__period">{plan.period}</span>
+        ${amount}
+        <span className="pricing-card__period">/{annual ? 'year' : 'month'}</span>
       </p>
 
-      <p className="pricing-card__billing">{plan.billing}</p>
-      {plan.savings && <p className="pricing-card__savings">{plan.savings}</p>}
-      <p className="pricing-card__trial">{trialAvailable ? plan.trial : 'Returning subscription — billed immediately'}</p>
+      <p className="pricing-card__billing">{annual ? 'Billed annually' : 'Billed monthly'} · {tier.monthlyLimit} resume analyses/month</p>
+      {annual && <p className="pricing-card__savings">Save ${annualSavings}/year compared with monthly</p>}
+      <p className="pricing-card__trial">{trialAvailable ? '7-day free trial for eligible new accounts' : 'Returning subscription — billed immediately'}</p>
 
       <button
         type="button"
-        onClick={() => onStartCheckout(plan.id)}
-        disabled={loading}
-        className={`pricing-card__cta ${selected ? 'is-selected' : ''}`}
+        onClick={() => onStartCheckout(planCode)}
+        className={`pricing-card__cta ${tier.id === 'growth' ? 'is-selected' : ''}`}
       >
-        {loading ? 'Preparing checkout…' : trialAvailable ? plan.cta : `Subscribe ${plan.id === 'annual' ? 'Annual' : 'Monthly'}`}
+        {trialAvailable ? `Start ${tier.name}` : `Subscribe to ${tier.name}`}
       </button>
 
       <ul className="pricing-card__features">
+        <li>{tier.monthlyLimit} resume analyses per month</li>
         {PLAN_FEATURES.map((feature) => (
           <li key={feature}>{feature}</li>
         ))}
@@ -138,8 +117,8 @@ export default function Pricing({ isAuthenticated, onRequireAuth, trialEligible 
         <p className="pricing-page__intro">
           Hireflow gives recruiting teams a straightforward way to evaluate candidates with AI support, without confusing add-ons or hidden pricing mechanics.
           Our pricing is designed to stay simple as you grow, whether you are handling a handful of roles or ongoing, high-volume hiring.
-          You get the same core platform experience across plans, with billing options that match how your team prefers to budget.
-          Includes up to 800 resume analyses/month, no surprise platform charges, and clear plan terms from day one.
+          You get the same core platform experience across plans, with a monthly resume analysis allowance that matches your team&apos;s needs.
+          Choose monthly or annual billing and see the total before checkout.
         </p>
 
         <div className="pricing-page__toggle-wrap">
@@ -170,33 +149,26 @@ export default function Pricing({ isAuthenticated, onRequireAuth, trialEligible 
         </div>
 
         <p className="pricing-page__price-note">
-          {selectedBilling === 'annual' ? '$83.25/month (billed annually at $999/year)' : '$99/month billed monthly'}
+          {selectedBilling === 'annual' ? 'Annual prices are billed once per year; analysis limits reset monthly.' : 'Monthly prices are billed each month.'}
         </p>
 
         <div className="pricing-page__grid">
-          <PricingCard
-            plan={PRICING.annual}
-            selected={selectedBilling === 'annual'}
-            emphasized
-            onStartCheckout={startCheckout}
-            loading={false}
-            trialAvailable={trialAvailable}
-          />
-          <PricingCard
-            plan={PRICING.monthly}
-            selected={selectedBilling === 'monthly'}
-            emphasized={false}
-            onStartCheckout={startCheckout}
-            loading={false}
-            trialAvailable={trialAvailable}
-          />
+          {PRICING_TIERS.map((tier) => (
+            <PricingCard
+              key={tier.id}
+              tier={tier}
+              billing={selectedBilling}
+              onStartCheckout={startCheckout}
+              trialAvailable={trialAvailable}
+            />
+          ))}
         </div>
 
         <section className="pricing-page__section" aria-labelledby="shared-features-heading">
           <h2 id="shared-features-heading" className="pricing-page__section-title">What&apos;s included in each plan</h2>
           <p className="pricing-page__section-copy">
             Every paid Hireflow plan includes the same essential recruiting workflow capabilities so you can focus on hiring outcomes, not feature gates.
-            The main difference is billing cadence, not access to core value.
+            The monthly resume analysis allowance and price vary by tier. Billing cadence does not change your monthly allowance.
           </p>
           <ul className="pricing-page__section-list">
             {SHARED_PLAN_FEATURES.map((feature) => (
@@ -217,7 +189,7 @@ export default function Pricing({ isAuthenticated, onRequireAuth, trialEligible 
           </p>
           <p className="pricing-page__section-copy">
             <strong>Recruitment agencies:</strong> If you support multiple clients and need repeatable quality across different roles, Hireflow can streamline intake and first-pass evaluation.
-            The fair-use allowance of up to 800 resume analyses/month is especially helpful for agencies that need predictable capacity while maintaining delivery speed and consistent screening standards.
+            Growth and Pro offer higher monthly analysis allowances for agencies that need predictable capacity while maintaining delivery speed and consistent screening standards.
           </p>
         </section>
 

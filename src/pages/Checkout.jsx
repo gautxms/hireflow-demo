@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import usePageSeo from '../hooks/usePageSeo'
 import { resolveCheckoutCloseState } from './checkoutState'
 import API_BASE from '../config/api'
+import { CHECKOUT_PLAN_DETAILS, getCheckoutPlanFromSearch } from '../config/pricingPlans'
 import { syncCompletedCheckout } from '../utils/paddleSubscriptionSync'
 import { isCanceledSubscription } from '../utils/subscriptionState'
 import { PADDLE_LAST_TRANSACTION_STORAGE_KEY } from '../utils/billingSuccessState'
@@ -12,27 +13,6 @@ const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 const fallbackClientToken = import.meta.env.VITE_PADDLE_CLIENT_TOKEN
 const CHECKOUT_COMPLETED_STORAGE_KEY = 'hireflow_checkout_completed_at'
 const PADDLE_CHECKOUT_ACTIVE_STORAGE_KEY = 'paddle_checkout_active'
-
-const PLAN_DETAILS = {
-  monthly: {
-    label: 'Monthly',
-    summary: 'You selected the monthly subscription.',
-  },
-  annual: {
-    label: 'Annual',
-    summary: 'You selected the annual subscription.',
-  },
-  'test-monthly': {
-    label: 'Monthly',
-    summary: 'You selected the monthly subscription.',
-  },
-}
-
-function getPlanFromQuery() {
-  const params = new URLSearchParams(window.location.search)
-  const plan = params.get('plan')
-  return plan === 'monthly' || plan === 'annual' || plan === 'test-monthly' ? plan : 'monthly'
-}
 
 function getTestKeyFromQuery() {
   const params = new URLSearchParams(window.location.search)
@@ -72,8 +52,8 @@ function waitForPaddle(timeoutMs = 5000) {
 }
 
 export default function Checkout({ onAuthSuccess }) {
-  const selectedPlan = getPlanFromQuery()
-  const plan = PLAN_DETAILS[selectedPlan]
+  const selectedPlan = getCheckoutPlanFromSearch(window.location.search)
+  const plan = selectedPlan ? CHECKOUT_PLAN_DETAILS[selectedPlan] : null
   const testKey = selectedPlan === 'test-monthly' ? getTestKeyFromQuery() : ''
   const [status, setStatus] = useState('idle') // idle, loading, ready, opened, action_required, error
   const [reactivateRequested, setReactivateRequested] = useState(false)
@@ -87,7 +67,7 @@ export default function Checkout({ onAuthSuccess }) {
   const isReturningSubscription = status === 'action_required' && requiredAction === 'cancelled'
   const isSubscriptionlessPaymentRetry = status === 'action_required' && requiredAction === 'payment_retry'
 
-  usePageSeo('HireFlow Checkout', `Checkout setup for the ${plan.label.toLowerCase()} plan.`)
+  usePageSeo('HireFlow Checkout', plan ? `Checkout setup for the ${plan.label.toLowerCase()} plan.` : 'Choose a plan to start checkout.')
 
   useEffect(() => {
     let isUnmounted = false
@@ -213,6 +193,12 @@ export default function Checkout({ onAuthSuccess }) {
       setSuccessMessage('')
       setShowRetry(false)
       setRequiredAction(null)
+
+      if (!selectedPlan) {
+        setStatus('error')
+        setErrorMessage('Please choose a valid plan from the pricing page.')
+        return
+      }
 
       if (wasCheckoutRecentlyCompleted()) {
         navigate('/billing/success')
@@ -681,7 +667,9 @@ export default function Checkout({ onAuthSuccess }) {
           <p className="checkout-page__eyebrow">Secure checkout</p>
           <h1>Complete your subscription</h1>
           <p className="checkout-page__subtitle">
-            You selected the <strong>{plan.label}</strong> plan. Payment is securely processed by Paddle.
+            {plan
+              ? <>You selected <strong>{plan.label}</strong> — {plan.price}, with {plan.monthlyLimit} resume analyses/month. Payment is securely processed by Paddle.</>
+              : 'Choose a plan to continue to secure checkout.'}
           </p>
         </header>
 
