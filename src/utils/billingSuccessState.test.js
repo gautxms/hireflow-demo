@@ -56,7 +56,13 @@ test('invalid browser correlation values are ignored', () => {
   assert.deepEqual(result, {
     transactionId: '',
     checkoutReservationId: '',
-    plan: 'monthly',
+    plan: '',
     message: '',
   })
+})
+
+test('Paddle return preserves Starter and Growth plan codes for the confirmation page', () => {
+  for (const plan of ['starter_monthly', 'starter_annual', 'growth_monthly', 'growth_annual']) {
+    assert.equal(resolveBillingSuccessState({ search: `?plan=${plan}` }).plan, plan)
+  }
 })

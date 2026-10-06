@@ -4,6 +4,7 @@ import '../styles/billing.css'
 import '../styles/checkout.css'
 import BillingStatusLayout from '../components/BillingStatusLayout'
 import API_BASE from '../config/api'
+import { getPlanDisplayLabel } from '../config/pricingPlans'
 import { hasActiveSubscription } from '../utils/routeGuards'
 import { syncCompletedCheckout } from '../utils/paddleSubscriptionSync'
 import {
@@ -147,7 +148,7 @@ export default function BillingSuccess() {
         <>
           <div className="billing-shell__summary-row">
             <span className="billing-shell__summary-label">Plan:</span>
-            <strong className="billing-shell__summary-value">{plan}</strong>
+            <strong className="billing-shell__summary-value">{getPlanDisplayLabel(plan) || 'Your subscription'}</strong>
           </div>
           {transactionId && (
             <div className="billing-shell__summary-row billing-shell__summary-row--transaction">

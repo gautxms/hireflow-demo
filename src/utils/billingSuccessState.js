@@ -1,6 +1,6 @@
 const PADDLE_TRANSACTION_PATTERN = /^txn_[a-z0-9]+$/i
 const CHECKOUT_RESERVATION_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
-const SUPPORTED_PLANS = new Set(['monthly', 'annual', 'test-monthly'])
+const SUPPORTED_PLANS = new Set(['monthly', 'annual', 'starter_monthly', 'starter_annual', 'growth_monthly', 'growth_annual', 'pro_monthly', 'pro_annual', 'test-monthly'])
 
 export const PADDLE_LAST_TRANSACTION_STORAGE_KEY = 'paddle_last_transaction'
 
@@ -32,7 +32,7 @@ export function resolveBillingSuccessState({
     transactionId: validTransactionId(safeHistoryState.transactionId) || validTransactionId(storedTransactionId),
     checkoutReservationId: validReservationId(safeHistoryState.checkoutReservationId)
       || validReservationId(params.get('checkout')),
-    plan: validPlan(safeHistoryState.plan) || validPlan(params.get('plan')) || 'monthly',
+    plan: validPlan(safeHistoryState.plan) || validPlan(params.get('plan')),
     message: typeof safeHistoryState.message === 'string' ? safeHistoryState.message : '',
   }
 }

@@ -38,6 +38,12 @@ test('active renewing subscription keeps active paid access without cancellation
   assert.equal(canRenderBillingPage(resolved), true)
 })
 
+test('tiered and legacy plans have readable billing labels', () => {
+  assert.equal(state({ status: 'active', plan: 'starter_monthly' }).planLabel, 'Starter Monthly')
+  assert.equal(state({ status: 'active', plan: 'growth_annual' }).planLabel, 'Growth Annual')
+  assert.equal(state({ status: 'active', plan: 'monthly' }).planLabel, 'Pro Monthly')
+})
+
 test('trialing subscription keeps product access without being labeled inactive', () => {
   const resolved = state({ status: 'trialing', plan: 'monthly' })
 
