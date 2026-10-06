@@ -4,6 +4,7 @@ import jwt from 'jsonwebtoken'
 
 import subscriptionsRouter, { selectExactRecoveredTransaction } from './subscriptions.js'
 import { pool } from '../db/client.js'
+import { TIERED_PLAN_CODES } from '../config/planCatalog.js'
 
 const BILLING_PROVIDER_MISSING_ERROR = 'Subscription cannot be changed because billing provider subscription is missing. Please contact support.'
 const PADDLE_PRICE_MISSING_ERROR = 'Subscription cannot be changed because billing configuration is missing. Please contact support.'
@@ -41,6 +42,12 @@ function createRes() {
 }
 
 function resetPaddleEnv() {
+  for (const plan of TIERED_PLAN_CODES) {
+    delete process.env[`PADDLE_PRODUCTION_${plan.toUpperCase()}_PRICE_ID`]
+    delete process.env[`PADDLE_PRODUCTION_${plan.toUpperCase()}_NO_TRIAL_PRICE_ID`]
+    delete process.env[`PADDLE_SANDBOX_${plan.toUpperCase()}_PRICE_ID`]
+    delete process.env[`PADDLE_SANDBOX_${plan.toUpperCase()}_NO_TRIAL_PRICE_ID`]
+  }
   process.env.PADDLE_DIRECT_PLAN_CHANGES_ENABLED = 'true'
   process.env.PADDLE_ENVIRONMENT = 'production'
   process.env.PADDLE_API_KEY = 'paddle-key'
@@ -575,6 +582,28 @@ test('GET /api/subscriptions/current returns Paddle actual canonical annual USD 
   assert.equal(res.payload.subscription.costFormatted, '$999.00')
   assert.equal(res.payload.subscription.costCurrencyCode, 'USD')
   assert.equal(res.payload.subscription.costSource, 'paddle')
+  assert.equal(res.payload.subscription.billingInterval, 'year')
+})
+
+test('GET /api/subscriptions/current labels a tiered plan and reads its Paddle price', async () => {
+  resetPaddleEnv()
+  process.env.PADDLE_PRODUCTION_GROWTH_ANNUAL_PRICE_ID = 'pri_growth_annual'
+  installDbMock({
+    ...activeAnnualUser(),
+    subscription_plan: 'growth_annual',
+    paddle_customer_id: 'ctm_123',
+  })
+  mockPaddleSequence([
+    { payload: { data: { id: 'sub_123', status: 'active', items: [
+      { price: { id: 'pri_growth_annual', billing_cycle: { interval: 'year' }, unit_price: { amount: '59000', currency_code: 'USD' } }, quantity: 1 },
+    ] } } },
+  ])
+
+  const res = await invokeRoute('/current')
+  assert.equal(res.statusCode, 200)
+  assert.equal(res.payload.subscription.plan, 'growth_annual')
+  assert.equal(res.payload.subscription.planLabel, 'Growth Annual')
+  assert.equal(res.payload.subscription.costFormatted, '$590.00')
   assert.equal(res.payload.subscription.billingInterval, 'year')
 })
 

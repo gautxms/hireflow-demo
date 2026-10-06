@@ -15,6 +15,7 @@ import {
 } from './paddleCheckout.js'
 import { reconcilePaddleSubscriptionState } from '../services/paddleSubscriptionReconciliation.js'
 import { markCheckoutReservationCompleted } from '../services/paddleCheckoutReservations.js'
+import { TIERED_PLAN_CODES } from '../config/planCatalog.js'
 
 function checkoutReservationFixture() {
   const reservation = {
@@ -95,6 +96,26 @@ test('validatePaddleCheckoutPlan preserves monthly and annual price selection', 
     validatePaddleCheckoutPlan({ plan: 'annual', paddle: paddle() }),
     { ok: true, priceId: 'pri_annual', storedPlan: 'annual', trialEligible: true, checkoutMode: 'trial' },
   )
+})
+
+test('six new plans select trial or full-price returning checkout without falling back to another tier', () => {
+  const config = paddle({
+    priceIdsByPlan: Object.fromEntries(TIERED_PLAN_CODES.map((plan) => [plan, `pri_${plan}_trial`])),
+    noTrialPriceIdsByPlan: Object.fromEntries(TIERED_PLAN_CODES.map((plan) => [plan, `pri_${plan}_paid`])),
+  })
+  for (const plan of TIERED_PLAN_CODES) {
+    assert.deepEqual(validatePaddleCheckoutPlan({ plan, paddle: config }), {
+      ok: true, priceId: `pri_${plan}_trial`, storedPlan: plan, trialEligible: true, checkoutMode: 'trial',
+    })
+    assert.deepEqual(validatePaddleCheckoutPlan({ plan, paddle: config, trialEligible: false }), {
+      ok: true, priceId: `pri_${plan}_paid`, storedPlan: plan, trialEligible: false, checkoutMode: 'paid_returning',
+    })
+  }
+  assert.equal(validatePaddleCheckoutPlan({ plan: 'starter_monthly', paddle: paddle() }).status, 503)
+  assert.equal(validatePaddleCheckoutPlan({ plan: 'starter_monthly', paddle: paddle(), trialEligible: false }).status, 503)
+  assert.equal(validatePaddleCheckoutPlan({ plan: 'unknown_monthly', paddle: config }).status, 400)
+  const conflicting = paddle({ priceIdsByPlan: { starter_monthly: 'pri_monthly' } })
+  assert.equal(validatePaddleCheckoutPlan({ plan: 'starter_monthly', paddle: conflicting }).status, 503)
 })
 
 test('completed checkout reservation updates require an exact UUID, account, environment, and transaction', async () => {

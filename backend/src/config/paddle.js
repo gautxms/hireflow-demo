@@ -1,3 +1,5 @@
+import { TIERED_PLAN_CODES } from './planCatalog.js'
+
 const DEFAULT_PADDLE_API_BASE_URLS = {
   production: 'https://api.paddle.com',
   sandbox: 'https://sandbox-api.paddle.com',
@@ -64,6 +66,14 @@ export function resolvePaddleConfig(env = process.env, environmentOverride) {
     ),
   }
 
+  for (const plan of TIERED_PLAN_CODES) {
+    const prefix = `PADDLE_${isSandbox ? 'SANDBOX' : 'PRODUCTION'}_${plan.toUpperCase()}`
+    const trialPriceId = firstDefined(env[`${prefix}_PRICE_ID`])
+    const noTrialPriceId = firstDefined(env[`${prefix}_NO_TRIAL_PRICE_ID`])
+    if (trialPriceId) priceIdsByPlan[plan] = trialPriceId
+    if (noTrialPriceId) noTrialPriceIdsByPlan[plan] = noTrialPriceId
+  }
+
   if (isTestCheckoutEnabled) {
     priceIdsByPlan['test-monthly'] = firstDefined(env.PADDLE_TEST_MONTHLY_PRICE_ID)
   }
@@ -107,6 +117,18 @@ export function resolvePaddleConfig(env = process.env, environmentOverride) {
       monthlyPriceId: firstDefined(env.PADDLE_TEST_MONTHLY_PRICE_ID),
     },
   }
+}
+
+export function planFromPaddlePriceId(priceId, paddle = {}) {
+  if (!priceId) return null
+  for (const plan of ['monthly', 'annual', ...TIERED_PLAN_CODES]) {
+    if (priceId === paddle.priceIdsByPlan?.[plan]
+      || priceId === paddle.noTrialPriceIdsByPlan?.[plan]
+      || paddle.legacyPriceIdsByPlan?.[plan]?.includes(priceId)) return plan
+  }
+  if (priceId === paddle.testUpgrade?.monthlyPriceId) return 'monthly'
+  if (priceId === paddle.testUpgrade?.annualPriceId) return 'annual'
+  return null
 }
 
 export function resolvePaddleConfigForUser(user = {}, env = process.env) {

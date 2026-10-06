@@ -410,6 +410,34 @@ test('enforceUploadLimit allows active paid users through the advertised 800-res
   }
 })
 
+test('enforceUploadLimit blocks Starter at its 100-analysis allowance', async () => {
+  const originalQuery = pool.query
+  pool.query = async (sql) => {
+    if (sql.includes('FROM usage_overrides')) return { rows: [] }
+    if (sql.includes('FROM usage_log')) return { rows: [{ usage_count: 100 }] }
+    throw new Error(`Unexpected query: ${sql}`)
+  }
+
+  try {
+    const req = {
+      userId: 1,
+      subscriptionStatus: 'active',
+      subscriptionQuotaContext: { status: 'active', plan: 'starter_annual' },
+      ip: '127.0.0.1',
+      headers: {},
+      files: [{ originalname: 'resume.pdf' }],
+    }
+    const res = createRes()
+    let nextCalled = false
+    await enforceUploadLimit(req, res, () => { nextCalled = true })
+    assert.equal(nextCalled, false)
+    assert.equal(res.statusCode, 429)
+    assert.equal(res.body.limit, 100)
+  } finally {
+    pool.query = originalQuery
+  }
+})
+
 test('enforceUploadLimit keeps trialing users on the trial resume allowance', async () => {
   const originalQuery = pool.query
   pool.query = async (sql) => {

@@ -1,3 +1,6 @@
+import { planFromPaddlePriceId } from '../config/paddle.js'
+import { PAID_PLAN_CODES, TIERED_PLAN_CODES } from '../config/planCatalog.js'
+
 const PLAN_CHANGE_METADATA_KEY = 'hireflowPlanChange'
 const PLAN_CHANGE_MATCH_LEEWAY_MS = 5 * 60 * 1000
 const PLAN_CHANGE_MATCH_WINDOW_MS = 60 * 60 * 1000
@@ -95,30 +98,21 @@ export function isSubscriptionUpdateTransaction(payload = {}) {
   return getPaddleTransactionOrigin(payload) === 'subscription_update'
 }
 
-function getPriceIdsForPlan(paddle, plan) {
-  return new Set([
-    paddle?.priceIdsByPlan?.[plan],
-    paddle?.noTrialPriceIdsByPlan?.[plan],
-    paddle?.testUpgrade?.[`${plan}PriceId`],
-    ...(paddle?.legacyPriceIdsByPlan?.[plan] || []),
-  ].filter(Boolean))
-}
-
 export function inferPlanFromPaddlePayload(payload = {}, paddle = {}) {
   const data = dataFromPayload(payload)
   const items = Array.isArray(data?.items) ? data.items : []
-  const monthlyIds = getPriceIdsForPlan(paddle, 'monthly')
-  const annualIds = getPriceIdsForPlan(paddle, 'annual')
 
   for (const item of items) {
     const priceId = item?.price?.id || item?.price_id || item?.priceId || null
-    if (monthlyIds.has(priceId)) return 'monthly'
-    if (annualIds.has(priceId)) return 'annual'
+    const matchedPlan = planFromPaddlePriceId(priceId, paddle)
+    if (matchedPlan) return matchedPlan
   }
 
   const customPlan = data?.custom_data?.plan || payload?.custom_data?.plan || null
   if (customPlan === 'test-monthly') return 'monthly'
-  return customPlan === 'monthly' || customPlan === 'annual' ? customPlan : null
+  // A new tier must be backed by its configured Paddle price when items are present.
+  if (items.length > 0 && TIERED_PLAN_CODES.includes(customPlan)) return null
+  return PAID_PLAN_CODES.includes(customPlan) ? customPlan : null
 }
 
 function transactionMatchesPlanChange(transaction, metadata, startedAt) {

@@ -1743,6 +1743,29 @@ test('POST /api/paddle/webhook derives annual from subscription.updated active i
   assert.match(userUpdateCalls(calls)[0].sql, /\$11::timestamptz > account\.last_paddle_event_at/)
 })
 
+test('POST /api/paddle/webhook projects a tiered sandbox plan from its Paddle price', async (t) => {
+  const key = 'PADDLE_SANDBOX_GROWTH_ANNUAL_PRICE_ID'
+  const original = process.env[key]
+  process.env[key] = 'pri_growth_annual'
+  t.after(() => {
+    if (original === undefined) delete process.env[key]
+    else process.env[key] = original
+  })
+
+  const payload = buildSubscriptionUpdatedPayload({
+    event_id: 'evt_subscription_updated_growth_annual',
+    data: {
+      ...buildSubscriptionUpdatedPayload().data,
+      custom_data: { userId: 42, plan: 'monthly', paddleEnvironment: 'sandbox' },
+      items: [{ price: { id: 'pri_growth_annual' }, quantity: 1, totals: { total: '59000' } }],
+    },
+  })
+
+  const { response, calls } = await postValidWebhookWithQueryMock(t, payload)
+  assert.equal(response.status, 200)
+  assert.equal(userUpdateCalls(calls)[0].params[4], 'growth_annual')
+})
+
 test('POST /api/paddle/webhook accepts a newer verified renewal date that moves backward', async (t) => {
   const payload = buildSubscriptionUpdatedPayload({
     event_id: 'evt_subscription_updated_renewal_moved_backward',

@@ -4,10 +4,29 @@ import assert from 'node:assert/strict'
 import {
   buildPlanChangeCustomData,
   getPlanChangeMetadata,
+  inferPlanFromPaddlePayload,
   isSubscriptionUpdateTransaction,
   PaddlePlanChangeRecoveryError,
   recoverFailedPaddlePlanChange,
 } from './paddlePlanChangeRecovery.js'
+import { TIERED_PLAN_CODES } from '../config/planCatalog.js'
+
+test('provider prices identify each tier for subscription and checkout reconciliation', () => {
+  const config = {
+    priceIdsByPlan: Object.fromEntries(TIERED_PLAN_CODES.map((plan) => [plan, `pri_${plan}_trial`])),
+    noTrialPriceIdsByPlan: Object.fromEntries(TIERED_PLAN_CODES.map((plan) => [plan, `pri_${plan}_paid`])),
+  }
+  for (const plan of TIERED_PLAN_CODES) {
+    for (const suffix of ['trial', 'paid']) {
+      assert.equal(inferPlanFromPaddlePayload({ data: {
+        items: [{ price: { id: `pri_${plan}_${suffix}` } }],
+        custom_data: { plan: 'monthly' },
+      } }, config), plan)
+    }
+  }
+  assert.equal(inferPlanFromPaddlePayload({ items: [{ price: { id: 'pri_unknown' } }] }, config), null)
+  assert.equal(inferPlanFromPaddlePayload({ items: [{ price: { id: 'pri_unknown' } }], custom_data: { plan: 'starter_monthly' } }, config), null)
+})
 
 function recoveryMetadata() {
   return getPlanChangeMetadata({

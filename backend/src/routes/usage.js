@@ -79,7 +79,7 @@ router.get('/resume-analysis', async (req, res) => {
     const quotaSubscriptionStatus = hasScheduledCancellationAccess(user)
       ? 'active'
       : user.subscription_status
-    const limit = resolveMonthlyResumeAnalysisLimit(quotaSubscriptionStatus, usageOverride)
+    const limit = resolveMonthlyResumeAnalysisLimit(quotaSubscriptionStatus, usageOverride, user.subscription_plan)
     const reservationsEnabled = isResumeQuotaReservationsEnabled()
     const period = reservationsEnabled
       ? resolveResumeQuotaPeriod({

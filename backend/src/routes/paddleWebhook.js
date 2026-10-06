@@ -6,9 +6,11 @@ import { recordFailedPaymentAttempt } from '../services/paymentRetry.js'
 import { trackEvent } from '../services/analytics.js'
 import { triggerWebhook } from '../services/webhookService.js'
 import {
+  planFromPaddlePriceId,
   resolvePaddleConfig,
   resolvePaddleEnvironmentForUser,
 } from '../config/paddle.js'
+import { PAID_PLAN_CODES } from '../config/planCatalog.js'
 import {
   getWebhookEventType,
   getPaddleSubscriptionLifecycleProjection,
@@ -318,16 +320,7 @@ function getWebhookDiagnosticIdentifiers(payload, eventType = null) {
 }
 
 function planFromPriceId(priceId, paddleConfig) {
-  if (!priceId) return null
-  if (priceId === paddleConfig.priceIdsByPlan.monthly) return 'monthly'
-  if (priceId === paddleConfig.priceIdsByPlan.annual) return 'annual'
-  if (priceId === paddleConfig.noTrialPriceIdsByPlan?.monthly) return 'monthly'
-  if (priceId === paddleConfig.noTrialPriceIdsByPlan?.annual) return 'annual'
-  if (priceId === paddleConfig.testUpgrade?.annualPriceId) return 'annual'
-  if (priceId === paddleConfig.testUpgrade?.monthlyPriceId) return 'monthly'
-  if (paddleConfig.legacyPriceIdsByPlan?.monthly?.includes(priceId)) return 'monthly'
-  if (paddleConfig.legacyPriceIdsByPlan?.annual?.includes(priceId)) return 'annual'
-  return null
+  return planFromPaddlePriceId(priceId, paddleConfig)
 }
 
 function getItemPriceId(item = {}) {
@@ -390,7 +383,7 @@ function getStoredSubscriptionPlan(payload, paddleConfig) {
     return 'monthly'
   }
 
-  return plan === 'monthly' || plan === 'annual' ? plan : null
+  return PAID_PLAN_CODES.includes(plan) ? plan : null
 }
 
 function getPaymentAmount(payload) {

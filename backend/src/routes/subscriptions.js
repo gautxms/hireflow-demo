@@ -2,7 +2,8 @@ import { Buffer } from 'node:buffer'
 import { Router } from 'express'
 import { pool, logErrorToDatabase } from '../db/client.js'
 import { requireAuth } from '../middleware/authMiddleware.js'
-import { resolvePaddleConfig, resolvePaddleConfigForUser } from '../config/paddle.js'
+import { planFromPaddlePriceId, resolvePaddleConfig, resolvePaddleConfigForUser } from '../config/paddle.js'
+import { TIERED_PLAN_CATALOG } from '../config/planCatalog.js'
 import {
   buildPlanChangeCustomData,
   getPlanChangeMetadata,
@@ -207,16 +208,7 @@ async function paddleRequest(path, options = {}, paddle = resolvePaddleConfig())
 }
 
 function planFromPriceId(priceId, paddle = resolvePaddleConfig()) {
-  if (!priceId) return null
-  if (priceId === paddle.priceIdsByPlan.monthly) return 'monthly'
-  if (priceId === paddle.priceIdsByPlan.annual) return 'annual'
-  if (priceId === paddle.noTrialPriceIdsByPlan?.monthly) return 'monthly'
-  if (priceId === paddle.noTrialPriceIdsByPlan?.annual) return 'annual'
-  if (priceId === paddle.testUpgrade?.annualPriceId) return 'annual'
-  if (priceId === paddle.testUpgrade?.monthlyPriceId) return 'monthly'
-  if (paddle.legacyPriceIdsByPlan?.monthly?.includes(priceId)) return 'monthly'
-  if (paddle.legacyPriceIdsByPlan?.annual?.includes(priceId)) return 'annual'
-  return null
+  return planFromPaddlePriceId(priceId, paddle)
 }
 
 function getSubscriptionItems(subscriptionPayload) {
@@ -328,7 +320,7 @@ function findCurrentBasePlanItem(subscriptionPayload, planKey, paddle = resolveP
 
   if (knownItem) return knownItem
 
-  const planInterval = PLAN_CONFIG[planKey]?.interval
+  const planInterval = (TIERED_PLAN_CATALOG[planKey] || PLAN_CONFIG[planKey])?.interval
   const intervalMatches = items.filter((item) => planInterval && getItemInterval(item) === planInterval)
   return intervalMatches.length === 1 ? intervalMatches[0] : null
 }
@@ -968,7 +960,10 @@ router.get('/current', requireAuth, async (req, res) => {
     }
 
     const planKey = user.subscription_plan || null
-    const plan = planKey ? (PLAN_CONFIG[planKey] || PLAN_CONFIG.monthly) : null
+    const tieredPlan = TIERED_PLAN_CATALOG[planKey]
+    const plan = planKey ? (tieredPlan
+      ? { label: `${tieredPlan.tier} ${tieredPlan.interval === 'year' ? 'Annual' : 'Monthly'}`, ...tieredPlan }
+      : (PLAN_CONFIG[planKey] || PLAN_CONFIG.monthly)) : null
     const hasBillingPortalAccess = Boolean(user.paddle_customer_id && user.paddle_subscription_id)
     const planCost = await resolveCurrentPlanCost(user, planKey, plan)
     const paddleDates = extractBillingDates(planCost.paddleSubscriptionPayload)

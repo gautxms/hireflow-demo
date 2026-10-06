@@ -1,7 +1,8 @@
 import { Router } from 'express'
 import { pool } from '../db/client.js'
 import { requireAuth } from '../middleware/auth.js'
-import { PAID_MONTHLY_RESUME_ANALYSIS_LIMIT } from '../config/resumeAnalysisQuota.js'
+import { resolveMonthlyResumeAnalysisLimit } from '../config/resumeAnalysisQuota.js'
+import { hasScheduledCancellationAccess } from '../utils/subscriptionAccess.js'
 
 const router = Router()
 const E164_REGEX = /^\+[1-9]\d{1,14}$/
@@ -9,7 +10,6 @@ const GRACE_PERIOD_DAYS = 30
 const KPI_SCHEMA_VERSION = '2026-05-08.v2'
 const MAX_DASHBOARD_RANGE_DAYS = 180
 const DEFAULT_DASHBOARD_RANGE_DAYS = 30
-const DASHBOARD_MONTHLY_RESUME_ANALYSIS_LIMIT = PAID_MONTHLY_RESUME_ANALYSIS_LIMIT
 
 const DASHBOARD_ERROR_CODE = {
   INVALID_RANGE: 'DASHBOARD_INVALID_RANGE',
@@ -165,7 +165,7 @@ router.get('/dashboard/kpis', async (req, res) => {
       }
     }
 
-    const [summaryResult, timeSeriesResult, topJobsResult, jobOptionsResult, monthlyUsageResult] = await Promise.all([
+    const [summaryResult, timeSeriesResult, topJobsResult, jobOptionsResult, monthlyUsageResult, planResult] = await Promise.all([
       runSegmentQuery(
         'summary',
         `WITH analysis_window AS (
@@ -361,6 +361,12 @@ router.get('/dashboard/kpis', async (req, res) => {
            AND a.created_at < date_trunc('month', NOW()) + interval '1 month'`,
         [filters.userId],
       ),
+      runSegmentQuery(
+        'subscriptionPlan',
+        `SELECT subscription_status, subscription_plan, cancellation_effective_at, current_period_end
+         FROM users WHERE id = $1`,
+        [filters.userId],
+      ),
     ])
 
     const summary = summaryResult.rows[0] || {}
@@ -372,7 +378,12 @@ router.get('/dashboard/kpis', async (req, res) => {
     const scoredCount = Number(summary.scored_count || 0)
     const monthlyUsageSummary = monthlyUsageResult.rows[0] || {}
     const monthlyResumeAnalysisCount = Number(monthlyUsageSummary.monthly_resume_analysis_count || 0)
-    const monthlyResumeAnalysisLimit = DASHBOARD_MONTHLY_RESUME_ANALYSIS_LIMIT
+    const accountPlan = planResult.rows[0] || {}
+    const monthlyResumeAnalysisLimit = resolveMonthlyResumeAnalysisLimit(
+      hasScheduledCancellationAccess(accountPlan) ? 'active' : accountPlan.subscription_status,
+      null,
+      accountPlan.subscription_plan,
+    )
     const monthlyResumeAnalysisRemaining = Math.max(monthlyResumeAnalysisLimit - monthlyResumeAnalysisCount, 0)
     const monthlyResumeAnalysisUsageRate = formatRate(monthlyResumeAnalysisCount, monthlyResumeAnalysisLimit)
 

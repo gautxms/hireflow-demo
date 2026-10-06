@@ -106,6 +106,22 @@ test('GET /usage/resume-analysis returns paid active user usage without mutating
   assert.equal(queries.some((sql) => /\b(INSERT|UPDATE|DELETE)\b/i.test(sql)), false)
 })
 
+test('GET /usage/resume-analysis reports the Growth annual allowance', async (t) => {
+  process.env.JWT_SECRET = 'test-secret'
+  t.mock.method(pool, 'query', async (sql) => {
+    if (sql.includes('FROM users')) return { rows: [{ id: 7, subscription_status: 'active', subscription_plan: 'growth_annual' }] }
+    if (sql.includes('FROM usage_overrides')) return { rows: [] }
+    if (sql.includes('FROM usage_log')) return { rows: [{ usage_count: 101 }] }
+    return { rows: [] }
+  })
+
+  const { response, payload } = await requestUsage({ headers: authHeader(7) })
+  assert.equal(response.status, 200)
+  assert.equal(payload.limit, 300)
+  assert.equal(payload.used, 101)
+  assert.equal(payload.remaining, 199)
+})
+
 test('GET /usage/resume-analysis reflects admin limit and reset overrides', async (t) => {
   process.env.JWT_SECRET = 'test-secret'
   const queries = []

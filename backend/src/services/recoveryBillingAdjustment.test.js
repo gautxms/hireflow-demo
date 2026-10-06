@@ -31,6 +31,11 @@ test('late monthly recovery still anchors one full calendar month from capture',
   assert.equal(addBillingInterval('2026-08-22T09:30:00Z', 'monthly').toISOString(), '2026-09-22T09:30:00.000Z')
 })
 
+test('tiered annual renewals advance one year while tiered monthly renewals advance one month', () => {
+  assert.equal(addBillingInterval('2028-01-31T09:30:00Z', 'starter_monthly').toISOString(), '2028-02-29T09:30:00.000Z')
+  assert.equal(addBillingInterval('2028-01-31T09:30:00Z', 'growth_annual').toISOString(), '2029-01-31T09:30:00.000Z')
+})
+
 test('authoritative capture deterministically selects latest valid captured payment', () => {
   const selected = selectAuthoritativeCapture([
     { id: 'pay_a', status: 'captured', captured_at: '2026-07-27T10:00:00Z' },

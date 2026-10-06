@@ -235,7 +235,7 @@ export async function enforceUploadLimit(req, res, next) {
     const ipAddress = req.ip || req.headers['x-forwarded-for'] || 'unknown'
     const usageOverride = await getUsageOverride(req.userId, legacyMonthStart)
     const quotaSubscriptionStatus = req.subscriptionStatusForQuota || req.subscriptionStatus
-    const uploadLimit = resolveMonthlyResumeAnalysisLimit(quotaSubscriptionStatus, usageOverride)
+    const uploadLimit = resolveMonthlyResumeAnalysisLimit(quotaSubscriptionStatus, usageOverride, req.subscriptionQuotaContext?.plan)
     const reservationsEnabled = isResumeQuotaReservationsEnabled()
     const enforcementPeriod = reservationsEnabled
       ? resolveResumeQuotaPeriod({

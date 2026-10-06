@@ -1,5 +1,6 @@
 import Joi from 'joi'
 import isEmail from 'isemail'
+import { PAID_PLAN_CODES } from '../config/planCatalog.js'
 import { hasSuspiciousPattern, sanitizeCompany, sanitizeEmail, sanitizePhone, sanitizeText } from '../utils/sanitize.js'
 
 const E164_REGEX = /^\+[1-9]\d{1,14}$/
@@ -62,7 +63,7 @@ export const schemas = {
     password: passwordField,
   }),
   paddleCheckout: Joi.object({
-    plan: Joi.string().valid('monthly', 'annual', 'test-monthly').required(),
+    plan: Joi.string().valid(...PAID_PLAN_CODES, 'test-monthly').required(),
     testKey: Joi.string().trim().max(256).optional(),
   }),
 }
