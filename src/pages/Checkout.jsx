@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import usePageSeo from '../hooks/usePageSeo'
 import { resolveCheckoutCloseState } from './checkoutState'
 import API_BASE from '../config/api'
@@ -52,6 +52,7 @@ function waitForPaddle(timeoutMs = 5000) {
 }
 
 export default function Checkout({ onAuthSuccess }) {
+  const onAuthSuccessRef = useRef(onAuthSuccess)
   const selectedPlan = getCheckoutPlanFromSearch(window.location.search)
   const plan = selectedPlan ? CHECKOUT_PLAN_DETAILS[selectedPlan] : null
   const testKey = selectedPlan === 'test-monthly' ? getTestKeyFromQuery() : ''
@@ -64,13 +65,19 @@ export default function Checkout({ onAuthSuccess }) {
   const [transactionId, setTransactionId] = useState(null)
   const [hasSuccessfulTransaction, setHasSuccessfulTransaction] = useState(false)
   const [checkoutOpen, setCheckoutOpen] = useState(false)
+  const [checkoutAttempt, setCheckoutAttempt] = useState(0)
   const isReturningSubscription = status === 'action_required' && requiredAction === 'cancelled'
   const isSubscriptionlessPaymentRetry = status === 'action_required' && requiredAction === 'payment_retry'
 
   usePageSeo('HireFlow Checkout', plan ? `Checkout setup for the ${plan.label.toLowerCase()} plan.` : 'Choose a plan to start checkout.')
 
   useEffect(() => {
+    onAuthSuccessRef.current = onAuthSuccess
+  }, [onAuthSuccess])
+
+  useEffect(() => {
     let isUnmounted = false
+    let checkoutOpenTimer = null
     let paddleRef = null
     let checkoutFailedHandler = null
     let checkoutClosedHandler = null
@@ -114,8 +121,8 @@ export default function Checkout({ onAuthSuccess }) {
 
       window.dispatchEvent(new CustomEvent('hireflow-auth-updated'))
 
-      if (typeof onAuthSuccess === 'function' && token) {
-        onAuthSuccess(token, normalizedStatus, user, redirectPath)
+      if (typeof onAuthSuccessRef.current === 'function' && token) {
+        onAuthSuccessRef.current(token, normalizedStatus, user, redirectPath)
       } else {
         navigate(redirectPath)
       }
@@ -216,6 +223,7 @@ export default function Checkout({ onAuthSuccess }) {
       try {
         console.log('[Checkout] Checking subscription status before initializing checkout')
         const { user, isActive, subscriptionStatus } = await verifySubscriptionStatus(token)
+        if (isUnmounted) return
         const isCanceled = isCanceledSubscription(subscriptionStatus)
 
         if (isActive) {
@@ -279,6 +287,7 @@ export default function Checkout({ onAuthSuccess }) {
           },
           body: JSON.stringify(checkoutRequestBody),
         })
+        if (isUnmounted) return
 
         console.log('[Checkout] BACKEND RESPONSE RECEIVED:', {
           status: response.status,
@@ -354,6 +363,7 @@ export default function Checkout({ onAuthSuccess }) {
         // Step 3: Wait for Paddle.js library (loaded globally in index.html)
         console.log('[Checkout] Waiting for Paddle.js...')
         const Paddle = await waitForPaddle()
+        if (isUnmounted) return
         paddleRef = Paddle
 
         if (paddleEnvironment === 'sandbox') {
@@ -462,7 +472,8 @@ export default function Checkout({ onAuthSuccess }) {
         setStatus('ready')
 
         // Use setTimeout to ensure Paddle is fully initialized before opening checkout
-        setTimeout(() => {
+        checkoutOpenTimer = window.setTimeout(() => {
+          if (isUnmounted) return
           console.log('[Checkout] Calling Paddle.Checkout.open with transactionId:', initialTransactionId)
 
           if (typeof Paddle.Checkout?.addEventListener === 'function') {
@@ -522,8 +533,10 @@ export default function Checkout({ onAuthSuccess }) {
         }, 500)
       } catch (error) {
         console.error('[Checkout] Error occurred:', error)
-        setStatus('error')
-        setErrorMessage(error.message || 'Unable to start checkout')
+        if (!isUnmounted) {
+          setStatus('error')
+          setErrorMessage(error.message || 'Unable to start checkout')
+        }
       }
     }
 
@@ -531,6 +544,7 @@ export default function Checkout({ onAuthSuccess }) {
 
     return () => {
       isUnmounted = true
+      if (checkoutOpenTimer !== null) window.clearTimeout(checkoutOpenTimer)
 
       if (typeof paddleRef?.Checkout?.removeEventListener === 'function') {
         try {
@@ -542,7 +556,7 @@ export default function Checkout({ onAuthSuccess }) {
         }
       }
     }
-  }, [onAuthSuccess, reactivateRequested, selectedPlan, testKey])
+  }, [checkoutAttempt, reactivateRequested, selectedPlan, testKey])
 
   useEffect(() => {
     if (!checkoutOpen || hasSuccessfulTransaction) {
@@ -753,6 +767,7 @@ export default function Checkout({ onAuthSuccess }) {
               } else {
                 setRequiredAction(null)
               }
+              setCheckoutAttempt((attempt) => attempt + 1)
             }}
             className="hf-btn hf-btn--primary checkout-page__retry"
           >
