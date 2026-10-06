@@ -47,7 +47,7 @@ const SHARED_PLAN_FEATURES = [
 const PRICING_FAQ = [
   {
     question: 'Can I change my plan later?',
-    answer: 'Yes. You can switch between monthly and annual billing as your hiring needs change. If your team hires in cycles, many teams start monthly and move to annual once usage is predictable. Your access to the product remains the same core experience, and billing updates are applied at the next billing cycle so changes are straightforward and easy to plan around.',
+    answer: 'Yes. Cancel your current subscription from Billing; you keep access through the end of the paid period. Once it ends, choose a new plan and complete checkout at the price shown. There is no automatic plan switch, prorated charge, or second free trial.',
   },
   {
     question: 'Is there a free trial?',

@@ -51,6 +51,7 @@ export function containsRawPaymentMethodField(body = {}) {
 }
 
 const ERROR_RESPONSES = {
+  PLAN_CHANGE_DISABLED: { status: 409, message: 'To choose a different plan, cancel your current subscription and subscribe again after your paid period ends.' },
   BILLING_CONFIG_MISSING: { status: 409, message: 'Subscription cannot be changed because billing configuration is missing. Please contact support.' },
   BILLING_PROVIDER_MISSING: { status: 409, message: 'Subscription cannot be changed because billing provider subscription is missing. Please contact support.' },
   PAYMENT_FAILED_OR_ACTION_REQUIRED: { status: 402, message: 'Paddle could not apply this plan change because payment failed or requires action. Please update your payment method or contact support.' },
@@ -1515,6 +1516,10 @@ async function persistSuccessfulPlanChange(userId, context, paddleUpdate) {
 }
 
 router.post('/change-plan-preview', requireAuth, async (req, res) => {
+  // MVP plan changes use cancellation followed by a new checkout after access ends.
+  if (process.env.PADDLE_DIRECT_PLAN_CHANGES_ENABLED !== 'true') {
+    return sendBillingError(res, new BillingError('PLAN_CHANGE_DISABLED'))
+  }
   const { targetPlan, upgradeTestKey } = req.body || {}
 
   try {
@@ -1547,6 +1552,9 @@ router.post('/change-plan-preview', requireAuth, async (req, res) => {
 })
 
 router.post('/change-plan', requireAuth, async (req, res) => {
+  if (process.env.PADDLE_DIRECT_PLAN_CHANGES_ENABLED !== 'true') {
+    return sendBillingError(res, new BillingError('PLAN_CHANGE_DISABLED'))
+  }
   const { targetPlan, upgradeTestKey } = req.body || {}
   let currentPlan = null
   let context = null

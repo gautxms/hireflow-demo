@@ -19,21 +19,6 @@ export function shouldPollRecoveryAdjustment(recoveryPending, subscription) {
   return Boolean((recoveryPending || providerAdjustmentPending) && !isRecoveryAdjustmentTerminal(status))
 }
 
-export function getBillingPlanAction(plan, subscriptionState = null) {
-  if (isPastDueBillingState(subscriptionState) || subscriptionState?.isActive !== true) return null
-
-  if (plan === 'monthly') {
-    return {
-      kind: 'upgrade',
-      targetPlan: 'annual',
-      label: 'Upgrade to annual',
-      isSelfServe: true,
-    }
-  }
-
-  return null
-}
-
 export function getCancelActionLabel(_plan) {
   return 'Cancel subscription'
 }
@@ -101,7 +86,7 @@ export function getCancellationAccessMessage(subscriptionState, subscription, fo
       : ''
   }
 
-  return `Cancellation scheduled. Your workspace remains fully available until ${formatDate(effectiveDate)}. You will not be charged again unless you keep the subscription.`
+  return `Cancellation scheduled. Your workspace remains fully available until ${formatDate(effectiveDate)}. You will not be charged again unless you keep the subscription. After access ends, you can choose a new plan from Pricing.`
 }
 
 export function getCancellationSuccessMessage(subscription, payload, formatDate = (value) => value) {

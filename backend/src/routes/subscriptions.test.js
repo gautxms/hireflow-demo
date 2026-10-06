@@ -41,6 +41,7 @@ function createRes() {
 }
 
 function resetPaddleEnv() {
+  process.env.PADDLE_DIRECT_PLAN_CHANGES_ENABLED = 'true'
   process.env.PADDLE_ENVIRONMENT = 'production'
   process.env.PADDLE_API_KEY = 'paddle-key'
   process.env.PADDLE_CLIENT_TOKEN = 'client-token'
@@ -1114,6 +1115,26 @@ test('GET /api/subscriptions/current exposes recovery adjustment rollout applica
 
   assert.equal(res.statusCode, 200)
   assert.equal(res.payload.subscription.recoveryAdjustmentEnabled, true)
+})
+
+test('direct plan-change endpoints reject requests by default without database or Paddle calls', async () => {
+  resetPaddleEnv()
+  delete process.env.PADDLE_DIRECT_PLAN_CHANGES_ENABLED
+  const { calls, connectCalls } = installDbMock(activeMonthlyUser())
+  const paddleCalls = mockPaddleResponse()
+
+  for (const path of ['/change-plan-preview', '/change-plan']) {
+    const res = await invokeRoute(path, { targetPlan: 'annual' })
+    assert.equal(res.statusCode, 409)
+    assert.deepEqual(res.payload, {
+      code: 'PLAN_CHANGE_DISABLED',
+      error: 'To choose a different plan, cancel your current subscription and subscribe again after your paid period ends.',
+    })
+  }
+
+  assert.equal(calls.length, 0)
+  assert.equal(connectCalls.length, 0)
+  assert.equal(paddleCalls.length, 0)
 })
 
 test('POST /api/subscriptions/change-plan-preview uses gated test annual price for valid upgradeTestKey', async () => {
