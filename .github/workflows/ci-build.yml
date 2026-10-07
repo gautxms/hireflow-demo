@@ -56,6 +56,11 @@ jobs:
           LIFECYCLE_POSTGRES_TEST_DATABASE_URL: postgresql://hireflow_test:hireflow_test@127.0.0.1:5432/hireflow_checkout_test
         run: node --test backend/src/services/paddleSubscriptionLifecycle.postgres.test.js
 
+      - name: Dashboard match score PostgreSQL test
+        env:
+          DASHBOARD_POSTGRES_TEST_DATABASE_URL: postgresql://hireflow_test:hireflow_test@127.0.0.1:5432/hireflow_checkout_test
+        run: node --test backend/src/routes/profile.dashboard.postgres.test.js
+
       - name: Paddle billing readiness PostgreSQL tests
         env:
           DATABASE_URL: postgresql://hireflow_test:hireflow_test@127.0.0.1:5432/hireflow_checkout_test
