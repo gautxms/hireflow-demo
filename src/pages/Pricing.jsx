@@ -25,7 +25,7 @@ const PRICING_FAQ = [
   },
   {
     question: 'Is there a free trial?',
-    answer: 'Eligible new accounts can use one 7-day free trial to test Hireflow before committing. A trial is not reinstated after cancellation, payment failure, pausing, or a previous subscription. Returning subscribers are charged when checkout completes.',
+    answer: 'Eligible new accounts can use one 7-day free trial with a limit of 10 resume analyses during the trial. The trial allowance resets each calendar month. A trial is not reinstated after cancellation, payment failure, pausing, or a previous subscription. Returning subscribers are charged when checkout completes.',
   },
   {
     question: 'How does billing work?',
@@ -33,7 +33,7 @@ const PRICING_FAQ = [
   },
   {
     question: 'What happens when I reach my resume limit?',
-    answer: 'Starter includes 100, Growth 300, and Pro 800 resume analyses per month. Once you reach your plan limit, you can review existing work but cannot start another analysis until the allowance resets. To switch plans, cancel your current subscription and choose a new plan after its access ends.',
+    answer: 'During an eligible trial, the limit is 10 resume analyses. Once paid billing begins, Starter includes 100, Growth 300, and Pro 800 resume analyses per month. Once you reach your limit, you can review existing work but cannot start another analysis until the allowance resets. To switch plans, cancel your current subscription and choose a new plan after its access ends.',
   },
   {
     question: 'Do you offer discounts for annual plans?',
@@ -68,9 +68,9 @@ function PricingCard({ tier, billing, onStartCheckout, trialAvailable }) {
         <span className="pricing-card__period">/{annual ? 'year' : 'month'}</span>
       </p>
 
-      <p className="pricing-card__billing">{annual ? 'Billed annually' : 'Billed monthly'} · {tier.monthlyLimit} resume analyses/month</p>
+      <p className="pricing-card__billing">{annual ? 'Billed annually' : 'Billed monthly'} · Paid plan: {tier.monthlyLimit} resume analyses/month</p>
       {annual && <p className="pricing-card__savings">Save ${annualSavings}/year compared with monthly</p>}
-      <p className="pricing-card__trial">{trialAvailable ? '7-day free trial for eligible new accounts' : 'Returning subscription — billed immediately'}</p>
+      <p className="pricing-card__trial">{trialAvailable ? '7-day free trial · 10 resume analyses during trial' : 'Returning subscription — billed immediately'}</p>
 
       <button
         type="button"
@@ -81,7 +81,7 @@ function PricingCard({ tier, billing, onStartCheckout, trialAvailable }) {
       </button>
 
       <ul className="pricing-card__features">
-        <li>{tier.monthlyLimit} resume analyses per month</li>
+        <li>Paid plan: {tier.monthlyLimit} resume analyses per month</li>
         {PLAN_FEATURES.map((feature) => (
           <li key={feature}>{feature}</li>
         ))}
@@ -112,7 +112,7 @@ export default function Pricing({ isAuthenticated, onRequireAuth, trialEligible 
 
         <h1 className="pricing-page__title">Choose your plan</h1>
         <p className="pricing-page__subtitle">
-          {trialAvailable ? '7-day free trial for eligible new accounts, cancel anytime.' : 'Choose a paid plan to restart your HireFlow subscription.'}
+          {trialAvailable ? 'Eligible new accounts: 7-day free trial with 10 resume analyses. Cancel anytime.' : 'Choose a paid plan to restart your HireFlow subscription.'}
         </p>
         <p className="pricing-page__intro">
           Hireflow gives recruiting teams a straightforward way to evaluate candidates with AI support, without confusing add-ons or hidden pricing mechanics.
