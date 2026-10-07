@@ -655,7 +655,7 @@ export default function Checkout({ onAuthSuccess }) {
           <h1>Complete your subscription</h1>
           <p className="checkout-page__subtitle">
             {plan
-              ? <>You selected <strong>{plan.label}</strong> — {plan.price}, with {plan.monthlyLimit} resume analyses/month. Payment is securely processed by Paddle.</>
+              ? <>You selected <strong>{plan.label}</strong> — {plan.price}. Eligible new accounts get a 7-day trial with 10 resume analyses; the paid plan includes {plan.monthlyLimit} analyses/month. Payment is securely processed by Paddle.</>
               : 'Choose a plan to continue to secure checkout.'}
           </p>
         </header>
