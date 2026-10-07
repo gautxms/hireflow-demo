@@ -100,6 +100,7 @@ function validateFile(file) {
 async function extractDocumentText(file, kind, { extractPdf, extractDocx }) {
   if (kind === 'pdf') {
     const result = await extractPdf(file.buffer, {
+      includeExtractedText: true,
       env: {
         ...process.env,
         PDF_CANONICAL_EXTRACTION_MAX_BYTES: String(MAX_JD_PREVIEW_FILE_BYTES),
@@ -113,7 +114,7 @@ async function extractDocumentText(file, kind, { extractPdf, extractDocx }) {
     if (result.ocrRequired || result.qualityClassification === 'suspicious_noise') {
       throw new JobDescriptionPreviewError('JD_OCR_REQUIRED', 'This PDF does not contain enough readable text. Try a text-based PDF or DOCX file.')
     }
-    return result.canonicalText
+    return result.extractedText || result.canonicalText
   }
   try {
     return await extractDocx(file.buffer, file.originalname, { logger: { warn() {}, debug() {} } })
