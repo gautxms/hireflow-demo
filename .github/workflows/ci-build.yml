@@ -41,6 +41,9 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: Job description preview tests
+        run: node --test backend/src/services/jobDescriptionPreviewService.test.js backend/src/routes/jobDescriptionPreview.test.js
+
       - name: Checkout concurrency and ownership tests
         env:
           DATABASE_URL: postgresql://hireflow_test:hireflow_test@127.0.0.1:5432/hireflow_checkout_test
