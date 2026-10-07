@@ -5,8 +5,10 @@ import { Router } from 'express'
 import { pool } from '../db/client.js'
 import { requireActiveSubscription } from '../middleware/subscriptionCheck.js'
 import { sanitizeFilename } from '../utils/sanitize.js'
+import jobDescriptionPreviewRoutes from './jobDescriptionPreview.js'
 
 const router = Router()
+router.use(jobDescriptionPreviewRoutes)
 const uploadDirectory = path.join(process.cwd(), 'backend', 'uploads', 'job-descriptions')
 const MAX_FILE_SIZE = 20 * 1024 * 1024
 const JOB_DESCRIPTION_USAGE_SUMMARY_FLAG = String(process.env.JOB_DESCRIPTION_USAGE_SUMMARY_ENABLED || '').trim() === 'true'
