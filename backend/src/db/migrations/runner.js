@@ -56,6 +56,7 @@ const migrationFiles = [
   '052-backfill-paddle-webhook-verification-gap',
   '053-protect-paddle-checkout-ownership',
   '054-add-paddle-reconciliation-cadence',
+  '055-allow-tiered-subscription-plans',
 ]
 
 async function ensureMigrationsTable(client) {
