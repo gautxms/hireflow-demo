@@ -70,6 +70,49 @@ test('missing fields remain empty and contradictory experience is flagged', () =
   assert.deepEqual(result.warnings, ['JOB_TITLE_NOT_FOUND', 'EXPERIENCE_RANGE_UNCLEAR'])
 })
 
+test('keeps responsibility and qualification lists returned as arrays', () => {
+  const result = normalizeJobDescriptionPreview({
+    responsibilities: ['Own a portfolio of customers', 'Lead renewal planning'],
+    requirements: ['4–7 years in Customer Success', 'Strong written communication'],
+  }, documentText)
+  assert.equal(result.fields.responsibilities, 'Own a portfolio of customers\nLead renewal planning')
+  assert.equal(result.fields.requirements, '4–7 years in Customer Success\nStrong written communication')
+})
+
+test('fills omitted lists from clearly labeled sections of a DOCX-style job description', async () => {
+  const jdText = `Customer Success Manager - Mid-Market SaaS
+US Market | Non-technical role | 4-7 years experience
+
+Full job description
+Own customer relationships throughout onboarding and adoption.
+
+Key responsibilities
+Manage a portfolio of mid-market accounts.
+Run onboarding and quarterly business reviews.
+
+Qualifications
+4-7 years of experience in Customer Success or Account Management.
+Excellent communication and stakeholder management.
+
+Skills
+Customer Success, account management, CRM
+
+Additional info
+Remote - United States`
+  const file = {
+    originalname: 'role.docx',
+    mimetype: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    buffer: Buffer.from('PK-placeholder'),
+  }
+  const result = await previewJobDescription(file, fakeDependencies({
+    extractDocx: async () => jdText,
+    callModel: async () => JSON.stringify({ title: 'Customer Success Manager', responsibilities: 'Manage accounts.', requirements: [], skills: [] }),
+  }))
+  assert.equal(result.fields.responsibilities, 'Manage a portfolio of mid-market accounts.\nRun onboarding and quarterly business reviews.')
+  assert.equal(result.fields.requirements, '4-7 years of experience in Customer Success or Account Management.\nExcellent communication and stakeholder management.')
+  assert.equal(result.fields.description, jdText)
+})
+
 test('does not call AI for a scanned or incomplete PDF', async () => {
   let called = false
   await assert.rejects(
