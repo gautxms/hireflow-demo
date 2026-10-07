@@ -337,9 +337,12 @@ export default function Checkout({ onAuthSuccess }) {
 
         // Extract transaction ID from the URL parameter
         let initialTransactionId
+        let successRedirectUrl
         try {
           const url = new URL(checkoutUrl)
           initialTransactionId = url.searchParams.get('_ptxn')
+          url.searchParams.delete('_ptxn')
+          successRedirectUrl = url.toString()
         } catch (e) {
           console.error('[Checkout] Failed to parse checkout URL:', checkoutUrl, e)
           throw new Error('Invalid checkout URL format')
@@ -501,7 +504,7 @@ export default function Checkout({ onAuthSuccess }) {
             transactionId: initialTransactionId,
             settings: {
               allowLogout: false,
-              successUrl: checkoutUrl,
+              successUrl: successRedirectUrl,
             },
           })
           setStatus('opened')
