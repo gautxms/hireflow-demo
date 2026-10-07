@@ -12,7 +12,8 @@ export default function JobModal({ isOpen, mode, item, resetToken, isSubmitting,
     const handleKeyDown = (event) => {
       if (event.key === 'Escape' && !isSubmitting) onClose()
       if (event.key !== 'Tab' || !dialogRef.current) return
-      const focusable = dialogRef.current.querySelectorAll('button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [href], [tabindex]:not([tabindex="-1"])')
+      const focusable = [...dialogRef.current.querySelectorAll('button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [href], [tabindex]:not([tabindex="-1"])')]
+        .filter((element) => element.getClientRects().length > 0)
       if (focusable.length === 0) return
       const first = focusable[0]
       const last = focusable[focusable.length - 1]
@@ -38,7 +39,7 @@ export default function JobModal({ isOpen, mode, item, resetToken, isSubmitting,
         <div className="job-modal__header">
           <div>
             <h2 id="job-modal-title" className="job-modal__title">{readOnly ? 'View Job' : (mode === 'edit' ? 'Edit Job' : 'Create Job')}</h2>
-            <p className="job-modal__subtitle">{readOnly ? 'Review the stored job profile and its attachment.' : 'Create and maintain structured job profiles for analysis workflows.'}</p>
+            <p className="job-modal__subtitle">{readOnly ? 'Review job details and attachment.' : (mode === 'edit' ? 'Update job details.' : 'Upload a JD or enter details below.')}</p>
           </div>
           <button type="button" className="job-modal__close" aria-label="Close job modal" onClick={onClose} disabled={isSubmitting}><X size={18} strokeWidth={1.5} aria-hidden="true" /></button>
         </div>
