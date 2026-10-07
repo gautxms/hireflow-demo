@@ -51,3 +51,32 @@ test('dashboard averages the saved job match score for each analysis item', {
     await client.end()
   }
 })
+
+test('one legacy numeric matchScore wins over a different profile score', {
+  skip: !connectionString,
+}, async () => {
+  const client = new pg.Client({ connectionString })
+  await client.connect()
+  try {
+    await client.query(`CREATE TEMP TABLE parse_jobs (
+      job_id TEXT PRIMARY KEY, user_id INTEGER, status TEXT, result JSONB
+    )`)
+    await client.query(`INSERT INTO parse_jobs (job_id, user_id, status, result)
+      VALUES ('one-job', 52, 'complete',
+        '{"candidates":[{"matchScore":86.8,"score":78,"profile_score":78}]}')`)
+
+    const result = await client.query(`WITH analysis_window AS (
+      SELECT 'analysis-one' AS id, 'one-resume' AS resume_id, TIMESTAMP '2026-10-07 08:00:00' AS created_at,
+             'complete' AS status, 'one-role' AS job_description_id, 'one-job' AS parse_job_id
+    ), completed_scored_item_window AS (
+      ${dashboardMatchScoreRowsSql('analysis_window')}
+    )
+    SELECT ROUND(AVG(score)::numeric, 2) AS avg_score, COUNT(*)::int AS scored_count
+    FROM completed_scored_item_window`, [52])
+
+    assert.equal(Number(result.rows[0].avg_score), 86.8)
+    assert.equal(result.rows[0].scored_count, 1)
+  } finally {
+    await client.end()
+  }
+})

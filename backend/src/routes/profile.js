@@ -37,6 +37,7 @@ export function dashboardMatchScoreRowsSql(windowName) {
       SELECT aw.resume_id, aw.created_at,
              COALESCE(
                ${dashboardNumericScoreSql("candidate.result #>> '{matchScore,score}'")},
+               ${dashboardNumericScoreSql("candidate.result ->> 'matchScore'")},
                ${dashboardNumericScoreSql("candidate.result ->> 'score'")}
              ) AS score
       FROM ${windowName} aw
