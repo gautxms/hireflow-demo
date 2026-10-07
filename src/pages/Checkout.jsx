@@ -79,8 +79,6 @@ export default function Checkout({ onAuthSuccess }) {
     let isUnmounted = false
     let checkoutOpenTimer = null
     let paddleRef = null
-    let checkoutFailedHandler = null
-    let checkoutClosedHandler = null
     let latestTransactionId = null
     let isPaymentFlowCompleted = false
 
@@ -370,23 +368,9 @@ export default function Checkout({ onAuthSuccess }) {
           Paddle.Environment.set('sandbox')
         }
 
-        // Step 4: Initialize Paddle with client token and user email
-        console.log('[Checkout] Initializing Paddle with pwCustomer...')
+        // Step 4: Prepare Paddle with the client token and user email.
         const effectiveClientToken = checkoutClientToken || fallbackClientToken
-        if (effectiveClientToken && userEmail) {
-          if (!Paddle.isInitialized && !Paddle.isInitializing) {
-            console.log('[Checkout] Calling Paddle.Initialize with client token and pwCustomer:', {
-              tokenExists: !!effectiveClientToken,
-              userEmail,
-            })
-            Paddle.Initialize({
-              token: effectiveClientToken,
-              pwCustomer: {
-                email: userEmail,
-              },
-            })
-          }
-        } else {
+        if (!effectiveClientToken || !userEmail) {
           console.error('[Checkout] Missing required Paddle initialization data:', {
             hasClientToken: !!effectiveClientToken,
             hasUserEmail: !!userEmail,
@@ -464,8 +448,45 @@ export default function Checkout({ onAuthSuccess }) {
           }
         }
 
-        checkoutFailedHandler = handleCheckoutFailed
-        checkoutClosedHandler = handleCheckoutClosed
+        const handleCheckoutCompleted = (eventData) => {
+          const completionTransactionId = eventData?.data?.transaction_id || eventData?.transaction_id
+          if (isUnmounted || isPaymentFlowCompleted || completionTransactionId !== latestTransactionId) return
+
+          console.log('[Paddle] checkout.completed received:', { transactionId: completionTransactionId })
+          isPaymentFlowCompleted = true
+          markCheckoutCompleted()
+          sessionStorage.setItem(PADDLE_LAST_TRANSACTION_STORAGE_KEY, completionTransactionId)
+          sessionStorage.removeItem(PADDLE_CHECKOUT_ACTIVE_STORAGE_KEY)
+          setTransactionId(completionTransactionId)
+          setHasSuccessfulTransaction(true)
+          setCheckoutOpen(false)
+          closePaddleCheckout()
+
+          navigate('/billing/success', {
+            replace: true,
+            state: { transactionId: completionTransactionId, plan: selectedPlan },
+          })
+        }
+
+        const handlePaddleEvent = (eventData) => {
+          if (isUnmounted) return
+          const eventTransactionId = eventData?.data?.transaction_id || eventData?.transaction_id
+          if (eventTransactionId && eventTransactionId !== latestTransactionId) return
+
+          if (eventData?.name === 'checkout.completed') handleCheckoutCompleted(eventData)
+          if (eventData?.name === 'checkout.closed') void handleCheckoutClosed()
+          if (eventData?.name === 'checkout.payment.failed') void handleCheckoutFailed(eventData)
+        }
+
+        if (Paddle.Initialized) {
+          Paddle.Update({ pwCustomer: { email: userEmail }, eventCallback: handlePaddleEvent })
+        } else {
+          Paddle.Initialize({
+            token: effectiveClientToken,
+            pwCustomer: { email: userEmail },
+            eventCallback: handlePaddleEvent,
+          })
+        }
 
         // Step 5: Open the embedded checkout with transaction ID
         console.log('[Checkout] Opening embedded checkout for transaction:', initialTransactionId)
@@ -476,55 +497,11 @@ export default function Checkout({ onAuthSuccess }) {
           if (isUnmounted) return
           console.log('[Checkout] Calling Paddle.Checkout.open with transactionId:', initialTransactionId)
 
-          if (typeof Paddle.Checkout?.addEventListener === 'function') {
-            Paddle.Checkout.addEventListener('checkout.failed', handleCheckoutFailed)
-            Paddle.Checkout.addEventListener('checkout.closed', handleCheckoutClosed)
-          }
-
           Paddle.Checkout.open({
             transactionId: initialTransactionId,
-            client: effectiveClientToken,
-            environment: paddleEnvironment,
             settings: {
               allowLogout: false,
-            },
-            onComplete: async (transaction) => {
-              console.log('[Paddle] onComplete callback fired:', transaction)
-
-              if (isPaymentFlowCompleted) {
-                return
-              }
-
-              const completionTransactionId = transaction?.id || latestTransactionId
-              latestTransactionId = completionTransactionId
-              setTransactionId(completionTransactionId)
-              sessionStorage.setItem(PADDLE_LAST_TRANSACTION_STORAGE_KEY, completionTransactionId)
-              isPaymentFlowCompleted = true
-              markCheckoutCompleted()
-              sessionStorage.removeItem(PADDLE_CHECKOUT_ACTIVE_STORAGE_KEY)
-
-              if (!isUnmounted) {
-                setStatus('loading')
-                setHasSuccessfulTransaction(true)
-                setCheckoutOpen(false)
-                setSuccessMessage('Payment successful! Redirecting to billing confirmation…')
-              }
-
-              closePaddleCheckout()
-              const synced = await syncSubscriptionAfterPayment(token, completionTransactionId)
-
-              if (synced?.isActive) {
-                persistActiveSubscription(token, synced.user, '/billing/success')
-              }
-
-              navigate('/billing/success', {
-                replace: true,
-                state: {
-                  transactionId: completionTransactionId,
-                  plan: synced?.user?.subscription_plan || selectedPlan,
-                  message: 'Welcome! Your subscription is now active.',
-                },
-              })
+              successUrl: checkoutUrl,
             },
           })
           setStatus('opened')
@@ -546,14 +523,8 @@ export default function Checkout({ onAuthSuccess }) {
       isUnmounted = true
       if (checkoutOpenTimer !== null) window.clearTimeout(checkoutOpenTimer)
 
-      if (typeof paddleRef?.Checkout?.removeEventListener === 'function') {
-        try {
-          paddleRef.Checkout.removeEventListener('checkout.failed', checkoutFailedHandler)
-          paddleRef.Checkout.removeEventListener('checkout.closed', checkoutClosedHandler)
-        } catch {
-          paddleRef.Checkout.removeEventListener('checkout.failed')
-          paddleRef.Checkout.removeEventListener('checkout.closed')
-        }
+      if (paddleRef?.Initialized && typeof paddleRef.Update === 'function') {
+        paddleRef.Update({ eventCallback: null })
       }
     }
   }, [checkoutAttempt, reactivateRequested, selectedPlan, testKey])
