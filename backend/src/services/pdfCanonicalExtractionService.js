@@ -513,7 +513,7 @@ function buildFailureResult({ category, startedAt, fileBuffer, error = null, par
 }
 
 export async function extractPdfCanonicalTextForInternalUse(fileBuffer, options = {}) {
-  const { env = process.env } = options || {}
+  const { env = process.env, includeExtractedText = false } = options || {}
   const startedAt = performance.now()
   const limits = getPdfCanonicalExtractionObserveOnlyLimits(env)
 
@@ -559,6 +559,7 @@ export async function extractPdfCanonicalTextForInternalUse(fileBuffer, options 
       ocrRequired: classification.ocrRequired,
       failureCategory: null,
       canonicalText,
+      ...(includeExtractedText ? { extractedText: extraction.extractedText } : {}),
     }
   } catch (error) {
     const category = Object.values(CATEGORY).includes(error?.category) ? error.category : CATEGORY.error
