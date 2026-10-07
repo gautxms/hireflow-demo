@@ -106,7 +106,7 @@ Remote - United States`
   }
   const result = await previewJobDescription(file, fakeDependencies({
     extractDocx: async () => jdText,
-    callModel: async () => JSON.stringify({ title: 'Customer Success Manager', responsibilities: null, requirements: [], skills: [] }),
+    callModel: async () => JSON.stringify({ title: 'Customer Success Manager', responsibilities: 'Manage accounts.', requirements: [], skills: [] }),
   }))
   assert.equal(result.fields.responsibilities, 'Manage a portfolio of mid-market accounts.\nRun onboarding and quarterly business reviews.')
   assert.equal(result.fields.requirements, '4-7 years of experience in Customer Success or Account Management.\nExcellent communication and stakeholder management.')
