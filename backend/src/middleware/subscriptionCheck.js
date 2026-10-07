@@ -344,7 +344,8 @@ export async function enforceUploadLimit(req, res, next) {
 
     const percentUsed = Math.round((projectedUsage / uploadLimit) * 100)
     if (percentUsed >= RESUME_ANALYSIS_USAGE_WARNING_THRESHOLD_PERCENT) {
-      res.set('X-Usage-Warning', `You have used ${percentUsed}% of your monthly upload quota.`)
+      const periodLabel = enforcementPeriod.source === RESUME_QUOTA_PERIOD_SOURCES.TRIAL ? 'trial' : 'monthly'
+      res.set('X-Usage-Warning', `You have used ${percentUsed}% of your ${periodLabel} resume allowance.`)
     }
 
     req.usageContext = {
