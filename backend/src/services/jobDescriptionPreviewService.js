@@ -89,8 +89,8 @@ export function normalizeJobDescriptionPreview(modelFields, documentText) {
     fields: {
       title: cleanText(modelFields.title, 200),
       description: documentText,
-      responsibilities: cleanSection(modelFields.responsibilities) || labeledSections.responsibilities,
-      requirements: cleanSection(modelFields.requirements) || labeledSections.requirements,
+      responsibilities: labeledSections.responsibilities || cleanSection(modelFields.responsibilities),
+      requirements: labeledSections.requirements || cleanSection(modelFields.requirements),
       skills,
       location: cleanText(modelFields.location, 250),
       experienceMin: validRange ? experienceMin : null,
