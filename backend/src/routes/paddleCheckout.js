@@ -242,7 +242,11 @@ export async function persistVerifiedCheckoutSubscription({
            cancellation_effective_at = NULL,
            cancellation_reason = NULL,
            subscription_started_at = COALESCE(subscription_started_at, $8, NOW()),
-           quota_anchor_at = COALESCE($8, quota_anchor_at, NOW()),
+           quota_anchor_at = CASE
+             WHEN $2 = 'active' AND subscription_status IN ('trialing', 'trial')
+               THEN COALESCE($8::timestamp, NOW())
+             ELSE COALESCE($8::timestamp, quota_anchor_at, NOW())
+           END,
            trial_consumed_at = COALESCE(trial_consumed_at, NOW()),
            paddle_environment = $9,
            last_paddle_event_at = CASE

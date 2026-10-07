@@ -4,13 +4,14 @@ import { pool } from '../db/client.js'
 import {
   getMonthStart,
   getUsageCount,
+  getUsageCountForPeriod,
   getUsageOverride,
 } from '../middleware/subscriptionCheck.js'
 import {
   getResumeQuotaUsageAvailabilitySnapshot,
   isResumeQuotaReservationsEnabled,
 } from '../services/resumeQuotaReservations.js'
-import { resolveResumeQuotaPeriod } from '../utils/resumeQuotaPeriod.js'
+import { resolveResumeQuotaPeriod, RESUME_QUOTA_PERIOD_SOURCES } from '../utils/resumeQuotaPeriod.js'
 import { canUsePaidMutation, hasScheduledCancellationAccess } from '../utils/subscriptionAccess.js'
 
 const router = Router()
@@ -35,6 +36,7 @@ export function buildResumeAnalysisUsageResponse({
   reserved = 0,
   nextRevalidationAt = periodEnd,
   canUseAnalysis = true,
+  periodKind = 'monthly',
 }) {
   const normalizedLimit = Number(limit || 0)
   const normalizedUsed = Number(used || 0)
@@ -52,6 +54,7 @@ export function buildResumeAnalysisUsageResponse({
     canCreateAnalysis: canUseAnalysis && available > 0,
     periodStart: periodStart.toISOString(),
     periodEnd: periodEnd.toISOString(),
+    periodKind,
     percentageUsed,
     warningLevel: resolveResumeAnalysisUsageWarningLevel(normalizedUsed, normalizedLimit),
     nextRevalidationAt: new Date(nextRevalidationAt).toISOString(),
@@ -61,7 +64,7 @@ export function buildResumeAnalysisUsageResponse({
 router.get('/resume-analysis', async (req, res) => {
   try {
     const userResult = await pool.query(
-      `SELECT id, subscription_status, subscription_plan, quota_anchor_at,
+      `SELECT id, subscription_status, subscription_plan, quota_anchor_at, subscription_started_at, trial_ends_at,
               cancellation_effective_at, current_period_end
        FROM users
        WHERE id = $1`,
@@ -81,11 +84,14 @@ router.get('/resume-analysis', async (req, res) => {
       : user.subscription_status
     const limit = resolveMonthlyResumeAnalysisLimit(quotaSubscriptionStatus, usageOverride, user.subscription_plan)
     const reservationsEnabled = isResumeQuotaReservationsEnabled()
-    const period = reservationsEnabled
-      ? resolveResumeQuotaPeriod({
+    const resolvedPeriod = resolveResumeQuotaPeriod({
         subscriptionStatus: quotaSubscriptionStatus,
         quotaAnchorAt: user.quota_anchor_at,
+        trialStartedAt: user.subscription_started_at,
+        trialEndsAt: user.trial_ends_at || user.current_period_end,
       })
+    const period = reservationsEnabled || resolvedPeriod.source === RESUME_QUOTA_PERIOD_SOURCES.TRIAL
+      ? resolvedPeriod
       : { start: legacyMonthStart, end: getMonthEnd(legacyMonthStart) }
     const availabilitySnapshot = reservationsEnabled
       ? await getResumeQuotaUsageAvailabilitySnapshot({
@@ -96,7 +102,9 @@ router.get('/resume-analysis', async (req, res) => {
       })
       : null
     const used = availabilitySnapshot?.used
-      ?? await getUsageCount(req.userId, legacyMonthStart, usageOverride?.reset_usage)
+      ?? (period.source === RESUME_QUOTA_PERIOD_SOURCES.TRIAL
+        ? await getUsageCountForPeriod(req.userId, period.start, period.end, usageOverride?.reset_usage)
+        : await getUsageCount(req.userId, legacyMonthStart, usageOverride?.reset_usage))
     const reserved = availabilitySnapshot?.reserved ?? 0
     const nextReservationChangeAt = availabilitySnapshot?.nextAvailabilityChangeAt ?? null
     const nextRevalidationAt = nextReservationChangeAt
@@ -109,6 +117,7 @@ router.get('/resume-analysis', async (req, res) => {
       used,
       periodStart: period.start,
       periodEnd: period.end,
+      periodKind: period.source === RESUME_QUOTA_PERIOD_SOURCES.TRIAL ? 'trial' : 'monthly',
       reserved,
       nextRevalidationAt,
       canUseAnalysis: canUsePaidMutation(user),

@@ -108,7 +108,7 @@ const HELP_ARTICLES = {
       desc: 'View your plan and manage renewal',
       content: [
         'Billing shows your current plan, status, renewal date, and next billing date.',
-        'An eligible 7-day trial allows 10 resume analyses, with the trial allowance resetting each calendar month.',
+        'An eligible 7-day trial allows 10 resume analyses in total across the trial. Your dashboard shows when the trial ends.',
         'After paid billing begins, Starter includes 100, Growth 300, and Pro 800 resume analyses per month; each tier has monthly and annual billing.',
         'To choose a different plan, cancel your current subscription. Access remains active until your paid period ends.',
         'After the paid period ends, return to Pricing to select a plan and complete a new checkout. Returning subscribers do not receive another trial.',

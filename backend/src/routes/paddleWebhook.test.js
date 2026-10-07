@@ -3110,7 +3110,7 @@ test('POST /api/paddle/webhook transaction.completed keeps setting user active',
   assert.equal(response.status, 200)
   assert.equal(calls.some(({ sql }) => /UPDATE users[\s\S]+subscription_status = 'active'/.test(sql)), true)
   const activeUpdate = calls.find(({ sql }) => /UPDATE users[\s\S]+subscription_status = 'active'/.test(sql))
-  assert.match(activeUpdate.sql, /quota_anchor_at = COALESCE/)
+  assert.match(activeUpdate.sql, /quota_anchor_at = CASE/)
   assert.equal(activeUpdate.params[7], '2026-07-24T00:00:00.000Z')
   const attemptUpdate = calls.find(({ sql }) => /UPDATE payment_attempts/.test(sql))
   assert.match(attemptUpdate.sql, /user_id = COALESCE\(user_id, \$3\)/)

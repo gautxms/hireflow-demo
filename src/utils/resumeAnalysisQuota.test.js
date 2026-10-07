@@ -94,6 +94,14 @@ test('quota rejection produces allowance guidance rather than a network failure'
   assert.doesNotMatch(message, /network/i)
 })
 
+test('trial quota guidance names the trial end instead of promising a reset', () => {
+  const message = formatResumeQuotaRejection({
+    limit: 10, used: 10, remaining: 0, periodEnd, periodKind: 'trial',
+  })
+  assert.match(message, /trial ends on 20 August 2026/)
+  assert.doesNotMatch(message, /resets/)
+})
+
 test('older and partial successful responses receive safe availability fallbacks', () => {
   const legacy = normalizeResumeAnalysisQuota({ limit: 800, used: 12, periodEnd })
   assert.equal(legacy.remaining, 788)

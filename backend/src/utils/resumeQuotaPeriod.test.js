@@ -66,15 +66,43 @@ test('resolveResumeQuotaPeriod keeps calendar-month fallback for legacy users mi
   assert.equal(period.end.toISOString(), '2026-08-01T00:00:00.000Z')
 })
 
-test('resolveResumeQuotaPeriod does not move trial users away from calendar-month accounting', () => {
+test('trial allowance spans the complete trial even across a calendar-month boundary', () => {
   const period = resolveResumeQuotaPeriod({
     subscriptionStatus: 'trialing',
-    quotaAnchorAt: '2026-01-20T08:30:00.000Z',
-    referenceDate: '2026-07-23T12:00:00.000Z',
+    trialStartedAt: '2026-10-29T08:30:00.000Z',
+    trialEndsAt: '2026-11-05T08:30:00.000Z',
+    referenceDate: '2026-11-02T12:00:00.000Z',
   })
 
-  assert.equal(period.source, RESUME_QUOTA_PERIOD_SOURCES.CALENDAR_FALLBACK)
-  assert.equal(period.fallbackReason, 'non_paid_status')
+  assert.equal(period.source, RESUME_QUOTA_PERIOD_SOURCES.TRIAL)
+  assert.equal(period.start.toISOString(), '2026-10-29T08:30:00.000Z')
+  assert.equal(period.end.toISOString(), '2026-11-05T08:30:00.000Z')
+})
+
+test('trial uses a stable seven-day boundary when the older account has only one trial date', () => {
+  const period = resolveResumeQuotaPeriod({
+    subscriptionStatus: 'trialing',
+    trialEndsAt: '2026-11-05T08:30:00.000Z',
+    referenceDate: '2026-11-02T12:00:00.000Z',
+  })
+  assert.equal(period.source, RESUME_QUOTA_PERIOD_SOURCES.TRIAL)
+  assert.equal(period.start.toISOString(), '2026-10-29T08:30:00.000Z')
+
+  const fallback = resolveResumeQuotaPeriod({ subscriptionStatus: 'trialing', referenceDate: '2026-11-02T12:00:00.000Z' })
+  assert.equal(fallback.source, RESUME_QUOTA_PERIOD_SOURCES.CALENDAR_FALLBACK)
+  assert.equal(fallback.fallbackReason, 'missing_trial_dates')
+})
+
+test('paid conversion starts a fresh monthly period at the paid anchor', () => {
+  const period = resolveResumeQuotaPeriod({
+    subscriptionStatus: 'active',
+    quotaAnchorAt: '2026-11-05T08:30:00.000Z',
+    trialStartedAt: '2026-10-29T08:30:00.000Z',
+    trialEndsAt: '2026-11-05T08:30:00.000Z',
+    referenceDate: '2026-11-06T12:00:00.000Z',
+  })
+  assert.equal(period.start.toISOString(), '2026-11-05T08:30:00.000Z')
+  assert.equal(period.end.toISOString(), '2026-12-05T08:30:00.000Z')
 })
 
 test('a known future annual boundary resolves the current monthly allowance window', () => {

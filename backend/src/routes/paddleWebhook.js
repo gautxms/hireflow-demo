@@ -1157,7 +1157,10 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment, storedEv
             `UPDATE users
              SET subscription_status = 'active',
                  subscription_started_at = COALESCE(subscription_started_at, NOW()),
-                 quota_anchor_at = COALESCE(quota_anchor_at, $8),
+                 quota_anchor_at = CASE
+                   WHEN subscription_status IN ('trialing', 'trial') THEN COALESCE($8::timestamp, NOW())
+                   ELSE COALESCE(quota_anchor_at, $8::timestamp)
+                 END,
                  trial_consumed_at = COALESCE(trial_consumed_at, NOW()),
                  paddle_subscription_id = COALESCE($2, paddle_subscription_id),
                  paddle_customer_id = COALESCE($3, paddle_customer_id),

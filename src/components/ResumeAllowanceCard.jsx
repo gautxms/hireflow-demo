@@ -10,6 +10,7 @@ export default function ResumeAllowanceCard({ status, quota }) {
 
   const tone = getResumeAllowanceTone(quota)
   const resetDate = formatResumeQuotaResetDate(quota.periodEnd)
+  const periodLabel = quota.periodKind === 'trial' ? 'Trial ends on' : 'Resets on'
   const progress = Math.max(0, Math.min(quota.percentageUsed, 100))
   const detail = tone === 'unavailable'
     ? 'An active subscription is required to analyze new resumes. Existing analyses and results remain available.'
@@ -30,8 +31,8 @@ export default function ResumeAllowanceCard({ status, quota }) {
       <div className="resume-allowance__track" role="progressbar" aria-label={`${quota.used} of ${quota.limit} resume analyses used; ${quota.available} currently available`} aria-valuemin="0" aria-valuemax={quota.limit} aria-valuenow={Math.min(quota.used, quota.limit)}>
         <span className="resume-allowance__fill" style={{ width: `${progress}%` }} />
       </div>
-      {resetDate ? <p className="resume-allowance__reset">Resets on {resetDate}</p> : null}
-      {detail ? <p className="resume-allowance__detail">{detail}{resetDate && tone === 'warning' ? ` Resets on ${resetDate}.` : ''}</p> : null}
+      {resetDate ? <p className="resume-allowance__reset">{periodLabel} {resetDate}</p> : null}
+      {detail ? <p className="resume-allowance__detail">{detail}{resetDate && tone === 'warning' ? ` ${periodLabel} ${resetDate}.` : ''}</p> : null}
     </article>
   )
 }

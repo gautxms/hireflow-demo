@@ -57,6 +57,7 @@ test('buildResumeAnalysisUsageResponse exposes UI-ready quota fields', () => {
     canCreateAnalysis: true,
     periodStart: '2026-05-01T00:00:00.000Z',
     periodEnd: '2026-06-01T00:00:00.000Z',
+    periodKind: 'monthly',
     percentageUsed: 75,
     warningLevel: 'approaching',
     nextRevalidationAt: '2026-06-01T00:00:00.000Z',
@@ -143,6 +144,38 @@ test('GET /usage/resume-analysis reflects admin limit and reset overrides', asyn
   assert.equal(payload.remaining, 25)
   assert.equal(payload.warningLevel, 'none')
   assert.equal(queries.some((sql) => sql.includes('FROM usage_log')), false)
+})
+
+test('trial usage exposes the trial end date and counts one allowance across month end', async (t) => {
+  process.env.JWT_SECRET = 'test-secret'
+  const previousFlag = process.env.RESUME_QUOTA_RESERVATIONS_ENABLED
+  process.env.RESUME_QUOTA_RESERVATIONS_ENABLED = 'false'
+  const queries = []
+  try {
+    t.mock.method(pool, 'query', async (sql, params) => {
+      queries.push({ sql, params })
+      if (sql.includes('FROM users')) return { rows: [{
+        id: 18,
+        subscription_status: 'trialing',
+        subscription_started_at: '2026-10-29T08:30:00.000Z',
+        trial_ends_at: '2026-11-05T08:30:00.000Z',
+      }] }
+      if (sql.includes('FROM usage_overrides')) return { rows: [] }
+      if (sql.includes('FROM usage_log')) return { rows: [{ usage_count: 7 }] }
+      return { rows: [] }
+    })
+    const { response, payload } = await requestUsage({ headers: authHeader(18) })
+    assert.equal(response.status, 200)
+    assert.equal(payload.limit, 10)
+    assert.equal(payload.used, 7)
+    assert.equal(payload.periodStart, '2026-10-29T08:30:00.000Z')
+    assert.equal(payload.periodEnd, '2026-11-05T08:30:00.000Z')
+    assert.equal(payload.periodKind, 'trial')
+    assert.ok(queries.some(({ sql, params }) => sql.includes('FROM usage_log') && params?.[1]?.toISOString() === payload.periodStart))
+  } finally {
+    if (previousFlag === undefined) delete process.env.RESUME_QUOTA_RESERVATIONS_ENABLED
+    else process.env.RESUME_QUOTA_RESERVATIONS_ENABLED = previousFlag
+  }
 })
 
 test('GET /usage/resume-analysis preserves the fallback limit but blocks inactive subscription access', async (t) => {
