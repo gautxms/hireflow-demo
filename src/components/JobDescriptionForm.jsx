@@ -1,4 +1,4 @@
-import { Upload, X } from 'lucide-react'
+import { ChevronDown, Upload, X } from 'lucide-react'
 import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import API_BASE from '../config/api'
 import { fetchWithAccountAccessRefresh } from '../utils/accountAccessRefresh'
@@ -63,7 +63,9 @@ export default function JobDescriptionForm({ initialValue, resetToken, onSubmit,
   const [attachmentError, setAttachmentError] = useState('')
   const [importMessage, setImportMessage] = useState('')
   const [isExtracting, setIsExtracting] = useState(false)
+  const [descriptionExpanded, setDescriptionExpanded] = useState(true)
   const fileInputId = useId()
+  const descriptionId = useId()
   const fileInputRef = useRef(null)
   const previewControllerRef = useRef(null)
   const previewSequenceRef = useRef(0)
@@ -83,6 +85,7 @@ export default function JobDescriptionForm({ initialValue, resetToken, onSubmit,
     setImportMessage('')
     setIsExtracting(false)
     setJdFile(null)
+    setDescriptionExpanded(!initialValue?.fileUrl)
     return () => {
       previewControllerRef.current?.abort()
       previewSequenceRef.current += 1
@@ -177,12 +180,13 @@ export default function JobDescriptionForm({ initialValue, resetToken, onSubmit,
         return merged.values
       })
       setErrors({})
+      setDescriptionExpanded(false)
       const warnings = Array.isArray(payload.warnings) ? payload.warnings : []
       const followUp = [
         warnings.includes('JOB_TITLE_NOT_FOUND') ? 'Add a job title.' : '',
         warnings.includes('EXPERIENCE_RANGE_UNCLEAR') ? 'Check the experience range.' : '',
       ].filter(Boolean).join(' ')
-      setImportMessage(`Job fields filled from the document. Review them before creating the job. ${followUp}`.trim())
+      setImportMessage(`Fields added. Review before creating. ${followUp}`.trim())
     } catch (error) {
       if (controller.signal.aborted || requestId !== previewSequenceRef.current) return
       setAttachmentError(`${error.message || 'Could not fill job fields.'} The file remains selected; you can enter details manually.`)
@@ -252,12 +256,11 @@ export default function JobDescriptionForm({ initialValue, resetToken, onSubmit,
 
   const attachmentSection = (
     <section className="job-form__section" aria-busy={isExtracting}>
-      <h3>{initialValue ? 'Attachment' : 'Upload a job description'}</h3>
-      {!initialValue ? <p className="job-form__help job-form__upload-intro">Upload a PDF or DOCX to fill the job fields, then review them before creating the job.</p> : null}
+      <h3>{initialValue ? 'Attachment' : 'Start with a job description'}</h3>
       <input ref={fileInputRef} id={fileInputId} className="job-form__file-input" type="file" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onChange={handleFileSelected} disabled={readOnly || isSubmitting} tabIndex={-1} />
       <div className="job-form__file-row">
-        {!readOnly ? <button type="button" className="hf-btn hf-btn--secondary" onClick={() => fileInputRef.current?.click()} disabled={isSubmitting}><Upload size={16} strokeWidth={1.5} aria-hidden="true" /> {jdFile ? 'Replace PDF/DOCX' : 'Upload PDF/DOCX'}</button> : null}
-        <span className="job-form__file-name">{jdFile ? jdFile.name : (hasExistingAttachment ? 'Current attachment available' : 'No file selected')}</span>
+        {!readOnly ? <button type="button" className="hf-btn hf-btn--secondary" onClick={() => fileInputRef.current?.click()} disabled={isSubmitting || isExtracting}><Upload size={16} strokeWidth={1.5} aria-hidden="true" /> {jdFile ? 'Replace file' : 'Upload PDF or DOCX'}</button> : null}
+        <span className="job-form__file-name">{jdFile ? jdFile.name : (hasExistingAttachment ? 'Attachment available' : '20 MB max')}</span>
         {hasExistingAttachment ? <button
           type="button"
           className="hf-btn hf-btn--secondary"
@@ -269,7 +272,6 @@ export default function JobDescriptionForm({ initialValue, resetToken, onSubmit,
         </button> : null}
         {!readOnly && jdFile ? <button type="button" className="job-form__file-clear" aria-label="Clear selected JD file" onClick={clearSelectedFile} disabled={isSubmitting}><X size={14} strokeWidth={1.5} aria-hidden="true" /></button> : null}
       </div>
-      <p className="job-form__help">Accepted formats: PDF or DOCX. Maximum size: 20MB.</p>
       {isExtracting ? <p className="job-form__import-status" role="status">Reading the document and filling job fields…</p> : null}
       {importMessage ? <p className="job-form__import-success" role="status">{importMessage}</p> : null}
       {attachmentError ? <p className="job-form__error" role="alert">{attachmentError}</p> : null}
@@ -281,7 +283,7 @@ export default function JobDescriptionForm({ initialValue, resetToken, onSubmit,
       <div className="job-form__scrollable">
         {!initialValue ? attachmentSection : null}
         <section className="job-form__section">
-          <h3>Core details</h3>
+          <h3>Job details</h3>
           <div className="job-form__grid job-form__grid--two">
             <label className="job-form__field" htmlFor="job-title"><span>Job title <em>*</em></span><input id="job-title" required className="job-form__control" placeholder="Senior Backend Engineer" value={formState.title} onChange={handleChange('title')} aria-invalid={Boolean(errors.title)} disabled={readOnly} /></label>
             <label className="job-form__field" htmlFor="job-status"><span>Status <em>*</em></span><select id="job-status" className="job-form__control" value={formState.status} onChange={handleChange('status')} disabled={readOnly}><option value="draft">Draft</option><option value="active">Active</option><option value="archived">Archived</option></select></label>
@@ -294,13 +296,21 @@ export default function JobDescriptionForm({ initialValue, resetToken, onSubmit,
         </section>
 
         <section className="job-form__section">
-          <h3>Content</h3>
+          <h3>Role content</h3>
           <div className="job-form__grid job-form__grid--two">
-            <label className="job-form__field job-form__field--full" htmlFor="job-description"><span>Full job description</span><textarea id="job-description" className="job-form__control job-form__control--textarea" placeholder="Describe responsibilities, goals, and outcomes for this role." rows={5} value={formState.description} onChange={handleChange('description')} disabled={readOnly} /></label>
-            <label className="job-form__field" htmlFor="job-responsibilities"><span>Key responsibilities</span><textarea id="job-responsibilities" className="job-form__control job-form__control--textarea" placeholder="List the day-to-day ownership areas." rows={4} value={formState.responsibilities} onChange={handleChange('responsibilities')} disabled={readOnly} /></label>
-            <label className="job-form__field" htmlFor="job-requirements"><span>Qualifications</span><textarea id="job-requirements" className="job-form__control job-form__control--textarea" placeholder="Required qualifications and domain experience." rows={4} value={formState.requirements} onChange={handleChange('requirements')} disabled={readOnly} /></label>
+            <label className="job-form__field job-form__field--full" htmlFor="job-responsibilities"><span>Key responsibilities</span><textarea id="job-responsibilities" className="job-form__control job-form__control--textarea" placeholder="What will this person own?" rows={4} value={formState.responsibilities} onChange={handleChange('responsibilities')} disabled={readOnly} /></label>
+            <label className="job-form__field job-form__field--full" htmlFor="job-requirements"><span>Qualifications</span><textarea id="job-requirements" className="job-form__control job-form__control--textarea" placeholder="What experience is needed?" rows={4} value={formState.requirements} onChange={handleChange('requirements')} disabled={readOnly} /></label>
             <label className="job-form__field" htmlFor="job-skills"><span>Skills</span><input id="job-skills" className="job-form__control" placeholder="Node.js, PostgreSQL, AWS" value={formState.skills} onChange={handleChange('skills')} disabled={readOnly} /></label>
             <label className="job-form__field" htmlFor="job-additional-info"><span>Additional info</span><input id="job-additional-info" className="job-form__control" placeholder="Team setup, interview loop, visa support, etc." value={formState.additionalInfo} onChange={handleChange('additionalInfo')} disabled={readOnly} /></label>
+          </div>
+        </section>
+
+        <section className="job-form__section job-form__description-section">
+          <button type="button" className="job-form__section-toggle" aria-expanded={descriptionExpanded} aria-controls={descriptionId} onClick={() => setDescriptionExpanded((value) => !value)}>
+            <span>Full job description</span><ChevronDown size={18} strokeWidth={1.5} aria-hidden="true" />
+          </button>
+          <div id={descriptionId} hidden={!descriptionExpanded}>
+            <label className="job-form__field" htmlFor="job-description"><span>Document text</span><textarea id="job-description" className="job-form__control job-form__control--textarea" placeholder="Describe the role, goals, and outcomes." rows={5} value={formState.description} onChange={handleChange('description')} disabled={readOnly} /></label>
           </div>
         </section>
 
