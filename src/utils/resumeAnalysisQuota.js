@@ -27,6 +27,7 @@ export function normalizeResumeAnalysisQuota(payload) {
     percentageUsed,
     periodStart: typeof payload.periodStart === 'string' ? payload.periodStart : null,
     periodEnd: typeof payload.periodEnd === 'string' ? payload.periodEnd : null,
+    periodKind: payload.periodKind === 'trial' ? 'trial' : 'monthly',
     warningLevel: typeof payload.warningLevel === 'string' ? payload.warningLevel : null,
     nextRevalidationAt: typeof payload.nextRevalidationAt === 'string'
       ? payload.nextRevalidationAt
@@ -80,7 +81,7 @@ export function formatResumeQuotaRejection(payload, fallbackQuota = null) {
   const capacity = available === null || available === undefined
     ? 'This batch exceeds your resume allowance.'
     : `This batch exceeds your resume allowance. You can currently submit ${available} resume${available === 1 ? '' : 's'}.`
-  return `${capacity}${resetDate ? ` Your allowance resets on ${resetDate}.` : ''}`
+  return `${capacity}${resetDate ? (quota?.periodKind === 'trial' ? ` Your trial ends on ${resetDate}.` : ` Your allowance resets on ${resetDate}.`) : ''}`
 }
 
 export function getBatchQuotaGuidance(quota, selectedCount) {

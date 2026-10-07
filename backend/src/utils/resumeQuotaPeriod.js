@@ -1,5 +1,7 @@
 const BILLING_ANCHOR_SOURCE = 'billing_anchor'
 const CALENDAR_FALLBACK_SOURCE = 'calendar_month_fallback'
+const TRIAL_SOURCE = 'trial'
+const TRIAL_DURATION_MS = 7 * 24 * 60 * 60 * 1000
 
 function toValidDate(value) {
   if (!value) return null
@@ -48,11 +50,23 @@ export function getCalendarMonthQuotaPeriod(referenceDate = new Date()) {
 export function resolveResumeQuotaPeriod({
   subscriptionStatus,
   quotaAnchorAt,
+  trialStartedAt,
+  trialEndsAt,
   referenceDate = new Date(),
 } = {}) {
   const reference = toValidDate(referenceDate) || new Date()
   const fallback = getCalendarMonthQuotaPeriod(reference)
   const normalizedStatus = String(subscriptionStatus || '').trim().toLowerCase()
+
+  if (normalizedStatus === 'trialing' || normalizedStatus === 'trial') {
+    const end = toValidDate(trialEndsAt)
+    const start = toValidDate(trialStartedAt) || (end ? new Date(end.getTime() - TRIAL_DURATION_MS) : null)
+    const resolvedEnd = end || (start ? new Date(start.getTime() + TRIAL_DURATION_MS) : null)
+    if (start && resolvedEnd && start < resolvedEnd) {
+      return { start, end: resolvedEnd, source: TRIAL_SOURCE, anchor: start }
+    }
+    return { ...fallback, fallbackReason: 'missing_trial_dates' }
+  }
 
   if (normalizedStatus !== 'active') {
     return { ...fallback, fallbackReason: 'non_paid_status' }
@@ -104,4 +118,5 @@ export function isResumeQuotaBillingPeriodShadowEnabled(env = process.env) {
 export const RESUME_QUOTA_PERIOD_SOURCES = Object.freeze({
   BILLING_ANCHOR: BILLING_ANCHOR_SOURCE,
   CALENDAR_FALLBACK: CALENDAR_FALLBACK_SOURCE,
+  TRIAL: TRIAL_SOURCE,
 })

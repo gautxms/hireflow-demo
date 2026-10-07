@@ -96,6 +96,44 @@ async function state(db, userId) {
   return { user, projection }
 }
 
+test('trial conversion starts the paid monthly allowance at the paid billing period', {
+  skip: !connectionString,
+}, async (t) => {
+  const db = await createDatabase()
+  t.after(async () => db.end())
+  const inserted = await db.query(
+    `INSERT INTO users (
+       email, paddle_customer_id, paddle_subscription_id, paddle_environment,
+       subscription_status, subscription_plan, subscription_started_at,
+       trial_ends_at, trial_consumed_at, quota_anchor_at, current_period_end,
+       last_paddle_event_at
+     ) VALUES (
+       'conversion@example.test', 'ctm_lifecycle', 'sub_lifecycle', 'sandbox',
+       'trialing', 'starter_monthly', '2026-08-01T00:00:00.000Z',
+       '2026-08-08T00:00:00.000Z', '2026-08-01T00:00:00.000Z',
+       '2026-08-01T00:00:00.000Z', '2026-08-08T00:00:00.000Z',
+       '2026-08-01T00:00:00.000Z'
+     ) RETURNING *`,
+  )
+  const payload = lifecyclePayload({
+    eventType: 'subscription.updated', status: 'active', occurredAt: '2026-08-08T00:00:01.000Z',
+  })
+  payload.data.current_billing_period.starts_at = '2026-08-08T00:00:00.000Z'
+  payload.data.current_billing_period.ends_at = '2026-09-08T00:00:00.000Z'
+  payload.data.next_billed_at = '2026-09-08T00:00:00.000Z'
+
+  const result = await applyPaddleSubscriptionLifecycle({
+    db, user: inserted.rows[0], subscriptionId: 'sub_lifecycle', customerId: 'ctm_lifecycle',
+    environment: 'sandbox', eventType: 'subscription.updated', status: 'active',
+    plan: 'starter_monthly', providerEventAt: payload.occurred_at, payload,
+  })
+
+  assert.equal(result.applied, true)
+  const updated = (await db.query('SELECT subscription_status, quota_anchor_at FROM users WHERE id = $1', [inserted.rows[0].id])).rows[0]
+  assert.equal(updated.subscription_status, 'active')
+  assert.equal(updated.quota_anchor_at.toISOString(), '2026-08-08T00:00:00.000Z')
+})
+
 test('PostgreSQL lifecycle projection is ordered, ownership-safe, and atomic', {
   skip: !connectionString,
 }, async (t) => {

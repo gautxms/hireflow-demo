@@ -114,6 +114,8 @@ export async function observeBillingPeriodQuota({
   const proposedPeriod = resolveResumeQuotaPeriod({
     subscriptionStatus: subscriptionContext?.status,
     quotaAnchorAt: subscriptionContext?.quotaAnchorAt,
+    trialStartedAt: subscriptionContext?.trialStartedAt,
+    trialEndsAt: subscriptionContext?.trialEndsAt,
     referenceDate,
   })
 
@@ -181,7 +183,7 @@ export async function observeBillingPeriodQuota({
 export async function requireActiveSubscription(req, res, next) {
   try {
     const userResult = await pool.query(
-      `SELECT id, subscription_status, subscription_plan, quota_anchor_at,
+      `SELECT id, subscription_status, subscription_plan, quota_anchor_at, subscription_started_at, trial_ends_at,
               cancellation_effective_at, current_period_end
        FROM users
        WHERE id = $1`,
@@ -215,6 +217,8 @@ export async function requireActiveSubscription(req, res, next) {
       status: req.subscriptionStatusForQuota,
       plan: user.subscription_plan || null,
       quotaAnchorAt: user.quota_anchor_at || null,
+      trialStartedAt: user.subscription_started_at || null,
+      trialEndsAt: user.trial_ends_at || user.current_period_end || null,
     }
     return next()
   } catch (error) {
@@ -237,11 +241,14 @@ export async function enforceUploadLimit(req, res, next) {
     const quotaSubscriptionStatus = req.subscriptionStatusForQuota || req.subscriptionStatus
     const uploadLimit = resolveMonthlyResumeAnalysisLimit(quotaSubscriptionStatus, usageOverride, req.subscriptionQuotaContext?.plan)
     const reservationsEnabled = isResumeQuotaReservationsEnabled()
-    const enforcementPeriod = reservationsEnabled
-      ? resolveResumeQuotaPeriod({
+    const resolvedPeriod = resolveResumeQuotaPeriod({
         subscriptionStatus: req.subscriptionQuotaContext?.status || quotaSubscriptionStatus,
         quotaAnchorAt: req.subscriptionQuotaContext?.quotaAnchorAt || null,
+        trialStartedAt: req.subscriptionQuotaContext?.trialStartedAt || null,
+        trialEndsAt: req.subscriptionQuotaContext?.trialEndsAt || null,
       })
+    const enforcementPeriod = reservationsEnabled || resolvedPeriod.source === RESUME_QUOTA_PERIOD_SOURCES.TRIAL
+      ? resolvedPeriod
       : {
         start: legacyMonthStart,
         end: legacyMonthEnd,
@@ -256,7 +263,7 @@ export async function enforceUploadLimit(req, res, next) {
       legacyMonthStart,
       usageOverride?.reset_usage,
     )
-    const currentUsage = reservationsEnabled
+    const currentUsage = reservationsEnabled || enforcementPeriod.source === RESUME_QUOTA_PERIOD_SOURCES.TRIAL
       ? await getUsageCountForPeriod(
         req.userId,
         periodStart,
@@ -300,6 +307,7 @@ export async function enforceUploadLimit(req, res, next) {
         requested: requestedUploads,
         remaining: remainingUploads,
         periodEnd: periodEnd.toISOString(),
+        periodKind: enforcementPeriod.source === RESUME_QUOTA_PERIOD_SOURCES.TRIAL ? 'trial' : 'monthly',
       })
     }
 
@@ -367,6 +375,7 @@ export async function enforceUploadLimit(req, res, next) {
         requested: error.details.requested,
         remaining: error.details.remaining,
         ...(quotaPeriodEnd ? { periodEnd: quotaPeriodEnd.toISOString() } : {}),
+        ...(req.subscriptionQuotaContext?.status === 'trialing' ? { periodKind: 'trial' } : {}),
       })
     }
     console.error('[Subscription] Failed to enforce upload usage limit:', error)

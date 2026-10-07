@@ -62,6 +62,8 @@ test('requireActiveSubscription allows active subscribers', async () => {
       status: 'active',
       plan: 'annual',
       quotaAnchorAt: '2026-01-20T08:30:00.000Z',
+      trialStartedAt: null,
+      trialEndsAt: null,
     })
   } finally {
     pool.query = originalQuery
@@ -468,6 +470,53 @@ test('enforceUploadLimit keeps trialing users on the trial resume allowance', as
     assert.equal(res.body.used, TRIAL_MONTHLY_RESUME_ANALYSIS_LIMIT)
   } finally {
     pool.query = originalQuery
+  }
+})
+
+test('trial analysis limit remains exhausted after a calendar-month boundary', async () => {
+  const originalQuery = pool.query
+  const previousFlag = process.env.RESUME_QUOTA_RESERVATIONS_ENABLED
+  process.env.RESUME_QUOTA_RESERVATIONS_ENABLED = 'false'
+  const periods = []
+  pool.query = async (sql, params) => {
+    if (sql.includes('FROM usage_overrides')) return { rows: [] }
+    if (sql.includes('FROM usage_log')) {
+      if (sql.includes('JOIN resume_quota_reservations')) {
+        periods.push(params)
+        return { rows: [{ usage_count: 10 }] }
+      }
+      return { rows: [{ usage_count: 0 }] }
+    }
+    throw new Error(`Unexpected query: ${sql}`)
+  }
+  try {
+    const req = {
+      userId: 1,
+      subscriptionStatus: 'trialing',
+      subscriptionStatusForQuota: 'trialing',
+      subscriptionQuotaContext: {
+        status: 'trialing',
+        trialStartedAt: '2026-10-29T08:30:00.000Z',
+        trialEndsAt: '2026-11-05T08:30:00.000Z',
+      },
+      ip: '127.0.0.1',
+      headers: {},
+      files: [{ originalname: 'resume.pdf' }],
+    }
+    const res = createRes()
+    let nextCalled = false
+    await enforceUploadLimit(req, res, () => { nextCalled = true })
+    assert.equal(nextCalled, false)
+    assert.equal(res.statusCode, 429)
+    assert.equal(res.body.periodKind, 'trial')
+    assert.equal(res.body.used, 10)
+    assert.equal(res.body.periodEnd, '2026-11-05T08:30:00.000Z')
+    assert.equal(periods[0][1].toISOString(), '2026-10-29T08:30:00.000Z')
+    assert.equal(periods[0][2].toISOString(), '2026-11-05T08:30:00.000Z')
+  } finally {
+    pool.query = originalQuery
+    if (previousFlag === undefined) delete process.env.RESUME_QUOTA_RESERVATIONS_ENABLED
+    else process.env.RESUME_QUOTA_RESERVATIONS_ENABLED = previousFlag
   }
 })
 

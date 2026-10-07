@@ -93,6 +93,8 @@ export async function applyPaddleSubscriptionLifecycle({
              ELSE account.subscription_started_at
            END,
            quota_anchor_at = CASE
+             WHEN $3 = 'active' AND account.subscription_status IN ('trialing', 'trial')
+               THEN COALESCE($10::timestamp, NOW())
              WHEN $3 = 'active' THEN COALESCE(account.quota_anchor_at, $10::timestamp)
              ELSE account.quota_anchor_at
            END,
