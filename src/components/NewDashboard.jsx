@@ -474,7 +474,7 @@ export default function NewDashboard() {
             iconName: 'users',
           },
           { label: 'Completion Rate', value: formatPercent(kpis.completionRate), iconName: 'target' },
-          { label: 'Average Score', value: formatScore(kpis.avgScore), iconName: 'chart' },
+          { label: 'Average Match Score', value: formatScore(kpis.avgScore), iconName: 'chart' },
           { label: 'Shortlisted Rate', value: formatPercent(kpis.shortlistedRate), iconName: 'users' },
         ].map(({ label, value, iconName, inlineMeta }) => (
           <article key={label} className="new-dashboard__kpi-card kpi-card">
@@ -530,21 +530,21 @@ export default function NewDashboard() {
         </article>
 
         <article className="new-dashboard__trend-card" role="region" aria-labelledby="dashboard-average-score-trend-title">
-          <h3 id="dashboard-average-score-trend-title" className="new-dashboard__trend-title"><Icon name="target" size="sm" tone="muted" className="new-dashboard__trend-title-icon" />Average score trend</h3>
-          <div className="new-dashboard__trend-summary" aria-label="Average score trend summary">
-            <span><strong>{formatScore(scoreSummary.average)}</strong>Average score</span>
+          <h3 id="dashboard-average-score-trend-title" className="new-dashboard__trend-title"><Icon name="target" size="sm" tone="muted" className="new-dashboard__trend-title-icon" />Average match score trend</h3>
+          <div className="new-dashboard__trend-summary" aria-label="Average match score trend summary">
+            <span><strong>{formatScore(scoreSummary.average)}</strong>Average match score</span>
             <span><strong>{formatScore(scoreSummary.highest?.value)}</strong>High · {scoreSummary.highest?.label || '—'}</span>
             <span><strong>{formatCompactNumber(scoreSummary.totalScoredCount)}</strong>Scored</span>
           </div>
           {loading ? <p className="new-dashboard__muted">Loading trend data…</p> : null}
           {hasFetchError ? <p className="new-dashboard__empty-state">Trend unavailable due to API error.</p> : null}
-          {isScoreEmpty && !loading && !hasFetchError ? <p className="new-dashboard__empty-state">No completed score data is available for the selected filters.</p> : null}
+          {isScoreEmpty && !loading && !hasFetchError ? <p className="new-dashboard__empty-state">No completed job match scores are available for the selected filters.</p> : null}
           {showScoreChart && (
             <div className="new-dashboard__chart-shell">
               <div className="new-dashboard__y-axis" aria-hidden="true">
                 {scoreTicks.map((tick) => <span key={`score-tick-${tick}`}>{formatScore(tick)}</span>)}
               </div>
-              <div className="new-dashboard__chart new-dashboard__chart--line" aria-label="Average score trend line chart with score axis and date ticks">
+              <div className="new-dashboard__chart new-dashboard__chart--line" aria-label="Average match score trend line chart with score axis and date ticks">
                 <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="new-dashboard__line-svg" aria-hidden="true">
                   {buildLineSegments(averageScorePoints).map((segment) => (
                     <polyline

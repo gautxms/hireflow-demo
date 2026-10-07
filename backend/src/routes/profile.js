@@ -11,6 +11,44 @@ const KPI_SCHEMA_VERSION = '2026-05-08.v2'
 const MAX_DASHBOARD_RANGE_DAYS = 180
 const DEFAULT_DASHBOARD_RANGE_DAYS = 30
 
+// Read the score saved for this analysis item. Candidate profiles and
+// resumes.profile_score can describe a different job or the resume alone.
+const dashboardCandidateSql = `COALESCE(
+  pj.result #> '{candidates,0}',
+  pj.result #> '{results,0}',
+  pj.result #> '{output,0}',
+  pj.result #> '{output,candidates,0}',
+  pj.result #> '{results,candidates,0}'
+)`
+
+function dashboardNumericScoreSql(expression) {
+  return `CASE WHEN BTRIM(${expression}) ~ '^-?[0-9]+([.][0-9]+)?$'
+    THEN LEAST(100, GREATEST(0, (${expression})::numeric))
+    ELSE NULL END`
+}
+
+export function dashboardMatchScoreRowsSql(windowName) {
+  if (!['analysis_window', 'filtered_analysis_items'].includes(windowName)) {
+    throw new Error('Unsupported dashboard analysis window')
+  }
+
+  return `SELECT scored.resume_id, scored.created_at, scored.score
+    FROM (
+      SELECT aw.resume_id, aw.created_at,
+             COALESCE(
+               ${dashboardNumericScoreSql("candidate.result #>> '{matchScore,score}'")},
+               ${dashboardNumericScoreSql("candidate.result ->> 'score'")}
+             ) AS score
+      FROM ${windowName} aw
+      INNER JOIN parse_jobs pj ON pj.job_id = aw.parse_job_id AND pj.user_id = $1
+      CROSS JOIN LATERAL (SELECT ${dashboardCandidateSql} AS result) candidate
+      WHERE aw.status = 'complete'
+        AND aw.job_description_id IS NOT NULL
+        AND pj.status = 'complete'
+    ) scored
+    WHERE scored.score IS NOT NULL`
+}
+
 const DASHBOARD_ERROR_CODE = {
   INVALID_RANGE: 'DASHBOARD_INVALID_RANGE',
   DB_QUERY_FAILED: 'DASHBOARD_QUERY_FAILED',
@@ -169,7 +207,7 @@ router.get('/dashboard/kpis', async (req, res) => {
       runSegmentQuery(
         'summary',
         `WITH analysis_window AS (
-           SELECT a.id, a.status, ai.resume_id
+           SELECT a.id, a.status, a.created_at, a.job_description_id, ai.resume_id, ai.parse_job_id
            FROM analyses a
            INNER JOIN analysis_items ai ON ai.analysis_id = a.id
            WHERE a.user_id = $1
@@ -177,27 +215,8 @@ router.get('/dashboard/kpis', async (req, res) => {
              AND a.created_at < $3::timestamptz
              AND ($4::text IS NULL OR a.job_description_id::text = $4::text)
          ),
-         completed_scored_resume_window AS (
-           SELECT DISTINCT r.id, r.profile_score
-           FROM resumes r
-           INNER JOIN analysis_window aw ON aw.resume_id = r.id
-           WHERE r.user_id = $1
-             AND aw.status = 'complete'
-             AND r.created_at >= $2::timestamptz
-             AND r.created_at < $3::timestamptz
-             AND r.profile_score IS NOT NULL
-         ),
-         resume_window AS (
-           SELECT DISTINCT r.id, r.profile_score
-           FROM resumes r
-           WHERE r.user_id = $1
-             AND r.created_at >= $2::timestamptz
-             AND r.created_at < $3::timestamptz
-             AND EXISTS (
-               SELECT 1
-               FROM analysis_window aw
-               WHERE aw.resume_id = r.id
-             )
+         completed_scored_item_window AS (
+           ${dashboardMatchScoreRowsSql('analysis_window')}
          ),
          shortlist_window AS (
            SELECT DISTINCT sc.resume_id
@@ -212,8 +231,8 @@ router.get('/dashboard/kpis', async (req, res) => {
            (SELECT COUNT(DISTINCT id)::int FROM analysis_window) AS analyses_run_count,
            (SELECT COUNT(DISTINCT id)::int FROM analysis_window WHERE status = 'complete') AS analyses_completed_count,
            (SELECT COUNT(DISTINCT id)::int FROM analysis_window WHERE status IN ('failed', 'partial')) AS analyses_failed_count,
-           (SELECT ROUND(AVG(profile_score)::numeric, 2) FROM completed_scored_resume_window) AS avg_score,
-           (SELECT COUNT(*)::int FROM completed_scored_resume_window) AS scored_count,
+           (SELECT ROUND(AVG(score)::numeric, 2) FROM completed_scored_item_window) AS avg_score,
+           (SELECT COUNT(*)::int FROM completed_scored_item_window) AS scored_count,
            -- Count analysis_items rows as resume analysis units so existing multi-resume analyses contribute one unit per resume.
            -- Older analyses without analysis_items cannot be safely attributed to resume units and remain excluded.
            (SELECT COUNT(*)::int FROM analysis_window) AS resumes_count,
@@ -230,6 +249,8 @@ router.get('/dashboard/kpis', async (req, res) => {
              a.id AS analysis_id,
              a.status,
              a.created_at,
+             a.job_description_id,
+             ai.parse_job_id,
              ai.resume_id
            FROM analyses a
            INNER JOIN analysis_items ai ON ai.analysis_id = a.id
@@ -253,24 +274,14 @@ router.get('/dashboard/kpis', async (req, res) => {
            ) analyses_for_counts
            GROUP BY 1
          ),
-         scored_resumes AS (
-           SELECT DISTINCT
-             fai.resume_id,
-             r.created_at,
-             r.profile_score
-           FROM filtered_analysis_items fai
-           INNER JOIN resumes r ON r.id = fai.resume_id
-           WHERE r.user_id = $1
-             AND fai.status = 'complete'
-             AND r.created_at >= $2::timestamptz
-             AND r.created_at < $3::timestamptz
-             AND r.profile_score IS NOT NULL
+         completed_scored_item_window AS (
+           ${dashboardMatchScoreRowsSql('filtered_analysis_items')}
          ),
          scores_by_day AS (
            SELECT date_trunc('day', created_at)::date AS day,
-                  SUM(profile_score)::numeric AS score_sum,
+                  SUM(score)::numeric AS score_sum,
                   COUNT(*)::int AS score_count
-           FROM scored_resumes
+           FROM completed_scored_item_window
            GROUP BY 1
          ),
          shortlists_by_day AS (

@@ -5,10 +5,11 @@ import { readFileSync } from 'node:fs'
 const profileRouteSource = readFileSync(new URL('./profile.js', import.meta.url), 'utf8')
 
 test('dashboard score averages only include completed analyses with valid scores', () => {
-  assert.match(profileRouteSource, /completed_scored_resume_window AS \(/)
-  assert.match(profileRouteSource, /aw\.status = 'complete'/)
-  assert.match(profileRouteSource, /fai\.status = 'complete'/)
-  assert.match(profileRouteSource, /r\.profile_score IS NOT NULL/)
+  assert.match(profileRouteSource, /dashboardMatchScoreRowsSql\('analysis_window'\)/)
+  assert.match(profileRouteSource, /dashboardMatchScoreRowsSql\('filtered_analysis_items'\)/)
+  assert.match(profileRouteSource, /INNER JOIN parse_jobs pj ON pj\.job_id = aw\.parse_job_id AND pj\.user_id = \$1/)
+  assert.match(profileRouteSource, /aw\.job_description_id IS NOT NULL/)
+  assert.doesNotMatch(profileRouteSource, /AVG\(profile_score\)/)
 })
 
 test('dashboard score trend preserves missing score buckets as null instead of zero', () => {
