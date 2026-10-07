@@ -371,7 +371,7 @@ export default function Checkout({ onAuthSuccess }) {
           Paddle.Environment.set('sandbox')
         }
 
-        // Step 4: Prepare Paddle with the client token and user email.
+        // Step 4: Initialize Paddle with the client token and checkout event callback.
         const effectiveClientToken = checkoutClientToken || fallbackClientToken
         if (!effectiveClientToken || !userEmail) {
           console.error('[Checkout] Missing required Paddle initialization data:', {
@@ -482,11 +482,10 @@ export default function Checkout({ onAuthSuccess }) {
         }
 
         if (Paddle.Initialized) {
-          Paddle.Update({ pwCustomer: { email: userEmail }, eventCallback: handlePaddleEvent })
+          Paddle.Update({ eventCallback: handlePaddleEvent })
         } else {
           Paddle.Initialize({
             token: effectiveClientToken,
-            pwCustomer: { email: userEmail },
             eventCallback: handlePaddleEvent,
           })
         }
