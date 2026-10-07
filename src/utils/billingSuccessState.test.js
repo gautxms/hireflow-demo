@@ -46,10 +46,20 @@ test('in-app checkout completion keeps its trusted navigation state', () => {
   assert.equal(result.message, 'Welcome')
 })
 
+test('signed-in customer can retry an existing checkout after closing its original tab', () => {
+  const result = resolveBillingSuccessState({
+    search: '?transaction=txn_completed123&plan=starter_annual',
+    storage: storageWith(),
+  })
+
+  assert.equal(result.transactionId, 'txn_completed123')
+  assert.equal(result.plan, 'starter_annual')
+})
+
 test('invalid browser correlation values are ignored', () => {
   const result = resolveBillingSuccessState({
     historyState: { transactionId: 'not-a-transaction', plan: 'enterprise' },
-    search: '?checkout=not-a-reservation&plan=enterprise',
+    search: '?checkout=not-a-reservation&transaction=not-a-transaction&plan=enterprise',
     storage: storageWith({ [PADDLE_LAST_TRANSACTION_STORAGE_KEY]: 'invalid' }),
   })
 

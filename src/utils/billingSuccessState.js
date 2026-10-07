@@ -29,7 +29,9 @@ export function resolveBillingSuccessState({
   const storedTransactionId = storage?.getItem?.(PADDLE_LAST_TRANSACTION_STORAGE_KEY) || ''
 
   return {
-    transactionId: validTransactionId(safeHistoryState.transactionId) || validTransactionId(storedTransactionId),
+    transactionId: validTransactionId(safeHistoryState.transactionId)
+      || validTransactionId(params.get('transaction'))
+      || validTransactionId(storedTransactionId),
     checkoutReservationId: validReservationId(safeHistoryState.checkoutReservationId)
       || validReservationId(params.get('checkout')),
     plan: validPlan(safeHistoryState.plan) || validPlan(params.get('plan')),
