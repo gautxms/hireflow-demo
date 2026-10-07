@@ -20,7 +20,7 @@ Requirements: Node.js and PostgreSQL experience.`
 
 function fakeDependencies(overrides = {}) {
   return {
-    extractPdf: async () => ({ success: true, canonicalText: documentText, ocrRequired: false, pageLimitReached: false }),
+    extractPdf: async () => ({ success: true, canonicalText: documentText.toLowerCase(), extractedText: documentText, ocrRequired: false, pageLimitReached: false }),
     loadCredentials: async () => ({ activeProvider: 'anthropic' }),
     callModel: async () => JSON.stringify({
       title: 'Senior Backend Engineer',
@@ -39,13 +39,19 @@ function fakeDependencies(overrides = {}) {
 
 test('returns reviewable fields while preserving the complete extracted text', async () => {
   let receivedText
+  let includeExtractedText
   const result = await previewJobDescription(pdfFile(), fakeDependencies({
+    extractPdf: async (_buffer, options) => {
+      includeExtractedText = options.includeExtractedText
+      return { success: true, canonicalText: documentText.toLowerCase(), extractedText: documentText, ocrRequired: false }
+    },
     callModel: async (text) => {
       receivedText = text
       return JSON.stringify({ title: 'Senior Backend Engineer', responsibilities: 'Build APIs', requirements: 'Node.js', skills: ['Node.js'], experienceMin: 4, experienceMax: 6, workMode: 'remote' })
     },
   }))
   assert.equal(receivedText, documentText)
+  assert.equal(includeExtractedText, true)
   assert.equal(result.fields.description, documentText)
   assert.equal(result.fields.title, 'Senior Backend Engineer')
   assert.equal(result.fields.workMode, 'remote')
