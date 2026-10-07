@@ -227,6 +227,10 @@
 .job-form__error,.job-form__help,.job-form__file-name { margin: 0; font-family: var(--font-family-ui); font-size: 0.8rem; }
 .job-form__error { color: var(--color-error); }
 .job-form__help,.job-form__file-name { color: var(--color-text-secondary); }
+.job-form__upload-intro { margin-bottom: 0.65rem; }
+.job-form__import-status,.job-form__import-success { margin: 0.55rem 0 0; font-family: var(--font-family-ui); font-size: 0.8rem; line-height: 1.45; }
+.job-form__import-status { color: var(--color-text-secondary); }
+.job-form__import-success { color: var(--color-primary); }
 .job-form__file-input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 .job-form__file-row { display: flex; align-items: center; gap: 0.45rem; flex-wrap: wrap; }
 .job-form__file-clear { border: 1px solid var(--color-border); background: var(--hf-bg-elevated); color: var(--color-text-secondary); width: 1.8rem; height: 1.8rem; border-radius: 999px; }

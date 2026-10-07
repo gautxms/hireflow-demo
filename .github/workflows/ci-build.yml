@@ -41,8 +41,8 @@ jobs:
       - name: Lint
         run: npm run lint
 
-      - name: Job description preview tests
-        run: node --test backend/src/services/jobDescriptionPreviewService.test.js backend/src/routes/jobDescriptionPreview.test.js
+      - name: Job description preview and prefill tests
+        run: node --test backend/src/services/jobDescriptionPreviewService.test.js backend/src/routes/jobDescriptionPreview.test.js src/components/jobDescriptionPrefill.test.js
 
       - name: Checkout concurrency and ownership tests
         env:
