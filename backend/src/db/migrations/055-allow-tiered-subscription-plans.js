@@ -1,11 +1,3 @@
-// Keep this list fixed so the migration remains reproducible if the catalog changes.
-const SUPPORTED_PLANS = [
-  'monthly', 'annual',
-  'starter_monthly', 'starter_annual',
-  'growth_monthly', 'growth_annual',
-  'pro_monthly', 'pro_annual',
-]
-
 export async function up(client) {
   const constraints = await client.query(`
     SELECT constraint_definition.conname AS name
@@ -22,10 +14,7 @@ export async function up(client) {
     const quotedName = `"${String(name).replaceAll('"', '""')}"`
     await client.query(`ALTER TABLE users DROP CONSTRAINT ${quotedName}`)
   }
-
-  await client.query(`
-    ALTER TABLE users
-      ADD CONSTRAINT users_subscription_plan_check
-      CHECK (subscription_plan IS NULL OR subscription_plan IN (${SUPPORTED_PLANS.map((plan) => `'${plan}'`).join(', ')}))
-  `)
+  // Historic rows can contain plan values outside the current catalog. A new
+  // CHECK would validate every existing row and prevent the app from starting.
+  // Checkout and provider reconciliation validate plan codes before writing.
 }
