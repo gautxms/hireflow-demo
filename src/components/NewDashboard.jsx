@@ -2,6 +2,7 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { Check, ChevronDown } from 'lucide-react'
 import API_BASE from '../config/api'
 import useResumeAnalysisQuota from '../hooks/useResumeAnalysisQuota.js'
+import { formatDashboardMatchScore as formatScore } from '../utils/dashboardMatchScore.js'
 import { Icon } from './Icon'
 import ResumeAllowanceCard from './ResumeAllowanceCard.jsx'
 import './NewDashboard.css'
@@ -19,11 +20,6 @@ function formatPercent(value) {
 function formatDateLabel(value) {
   const date = new Date(value)
   return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
-}
-
-function formatScore(value) {
-  const numericValue = Number(value)
-  return Number.isFinite(numericValue) ? numericValue.toFixed(2) : '—'
 }
 
 function parseFiniteNumber(value) {
@@ -391,6 +387,8 @@ export default function NewDashboard() {
     resumesAnalyzedCount: 0,
     completionRate: 0,
     avgScore: null,
+    latestMatchScore: null,
+    latestMatchAnalysisId: null,
     scoredCount: 0,
     shortlistedRate: 0,
   }
@@ -474,9 +472,18 @@ export default function NewDashboard() {
             iconName: 'users',
           },
           { label: 'Completion Rate', value: formatPercent(kpis.completionRate), iconName: 'target' },
-          { label: 'Average Match Score', value: formatScore(kpis.avgScore), iconName: 'chart' },
+          {
+            label: 'Latest Match Score',
+            value: formatScore(kpis.latestMatchScore),
+            inlineMeta: kpis.latestMatchScore == null ? null : '/10',
+            caption: kpis.scoredCount > 0
+              ? `Filtered average: ${formatScore(kpis.avgScore)}/10 across ${kpis.scoredCount} scored ${kpis.scoredCount === 1 ? 'resume' : 'resumes'}`
+              : 'No job match scores in this period',
+            analysisHref: kpis.latestMatchAnalysisId ? `/analyses/${encodeURIComponent(kpis.latestMatchAnalysisId)}` : null,
+            iconName: 'chart',
+          },
           { label: 'Shortlisted Rate', value: formatPercent(kpis.shortlistedRate), iconName: 'users' },
-        ].map(({ label, value, iconName, inlineMeta }) => (
+        ].map(({ label, value, iconName, inlineMeta, caption, analysisHref }) => (
           <article key={label} className="new-dashboard__kpi-card kpi-card">
             <div className="new-dashboard__kpi-top-row">
               <p className="new-dashboard__kpi-label kpi-card-label">{label}</p>
@@ -487,6 +494,7 @@ export default function NewDashboard() {
                 {value}
                 {inlineMeta ? <span className="new-dashboard__kpi-inline-meta">{inlineMeta}</span> : null}
               </p>
+              {caption ? <p className="new-dashboard__kpi-caption">{caption}{analysisHref ? <> · <a href={analysisHref}>View latest analysis</a></> : null}</p> : null}
             </div>
           </article>
         ))}

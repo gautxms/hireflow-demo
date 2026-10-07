@@ -32,9 +32,11 @@ export function dashboardMatchScoreRowsSql(windowName) {
     throw new Error('Unsupported dashboard analysis window')
   }
 
-  return `SELECT scored.resume_id, scored.created_at, scored.score
+  const analysisIdColumn = windowName === 'analysis_window' ? 'id' : 'analysis_id'
+
+  return `SELECT scored.resume_id, scored.created_at, scored.score, scored.analysis_id, scored.parse_job_id
     FROM (
-      SELECT aw.resume_id, aw.created_at,
+      SELECT aw.resume_id, aw.created_at, aw.${analysisIdColumn} AS analysis_id, aw.parse_job_id,
              COALESCE(
                ${dashboardNumericScoreSql("candidate.result #>> '{matchScore,score}'")},
                ${dashboardNumericScoreSql("candidate.result ->> 'score'")}
@@ -42,8 +44,7 @@ export function dashboardMatchScoreRowsSql(windowName) {
       FROM ${windowName} aw
       INNER JOIN parse_jobs pj ON pj.job_id = aw.parse_job_id AND pj.user_id = $1
       CROSS JOIN LATERAL (SELECT ${dashboardCandidateSql} AS result) candidate
-      WHERE aw.status = 'complete'
-        AND aw.job_description_id IS NOT NULL
+      WHERE aw.job_description_id IS NOT NULL
         AND pj.status = 'complete'
     ) scored
     WHERE scored.score IS NOT NULL`
@@ -233,6 +234,10 @@ router.get('/dashboard/kpis', async (req, res) => {
            (SELECT COUNT(DISTINCT id)::int FROM analysis_window WHERE status IN ('failed', 'partial')) AS analyses_failed_count,
            (SELECT ROUND(AVG(score)::numeric, 2) FROM completed_scored_item_window) AS avg_score,
            (SELECT COUNT(*)::int FROM completed_scored_item_window) AS scored_count,
+           (SELECT score FROM completed_scored_item_window
+            ORDER BY created_at DESC, analysis_id DESC, parse_job_id DESC LIMIT 1) AS latest_match_score,
+           (SELECT analysis_id FROM completed_scored_item_window
+            ORDER BY created_at DESC, analysis_id DESC, parse_job_id DESC LIMIT 1) AS latest_match_analysis_id,
            -- Count analysis_items rows as resume analysis units so existing multi-resume analyses contribute one unit per resume.
            -- Older analyses without analysis_items cannot be safely attributed to resume units and remain excluded.
            (SELECT COUNT(*)::int FROM analysis_window) AS resumes_count,
@@ -404,6 +409,8 @@ router.get('/dashboard/kpis', async (req, res) => {
       completionRate: formatRate(analysesCompletedCount, analysesRunCount),
       analysesFailedCount,
       avgScore: summary.avg_score === null || summary.avg_score === undefined ? null : Number(summary.avg_score),
+      latestMatchScore: summary.latest_match_score === null || summary.latest_match_score === undefined ? null : Number(summary.latest_match_score),
+      latestMatchAnalysisId: summary.latest_match_analysis_id || null,
       scoredCount,
       shortlistedRate: formatRate(shortlistedCount, resumesCount),
     }
@@ -517,6 +524,8 @@ router.get('/dashboard/kpis', async (req, res) => {
         ['monthly_resume_analysis_usage_rate', payload.usage.monthlyResumeAnalysisUsageRate],
         ['completion_rate', payload.kpis.completionRate],
         ['avg_score', payload.kpis.avgScore],
+        ['latest_match_score', payload.kpis.latestMatchScore],
+        ['latest_match_analysis_id', payload.kpis.latestMatchAnalysisId],
         ['scored_count', payload.kpis.scoredCount],
         ['shortlisted_rate', payload.kpis.shortlistedRate],
       ]
