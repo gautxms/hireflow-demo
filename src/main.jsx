@@ -89,7 +89,7 @@ if (shouldHydratePrerenderedRoute && !hasStoredAuthenticatedSession()) {
       root,
       <React.StrictMode>
         <AppErrorBoundary>
-          <PublicRouteApp pathname={window.location.pathname} />
+          {React.createElement(PublicRouteApp, { pathname: window.location.pathname })}
         </AppErrorBoundary>
       </React.StrictMode>,
     )
