@@ -38,6 +38,23 @@ test('active renewing subscription keeps active paid access without cancellation
   assert.equal(canRenderBillingPage(resolved), true)
 })
 
+test('active access without provider billing identity remains visible but not manageable', () => {
+  const resolved = state({ status: 'active' })
+
+  assert.equal(resolved.hasActivePaidAccess, true)
+  assert.equal(resolved.canManageBilling, false)
+  assert.equal(resolved.hasProviderSubscription, false)
+  assert.equal(resolved.planLabel, 'Active workspace access')
+  assert.equal(canRenderBillingPage(resolved), true)
+})
+
+test('trial access without a plan has a truthful fallback label', () => {
+  const resolved = state({ status: 'trialing' })
+
+  assert.equal(resolved.planLabel, 'Trial access')
+  assert.equal(canRenderBillingPage(resolved), true)
+})
+
 test('tiered and legacy plans have readable billing labels', () => {
   assert.equal(state({ status: 'active', plan: 'starter_monthly' }).planLabel, 'Starter Monthly')
   assert.equal(state({ status: 'active', plan: 'growth_annual' }).planLabel, 'Growth Annual')
