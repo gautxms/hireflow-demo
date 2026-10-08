@@ -195,7 +195,11 @@ export function canAccessProductDashboard(subscriptionStateOrSubscription, now =
 }
 
 export function canRenderBillingPage(subscriptionState) {
-  return Boolean(subscriptionState?.canManageBilling || (subscriptionState?.hasProviderCustomer && subscriptionState?.hasProviderSubscription && !subscriptionState?.isFree))
+  return Boolean(
+    subscriptionState?.hasActivePaidAccess
+      || subscriptionState?.canManageBilling
+      || (subscriptionState?.hasProviderCustomer && subscriptionState?.hasProviderSubscription && !subscriptionState?.isFree),
+  )
 }
 
 function buildSubscriptionAccessInput({ user = null, subscription = null, rawStatus = 'inactive' } = {}) {
@@ -257,7 +261,11 @@ export function resolveSubscriptionState({ user = null, subscription = null, now
     rawStatus,
     statusLabel,
     plan,
-    planLabel: plan ? getPlanDisplayLabel(plan) || String(plan) : 'No active subscription',
+    planLabel: plan
+      ? getPlanDisplayLabel(plan) || String(plan)
+      : activePaidAccess
+        ? trialing ? 'Trial access' : 'Active workspace access'
+        : 'No active subscription',
     isActive,
     isTrialing: trialing,
     isPastDue: pastDue,
