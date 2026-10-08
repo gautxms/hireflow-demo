@@ -391,3 +391,13 @@ test('BillingPage past_due no longer relies on a support email for payment recov
   assert.equal((pageSource.match(/pastDueBillingNotice/g) || []).length, 3)
   assert.equal((pageSource.match(/hello@hireflow\.dev/g) || []).length, 0)
 })
+
+test('BillingPage shows providerless active entitlement without fabricated billing details', () => {
+  const source = readFileSync(new URL('./BillingPage.jsx', import.meta.url), 'utf8')
+
+  assert.match(source, /const hasProviderlessActiveAccess = subscriptionState\.hasActivePaidAccess && !subscriptionState\.hasProviderSubscription/)
+  assert.match(source, /hasProviderlessActiveAccess \? 'Current access' : 'Current plan'/)
+  assert.match(source, /Your HireFlow access is active\./)
+  assert.match(source, /No self-service billing subscription is linked to this account\./)
+  assert.match(source, /hasProviderlessActiveAccess \? \([\s\S]*subscription\.costFormatted/)
+})
