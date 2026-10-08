@@ -230,7 +230,7 @@ export default function AnalysesPage({ isReadOnly = false }) {
     }
   }, [openSummaryPopoverId, openFilesPopoverId])
 
-  const resetModal = () => {
+  const resetModal = useCallback(() => {
     setIsCreateModalOpen(false)
     setAnalysisName('')
     setSelectedJobDescriptionId('')
@@ -238,7 +238,7 @@ export default function AnalysesPage({ isReadOnly = false }) {
     setSubmitError('')
     setValidationErrors({})
     setIsSubmitting(false)
-  }
+  }, [])
 
   useEffect(() => {
     if (isCreateModalOpen) return undefined
@@ -786,6 +786,11 @@ function CreateAnalysisModal({ isOpen, isSubmitting, analysisName, onAnalysisNam
   useEffect(() => {
     if (!isOpen) return undefined
     nameInputRef.current?.focus()
+    return undefined
+  }, [isOpen, nameInputRef])
+
+  useEffect(() => {
+    if (!isOpen) return undefined
 
     const handleKeyDown = (event) => {
       if (event.key === 'Escape' && !isSubmitting) {
@@ -808,7 +813,7 @@ function CreateAnalysisModal({ isOpen, isSubmitting, analysisName, onAnalysisNam
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [isOpen, isSubmitting, onClose, nameInputRef])
+  }, [isOpen, isSubmitting, onClose])
 
   if (!isOpen) return null
 
