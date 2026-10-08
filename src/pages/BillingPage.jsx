@@ -204,6 +204,7 @@ export default function BillingPage({ onNavigate = null }) {
 
   const subscriptionState = resolveSubscriptionState({ subscription })
   const canShowBillingPage = canRenderBillingPage(subscriptionState)
+  const hasProviderlessActiveAccess = subscriptionState.hasActivePaidAccess && !subscriptionState.hasProviderSubscription
   const cancelActionLabel = getCancelActionLabel(subscription?.plan)
   const displayedStatusLabel = getBillingStatusLabel(subscriptionState, subscription, formatDate)
   const cancellationAccessMessage = getCancellationAccessMessage(subscriptionState, subscription, formatDate)
@@ -348,20 +349,29 @@ export default function BillingPage({ onNavigate = null }) {
             <article className="billing-page__card">
               <div className="billing-page__card-header">
                 <div>
-                  <p className="billing-page__eyebrow">{isFinalCancellation ? 'Previous plan' : 'Current plan'}</p>
+                  <p className="billing-page__eyebrow">{isFinalCancellation ? 'Previous plan' : hasProviderlessActiveAccess ? 'Current access' : 'Current plan'}</p>
                   <h2 className="billing-page__plan-title">{subscription.planLabel || subscriptionState.planLabel}</h2>
                 </div>
                 <span className="billing-page__status-badge">{displayedStatusLabel}</span>
               </div>
-              <p className="billing-page__line">{subscription.costFormatted || '—'} <span>{subscription.billingInterval ? `per ${subscription.billingInterval}` : (subscription.plan ? `per ${subscription.plan === 'annual' ? 'year' : 'month'}` : '')}</span></p>
-              {subscription.costSource === 'local_fallback' && subscription.paddleSubscriptionId ? (
-                <p className="billing-page__cost-helper">Price shown from plan settings; Paddle is the source of truth.</p>
-              ) : null}
-              <div className="billing-page__meta-grid">
-                {billingMetadataRows.map((row) => (
-                  <p className="billing-page__meta" key={row.label}><span>{row.label}</span>{row.value}</p>
-                ))}
-              </div>
+              {hasProviderlessActiveAccess ? (
+                <>
+                  <p className="billing-page__line">Your HireFlow access is active.</p>
+                  <p className="billing-page__cost-helper">No self-service billing subscription is linked to this account.</p>
+                </>
+              ) : (
+                <>
+                  <p className="billing-page__line">{subscription.costFormatted || '—'} <span>{subscription.billingInterval ? `per ${subscription.billingInterval}` : (subscription.plan ? `per ${subscription.plan === 'annual' ? 'year' : 'month'}` : '')}</span></p>
+                  {subscription.costSource === 'local_fallback' && subscription.paddleSubscriptionId ? (
+                    <p className="billing-page__cost-helper">Price shown from plan settings; Paddle is the source of truth.</p>
+                  ) : null}
+                  <div className="billing-page__meta-grid">
+                    {billingMetadataRows.map((row) => (
+                      <p className="billing-page__meta" key={row.label}><span>{row.label}</span>{row.value}</p>
+                    ))}
+                  </div>
+                </>
+              )}
               {pastDueBillingNotice ? <p className="billing-page__past-due-note">{pastDueBillingNotice}</p> : null}
               {['pending', 'provider_updating', 'retryable_failed'].includes(subscription?.recoveryAdjustmentStatus) ? (
                 <p className="billing-page__feedback billing-page__feedback--success" role="status">
