@@ -4,7 +4,6 @@ import { readFileSync } from 'node:fs'
 import { shouldHydrateStaticPublicRoute } from './public/staticPublicRouteHydration.js'
 
 const mainSource = readFileSync(new URL('./main.jsx', import.meta.url), 'utf8')
-const bootstrapSource = readFileSync(new URL('./public/StaticPublicRouteBootstrap.jsx', import.meta.url), 'utf8')
 
 test('only marked, statically generated public routes enter hydration', () => {
   const decide = (pathname, hasPrerenderedPublicMarkup = true) => shouldHydrateStaticPublicRoute({
@@ -26,18 +25,18 @@ test('only marked, statically generated public routes enter hydration', () => {
 
 test('main gates static hydration through the shared route-manifest decision', () => {
   assert.match(mainSource, /shouldHydrateStaticPublicRoute\(\{[\s\S]*hasPrerenderedPublicMarkup: root\.hasAttribute\('data-static-public-route'\)[\s\S]*pathname: window\.location\.pathname/)
-  assert.match(mainSource, /if \(shouldHydratePrerenderedRoute\)/)
+  assert.match(mainSource, /if \(shouldHydratePrerenderedRoute && !hasStoredAuthenticatedSession\(\)\)/)
   assert.doesNotMatch(mainSource, /if \(root\.hasAttribute\('data-static-public-route'\)\)/)
 })
 
-test('static public routes preserve prerendered markup for hydration before mounting App', () => {
-  assert.match(bootstrapSource, /return createElement\(PublicRouteComponent, \{ pathname \}\)/)
-  assert.match(mainSource, /hydrateRoot\([\s\S]*<StaticPublicRouteBootstrap[\s\S]*PublicRouteComponent=\{PublicRouteApp\}[\s\S]*pathname=\{window\.location\.pathname\}/)
+test('anonymous static public routes hydrate the matching prerendered tree in place', () => {
+  assert.match(mainSource, /hydrateRoot\([\s\S]*React\.createElement\(PublicRouteApp, \{ pathname: window\.location\.pathname \}\)/)
+  assert.doesNotMatch(mainSource, /StaticPublicRouteBootstrap/)
 })
 
-test('static public routes switch to the auth-aware App after hydration', () => {
-  assert.match(bootstrapSource, /useSyncExternalStore\(subscribe, getClientSnapshot, getServerSnapshot\)/)
-  assert.match(bootstrapSource, /const getServerSnapshot = \(\) => false/)
-  assert.match(bootstrapSource, /const getClientSnapshot = \(\) => true/)
-  assert.match(bootstrapSource, /if \(showAuthenticatedApp\) \{\s*return <App \/>\s*\}/)
+test('stored sessions bypass public hydration and mount App from a clean root', () => {
+  assert.match(mainSource, /const TOKEN_STORAGE_KEY = 'hireflow_auth_token'/)
+  assert.match(mainSource, /function hasStoredAuthenticatedSession\(\) \{[\s\S]*localStorage\.getItem\(TOKEN_STORAGE_KEY\)[\s\S]*catch/)
+  assert.match(mainSource, /if \(shouldHydratePrerenderedRoute\) \{\s*root\.replaceChildren\(\)\s*\}/)
+  assert.match(mainSource, /ReactDOM\.createRoot\(root\)\.render\([\s\S]*<App \/>/)
 })
