@@ -54,3 +54,15 @@ test('usage API failure does not proactively block either submission path', () =
   assert.doesNotMatch(analysesSource, /resumeQuota\.status === 'unavailable'[\s\S]{0,120}return/)
   assert.doesNotMatch(uploaderSource, /resumeQuota\.status === 'unavailable'[\s\S]{0,120}return/)
 })
+
+
+test('batch quota guidance stays beside the resume uploader', () => {
+  const dropzoneIndex = analysesSource.indexOf('analyses-modal__dropzone')
+  const warningIndex = analysesSource.indexOf('id="analysis-files-quota-guidance"')
+  const selectedFilesIndex = analysesSource.indexOf('analyses-modal__selected-files')
+
+  assert.ok(dropzoneIndex >= 0)
+  assert.ok(warningIndex > dropzoneIndex)
+  assert.ok(selectedFilesIndex > warningIndex)
+  assert.match(analysesSource, /aria-describedby=\{\['analysis-files-help',[\s\S]*'analysis-files-quota-guidance'/)
+})
