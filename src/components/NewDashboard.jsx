@@ -2,6 +2,7 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { Check, ChevronDown } from 'lucide-react'
 import API_BASE from '../config/api'
 import useResumeAnalysisQuota from '../hooks/useResumeAnalysisQuota.js'
+import { formatDashboardMatchScore as formatScore } from '../utils/dashboardMatchScore.js'
 import { Icon } from './Icon'
 import ResumeAllowanceCard from './ResumeAllowanceCard.jsx'
 import './NewDashboard.css'
@@ -19,11 +20,6 @@ function formatPercent(value) {
 function formatDateLabel(value) {
   const date = new Date(value)
   return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
-}
-
-function formatScore(value) {
-  const numericValue = Number(value)
-  return Number.isFinite(numericValue) ? numericValue.toFixed(2) : '—'
 }
 
 function parseFiniteNumber(value) {
@@ -474,7 +470,7 @@ export default function NewDashboard() {
             iconName: 'users',
           },
           { label: 'Completion Rate', value: formatPercent(kpis.completionRate), iconName: 'target' },
-          { label: 'Average Match Score', value: formatScore(kpis.avgScore), iconName: 'chart' },
+          { label: 'Average Match Score', value: formatScore(kpis.avgScore), inlineMeta: kpis.avgScore == null ? null : '/10', iconName: 'chart' },
           { label: 'Shortlisted Rate', value: formatPercent(kpis.shortlistedRate), iconName: 'users' },
         ].map(({ label, value, iconName, inlineMeta }) => (
           <article key={label} className="new-dashboard__kpi-card kpi-card">
@@ -530,9 +526,9 @@ export default function NewDashboard() {
         </article>
 
         <article className="new-dashboard__trend-card" role="region" aria-labelledby="dashboard-average-score-trend-title">
-          <h3 id="dashboard-average-score-trend-title" className="new-dashboard__trend-title"><Icon name="target" size="sm" tone="muted" className="new-dashboard__trend-title-icon" />Average match score trend</h3>
+          <h3 id="dashboard-average-score-trend-title" className="new-dashboard__trend-title"><Icon name="target" size="sm" tone="muted" className="new-dashboard__trend-title-icon" />Average match score trend (/10)</h3>
           <div className="new-dashboard__trend-summary" aria-label="Average match score trend summary">
-            <span><strong>{formatScore(scoreSummary.average)}</strong>Average match score</span>
+            <span><strong>{formatScore(scoreSummary.average)}</strong>Average match score /10</span>
             <span><strong>{formatScore(scoreSummary.highest?.value)}</strong>High · {scoreSummary.highest?.label || '—'}</span>
             <span><strong>{formatCompactNumber(scoreSummary.totalScoredCount)}</strong>Scored</span>
           </div>
@@ -562,8 +558,8 @@ export default function NewDashboard() {
                     type="button"
                     className="new-dashboard__point"
                     style={{ left: `${point.x}%`, bottom: `${point.height}%` }}
-                    aria-label={`${point.label}: ${formatScore(point.value)} score`}
-                    data-tooltip={`${point.label}: ${formatScore(point.value)} score`}
+                    aria-label={`${point.label}: ${formatScore(point.value)} score /10`}
+                    data-tooltip={`${point.label}: ${formatScore(point.value)} score /10`}
                     data-state="value"
                   />
                 ))}
