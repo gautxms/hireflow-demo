@@ -10,10 +10,10 @@ import './index.css'
 import App from './App.jsx'
 import AppErrorBoundary from './components/AppErrorBoundary'
 import API_BASE from './config/api'
-import StaticPublicRouteBootstrap from './public/StaticPublicRouteBootstrap.jsx'
 import { shouldHydrateStaticPublicRoute } from './public/staticPublicRouteHydration.js'
 
 const RECENT_CRASH_CONTEXT_KEY = 'hireflow_recent_crash_context_v1'
+const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 
 function storeCrashContext(detail) {
   try {
@@ -69,27 +69,36 @@ window.addEventListener('hireflow:telemetry', (event) => {
   })
 })
 
+function hasStoredAuthenticatedSession() {
+  try {
+    return Boolean(localStorage.getItem(TOKEN_STORAGE_KEY))
+  } catch {
+    return false
+  }
+}
+
 const root = document.getElementById('root')
 const shouldHydratePrerenderedRoute = shouldHydrateStaticPublicRoute({
   hasPrerenderedPublicMarkup: root.hasAttribute('data-static-public-route'),
   pathname: window.location.pathname,
 })
 
-if (shouldHydratePrerenderedRoute) {
+if (shouldHydratePrerenderedRoute && !hasStoredAuthenticatedSession()) {
   import('./public/PublicRouteApp.jsx').then(({ default: PublicRouteApp }) => {
     hydrateRoot(
       root,
       <React.StrictMode>
         <AppErrorBoundary>
-          <StaticPublicRouteBootstrap
-            PublicRouteComponent={PublicRouteApp}
-            pathname={window.location.pathname}
-          />
+          <PublicRouteApp pathname={window.location.pathname} />
         </AppErrorBoundary>
       </React.StrictMode>,
     )
   })
 } else {
+  if (shouldHydratePrerenderedRoute) {
+    root.replaceChildren()
+  }
+
   ReactDOM.createRoot(root).render(
     <React.StrictMode>
       <AppErrorBoundary>
