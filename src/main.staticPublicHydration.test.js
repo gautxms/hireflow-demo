@@ -30,7 +30,7 @@ test('main gates static hydration through the shared route-manifest decision', (
 })
 
 test('anonymous static public routes hydrate the matching prerendered tree in place', () => {
-  assert.match(mainSource, /hydrateRoot\([\s\S]*<PublicRouteApp pathname=\{window\.location\.pathname\} \/>/)
+  assert.match(mainSource, /hydrateRoot\([\s\S]*React\.createElement\(PublicRouteApp, \{ pathname: window\.location\.pathname \}\)/)
   assert.doesNotMatch(mainSource, /StaticPublicRouteBootstrap/)
 })
 
