@@ -33,10 +33,14 @@ export function normalizeResumeAnalysisQuota(payload) {
       ? payload.nextRevalidationAt
       : (typeof payload.periodEnd === 'string' ? payload.periodEnd : null),
     canCreateAnalysis: explicitAllowed ?? available > 0,
+    accessBlocked: typeof payload.accessBlocked === 'boolean' ? payload.accessBlocked : null,
+    accessReason: typeof payload.accessReason === 'string' ? payload.accessReason : null,
   }
 }
 
 export function isResumeAnalysisAccessBlocked(quota) {
+  if (quota?.accessBlocked === true) return true
+  if (quota?.accessBlocked === false) return false
   return quota?.canCreateAnalysis === false && finiteNonNegative(quota?.available) > 0
 }
 

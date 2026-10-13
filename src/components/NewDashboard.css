@@ -265,6 +265,12 @@
   background: var(--card);
   font-family: var(--font-family-base);
 }
+.resume-allowance.resume-allowance--unavailable {
+  grid-template-columns: 1fr;
+  grid-template-areas:
+    "summary"
+    "detail";
+}
 .resume-allowance h2 { margin: 0; color: var(--color-text-primary); font-family: var(--font-family-heading); font-size: 1rem; }
 .resume-allowance p { margin: 0; }
 .resume-allowance__summary { grid-area: summary; display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 12px; min-width: 0; }

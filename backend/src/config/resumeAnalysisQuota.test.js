@@ -24,10 +24,15 @@ test('paid tier limits apply to both billing intervals and legacy Pro plans', ()
   assert.equal(resolveMonthlyResumeAnalysisLimit('active', { upload_limit: 150 }, 'starter_monthly'), 150)
 })
 
-test('resolveMonthlyResumeAnalysisLimit keeps trial/free behavior unchanged', () => {
+test('only trial and trialing receive the 10-analysis entitlement', () => {
   assert.equal(TRIAL_MONTHLY_RESUME_ANALYSIS_LIMIT, 10)
-  assert.equal(resolveMonthlyResumeAnalysisLimit('trialing'), 10)
-  assert.equal(resolveMonthlyResumeAnalysisLimit('inactive'), 10)
+  for (const status of ['trial', 'trialing']) {
+    assert.equal(resolveMonthlyResumeAnalysisLimit(status), 10)
+  }
+  for (const status of ['canceled', 'cancelled', 'inactive', 'expired', 'past_due', 'payment_failed', 'paused', 'no_subscription', 'none', 'free', null]) {
+    assert.equal(resolveMonthlyResumeAnalysisLimit(status), 0, String(status))
+    assert.equal(resolveMonthlyResumeAnalysisLimit(status, { upload_limit: 25 }), 0, String(status))
+  }
 })
 
 test('resolveMonthlyResumeAnalysisLimit keeps admin override precedence', () => {
