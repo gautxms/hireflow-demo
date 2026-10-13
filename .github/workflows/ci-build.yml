@@ -41,6 +41,17 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: Resume allowance and access tests
+        run: >-
+          node --test
+          backend/src/config/resumeAnalysisQuota.test.js
+          backend/src/routes/usage.test.js
+          backend/src/utils/resumeQuotaPeriod.test.js
+          backend/src/utils/subscriptionAccess.test.js
+          backend/src/middleware/subscriptionCheck.test.js
+          src/utils/resumeAnalysisQuota.test.js
+          src/components/ResumeAllowanceCard.test.js
+
       - name: Job description preview and prefill tests
         run: node --test backend/src/services/jobDescriptionPreviewService.test.js backend/src/routes/jobDescriptionPreview.test.js src/components/jobDescriptionPrefill.test.js
 
