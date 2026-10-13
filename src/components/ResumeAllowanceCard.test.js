@@ -9,6 +9,7 @@ test('ResumeAllowanceCard distinguishes active, exhausted, trial and blocked acc
   const vite = await createServer({
     configFile: false,
     plugins: [react()],
+    optimizeDeps: { noDiscovery: true },
     server: { middlewareMode: true },
     appType: 'custom',
   })

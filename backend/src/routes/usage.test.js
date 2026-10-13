@@ -366,23 +366,30 @@ test('cancelled and billing-interrupted accounts never advertise a trial reset',
 
 test('future scheduled cancellation retains paid tier and writable usage until expiry', async (t) => {
   process.env.JWT_SECRET = 'test-secret'
-  t.mock.method(pool, 'query', async (sql) => {
-    if (sql.includes('FROM users')) return { rows: [{
-      id: 9, subscription_status: 'cancelled', subscription_plan: 'starter_monthly',
-      cancellation_effective_at: '2099-01-01T00:00:00Z', quota_anchor_at: '2026-01-20T08:30:00Z',
-    }] }
-    if (sql.includes('FROM usage_overrides')) return { rows: [] }
-    if (sql.includes('FROM usage_log')) return { rows: [{ usage_count: 2 }] }
-    return { rows: [] }
-  })
+  const previousFlag = process.env.RESUME_QUOTA_RESERVATIONS_ENABLED
+  process.env.RESUME_QUOTA_RESERVATIONS_ENABLED = 'true'
+  try {
+    t.mock.method(pool, 'query', async (sql) => {
+      if (sql.includes('FROM users')) return { rows: [{
+        id: 9, subscription_status: 'cancelled', subscription_plan: 'starter_monthly',
+        cancellation_effective_at: '2099-01-01T00:00:00Z', quota_anchor_at: '2026-01-20T08:30:00Z',
+      }] }
+      if (sql.includes('FROM usage_overrides')) return { rows: [] }
+      if (sql.includes('WITH quota_usage AS')) return { rows: [{ usage_count: 2, reserved_count: 0 }] }
+      return { rows: [] }
+    })
 
-  const { response, payload } = await requestUsage({ headers: authHeader(9) })
-  assert.equal(response.status, 200)
-  assert.equal(payload.limit, 100)
-  assert.equal(payload.available, 98)
-  assert.equal(payload.canCreateAnalysis, true)
-  assert.equal(payload.accessBlocked, false)
-  assert.match(payload.periodEnd, /-20T08:30:00\.000Z$/)
+    const { response, payload } = await requestUsage({ headers: authHeader(9) })
+    assert.equal(response.status, 200)
+    assert.equal(payload.limit, 100)
+    assert.equal(payload.available, 98)
+    assert.equal(payload.canCreateAnalysis, true)
+    assert.equal(payload.accessBlocked, false)
+    assert.match(payload.periodEnd, /-20T08:30:00\.000Z$/)
+  } finally {
+    if (previousFlag === undefined) delete process.env.RESUME_QUOTA_RESERVATIONS_ENABLED
+    else process.env.RESUME_QUOTA_RESERVATIONS_ENABLED = previousFlag
+  }
 })
 
 test('a paid Starter at its genuine limit remains a reached quota with a reset', () => {
