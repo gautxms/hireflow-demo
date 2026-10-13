@@ -57,6 +57,23 @@ test('server-provided creation decision overrides browser percentage', () => {
   assert.equal(quota(800, 800, { canCreateAnalysis: true, available: 1 }).canCreateAnalysis, true)
 })
 
+test('explicit access block wins even with zero capacity and no reset date', () => {
+  const blocked = normalizeResumeAnalysisQuota({
+    limit: 0, used: 100, available: 0, canCreateAnalysis: false,
+    accessBlocked: true, accessReason: 'cancelled', periodEnd: null,
+  })
+  assert.equal(blocked.accessBlocked, true)
+  assert.equal(blocked.accessReason, 'cancelled')
+  assert.equal(isResumeAnalysisAccessBlocked(blocked), true)
+  assert.equal(getResumeAllowanceTone(blocked), 'unavailable')
+  assert.match(formatResumeAnalysisCreationBlocked(blocked), /active subscription/i)
+  assert.equal(blocked.periodEnd, null)
+
+  const exhausted = quota(100, 100, { accessBlocked: false, canCreateAnalysis: false })
+  assert.equal(isResumeAnalysisAccessBlocked(exhausted), false)
+  assert.equal(getResumeAllowanceTone(exhausted), 'reached')
+})
+
 test('reset dates render exactly when present and disappear when absent', () => {
   assert.equal(formatResumeQuotaResetDate(periodEnd), '20 August 2026')
   assert.equal(formatResumeQuotaResetDate(null), '')

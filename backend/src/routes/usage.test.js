@@ -55,6 +55,8 @@ test('buildResumeAnalysisUsageResponse exposes UI-ready quota fields', () => {
     remaining: 200,
     available: 200,
     canCreateAnalysis: true,
+    accessBlocked: false,
+    accessReason: null,
     periodStart: '2026-05-01T00:00:00.000Z',
     periodEnd: '2026-06-01T00:00:00.000Z',
     periodKind: 'monthly',
@@ -178,7 +180,7 @@ test('trial usage exposes the trial end date and counts one allowance across mon
   }
 })
 
-test('GET /usage/resume-analysis preserves the fallback limit but blocks inactive subscription access', async (t) => {
+test('GET /usage/resume-analysis blocks inactive access without a trial allowance or reset', async (t) => {
   process.env.JWT_SECRET = 'test-secret'
 
   t.mock.method(pool, 'query', async (sql) => {
@@ -191,25 +193,37 @@ test('GET /usage/resume-analysis preserves the fallback limit but blocks inactiv
   const { response, payload } = await requestUsage({ headers: authHeader(9) })
 
   assert.equal(response.status, 200)
-  assert.equal(payload.limit, 10)
+  assert.equal(payload.limit, 0)
   assert.equal(payload.used, 9)
-  assert.equal(payload.remaining, 1)
-  assert.equal(payload.available, 1)
+  assert.equal(payload.remaining, 0)
+  assert.equal(payload.available, 0)
   assert.equal(payload.canCreateAnalysis, false)
-  assert.equal(payload.percentageUsed, 90)
-  assert.equal(payload.warningLevel, 'critical')
+  assert.equal(payload.accessBlocked, true)
+  assert.equal(payload.accessReason, 'inactive')
+  assert.equal(payload.periodEnd, null)
+  assert.equal(payload.nextRevalidationAt, null)
+  assert.equal(payload.warningLevel, 'none')
 })
 
-test('buildResumeAnalysisUsageResponse requires both subscription access and quota capacity', () => {
+test('buildResumeAnalysisUsageResponse hides allowance boundaries when access is blocked', () => {
   const payload = buildResumeAnalysisUsageResponse({
-    limit: 10,
-    used: 0,
+    limit: 0,
+    used: 103,
     canUseAnalysis: false,
+    accessBlocked: true,
+    accessReason: 'cancelled',
     periodStart: new Date('2026-05-01T00:00:00.000Z'),
   })
 
-  assert.equal(payload.available, 10)
+  assert.equal(payload.available, 0)
+  assert.equal(payload.remaining, 0)
   assert.equal(payload.canCreateAnalysis, false)
+  assert.equal(payload.accessBlocked, true)
+  assert.equal(payload.accessReason, 'cancelled')
+  assert.equal(payload.periodStart, null)
+  assert.equal(payload.periodEnd, null)
+  assert.equal(payload.nextRevalidationAt, null)
+  assert.equal(payload.warningLevel, 'none')
 })
 
 test('buildResumeAnalysisUsageResponse subtracts active reservations from current availability', () => {
@@ -325,4 +339,59 @@ test('flagged usage response reports enforcement-consistent availability after a
     if (previousFlag === undefined) delete process.env.RESUME_QUOTA_RESERVATIONS_ENABLED
     else process.env.RESUME_QUOTA_RESERVATIONS_ENABLED = previousFlag
   }
+})
+
+test('cancelled and billing-interrupted accounts never advertise a trial reset', async (t) => {
+  process.env.JWT_SECRET = 'test-secret'
+  let user = null
+  t.mock.method(pool, 'query', async (sql) => {
+    if (sql.includes('FROM users')) return { rows: [user] }
+    if (sql.includes('FROM usage_overrides')) return { rows: [] }
+    if (sql.includes('FROM usage_log')) return { rows: [{ usage_count: 100 }] }
+    return { rows: [] }
+  })
+
+  for (const status of ['cancelled', 'canceled', 'past_due', 'payment_failed', 'paused', 'inactive', 'expired']) {
+    user = { id: 9, subscription_status: status, subscription_plan: 'starter_monthly', cancellation_effective_at: '2025-01-01T00:00:00Z' }
+    const { response, payload } = await requestUsage({ headers: authHeader(9) })
+    assert.equal(response.status, 200, status)
+    assert.equal(payload.limit, 0, status)
+    assert.equal(payload.available, 0, status)
+    assert.equal(payload.canCreateAnalysis, false, status)
+    assert.equal(payload.accessBlocked, true, status)
+    assert.equal(payload.accessReason, ['cancelled', 'canceled'].includes(status) ? 'cancelled' : status, status)
+    assert.equal(payload.periodEnd, null, status)
+  }
+})
+
+test('future scheduled cancellation retains paid tier and writable usage until expiry', async (t) => {
+  process.env.JWT_SECRET = 'test-secret'
+  t.mock.method(pool, 'query', async (sql) => {
+    if (sql.includes('FROM users')) return { rows: [{
+      id: 9, subscription_status: 'cancelled', subscription_plan: 'starter_monthly',
+      cancellation_effective_at: '2099-01-01T00:00:00Z', quota_anchor_at: '2026-01-20T08:30:00Z',
+    }] }
+    if (sql.includes('FROM usage_overrides')) return { rows: [] }
+    if (sql.includes('FROM usage_log')) return { rows: [{ usage_count: 2 }] }
+    return { rows: [] }
+  })
+
+  const { response, payload } = await requestUsage({ headers: authHeader(9) })
+  assert.equal(response.status, 200)
+  assert.equal(payload.limit, 100)
+  assert.equal(payload.available, 98)
+  assert.equal(payload.canCreateAnalysis, true)
+  assert.equal(payload.accessBlocked, false)
+  assert.match(payload.periodEnd, /-20T08:30:00\.000Z$/)
+})
+
+test('a paid Starter at its genuine limit remains a reached quota with a reset', () => {
+  const payload = buildResumeAnalysisUsageResponse({
+    limit: 100, used: 100, periodStart: new Date('2026-10-08T00:00:00Z'),
+  })
+  assert.equal(payload.available, 0)
+  assert.equal(payload.canCreateAnalysis, false)
+  assert.equal(payload.accessBlocked, false)
+  assert.equal(payload.warningLevel, 'exceeded')
+  assert.equal(payload.periodEnd, '2026-11-01T00:00:00.000Z')
 })

@@ -1,4 +1,4 @@
-import { formatResumeQuotaResetDate, getResumeAllowanceTone } from '../utils/resumeAnalysisQuota.js'
+import { formatResumeQuotaResetDate, getResumeAllowanceTone, isResumeAnalysisAccessBlocked } from '../utils/resumeAnalysisQuota.js'
 
 export default function ResumeAllowanceCard({ status, quota }) {
   if (status === 'loading') {
@@ -6,6 +6,25 @@ export default function ResumeAllowanceCard({ status, quota }) {
   }
   if (status !== 'success' || !quota) {
     return <article className="resume-allowance resume-allowance--unavailable"><div className="resume-allowance__summary"><h2>Resume allowance</h2><p className="resume-allowance__status">Allowance temporarily unavailable.</p></div></article>
+  }
+
+  if (isResumeAnalysisAccessBlocked(quota)) {
+    const detail = quota.accessReason === 'cancelled'
+      ? 'Your subscription is cancelled. Choose a plan to analyze new resumes. Existing analyses and results remain available.'
+      : ['past_due', 'payment_failed'].includes(quota.accessReason)
+        ? 'Your subscription needs payment attention. Update your payment method to analyze new resumes. Existing analyses and results remain available.'
+        : quota.accessReason === 'paused'
+          ? 'Your subscription is paused. Resume your plan to analyze new resumes. Existing analyses and results remain available.'
+          : 'An active subscription is required to analyze new resumes. Choose a plan to continue. Existing analyses and results remain available.'
+    return (
+      <article className="resume-allowance resume-allowance--unavailable" aria-labelledby="resume-allowance-title">
+        <div className="resume-allowance__summary">
+          <h2 id="resume-allowance-title">Resume allowance</h2>
+          <p className="resume-allowance__value">Not available</p>
+        </div>
+        <p className="resume-allowance__detail">{detail}</p>
+      </article>
+    )
   }
 
   const tone = getResumeAllowanceTone(quota)

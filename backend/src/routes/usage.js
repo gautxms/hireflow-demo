@@ -12,7 +12,7 @@ import {
   isResumeQuotaReservationsEnabled,
 } from '../services/resumeQuotaReservations.js'
 import { resolveResumeQuotaPeriod, RESUME_QUOTA_PERIOD_SOURCES } from '../utils/resumeQuotaPeriod.js'
-import { canUsePaidMutation, hasScheduledCancellationAccess } from '../utils/subscriptionAccess.js'
+import { canUsePaidMutation, hasScheduledCancellationAccess, normalizeSubscriptionStatus } from '../utils/subscriptionAccess.js'
 
 const router = Router()
 
@@ -37,11 +37,13 @@ export function buildResumeAnalysisUsageResponse({
   nextRevalidationAt = periodEnd,
   canUseAnalysis = true,
   periodKind = 'monthly',
+  accessBlocked = false,
+  accessReason = null,
 }) {
   const normalizedLimit = Number(limit || 0)
   const normalizedUsed = Number(used || 0)
-  const remaining = Math.max(normalizedLimit - normalizedUsed, 0)
-  const available = Math.max(remaining - Math.max(Number(reserved || 0), 0), 0)
+  const remaining = accessBlocked ? 0 : Math.max(normalizedLimit - normalizedUsed, 0)
+  const available = accessBlocked ? 0 : Math.max(remaining - Math.max(Number(reserved || 0), 0), 0)
   const percentageUsed = normalizedLimit > 0
     ? Math.floor((normalizedUsed / normalizedLimit) * 100)
     : 0
@@ -51,13 +53,15 @@ export function buildResumeAnalysisUsageResponse({
     used: normalizedUsed,
     remaining,
     available,
-    canCreateAnalysis: canUseAnalysis && available > 0,
-    periodStart: periodStart.toISOString(),
-    periodEnd: periodEnd.toISOString(),
+    canCreateAnalysis: !accessBlocked && canUseAnalysis && available > 0,
+    accessBlocked,
+    accessReason: accessBlocked ? accessReason : null,
+    periodStart: accessBlocked ? null : periodStart.toISOString(),
+    periodEnd: accessBlocked ? null : periodEnd.toISOString(),
     periodKind,
     percentageUsed,
-    warningLevel: resolveResumeAnalysisUsageWarningLevel(normalizedUsed, normalizedLimit),
-    nextRevalidationAt: new Date(nextRevalidationAt).toISOString(),
+    warningLevel: accessBlocked ? 'none' : resolveResumeAnalysisUsageWarningLevel(normalizedUsed, normalizedLimit),
+    nextRevalidationAt: accessBlocked ? null : new Date(nextRevalidationAt).toISOString(),
   }
 }
 
@@ -82,6 +86,11 @@ router.get('/resume-analysis', async (req, res) => {
     const quotaSubscriptionStatus = hasScheduledCancellationAccess(user)
       ? 'active'
       : user.subscription_status
+    const canUseAnalysis = canUsePaidMutation(user)
+    const status = normalizeSubscriptionStatus(user.subscription_status)
+    const accessReason = ['canceled', 'cancelled', 'cancel_scheduled', 'cancellation_scheduled', 'pending_cancellation', 'scheduled_cancellation'].includes(status)
+      ? 'cancelled'
+      : status
     const limit = resolveMonthlyResumeAnalysisLimit(quotaSubscriptionStatus, usageOverride, user.subscription_plan)
     const reservationsEnabled = isResumeQuotaReservationsEnabled()
     const resolvedPeriod = resolveResumeQuotaPeriod({
@@ -120,7 +129,9 @@ router.get('/resume-analysis', async (req, res) => {
       periodKind: period.source === RESUME_QUOTA_PERIOD_SOURCES.TRIAL ? 'trial' : 'monthly',
       reserved,
       nextRevalidationAt,
-      canUseAnalysis: canUsePaidMutation(user),
+      canUseAnalysis,
+      accessBlocked: !canUseAnalysis,
+      accessReason,
     }))
   } catch (error) {
     console.error('[Usage] Failed to load resume analysis usage:', error)
