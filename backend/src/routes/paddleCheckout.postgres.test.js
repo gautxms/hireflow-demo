@@ -285,6 +285,54 @@ test('a completed returning checkout blocks duplicate Paddle creation until appl
                       cancellation_effective_at = $2::timestamp WHERE id = $1`,
     [userId, laterCancellationAt],
   )
+
+  const addOlderCompletion = async (subscriptionId, minutesAgo) => {
+    const transactionId = `txn_${subscriptionId.replace(/[^a-z0-9]/gi, '')}`
+    const older = (await db.query(
+      `INSERT INTO paddle_checkout_reservations (
+         user_id, paddle_environment, requested_plan, stored_plan, price_id,
+         trial_eligible, checkout_mode, status, paddle_transaction_id, paddle_customer_id,
+         expires_at, created_at, updated_at
+       ) VALUES ($1, 'sandbox', 'monthly', 'monthly', 'pri_monthly_paid',
+                 false, 'paid_returning', 'completed', $2, 'ctm_completed_pg',
+                 NOW() + INTERVAL '1 day', NOW() - $3::int * INTERVAL '1 minute', NOW())
+       RETURNING *`,
+      [userId, transactionId, minutesAgo],
+    )).rows[0]
+    transactions.set(transactionId, {
+      id: transactionId, status: 'completed', subscription_id: subscriptionId,
+      customer_id: 'ctm_completed_pg', items: [{ price_id: 'pri_monthly_paid' }],
+      custom_data: {
+        userId, checkoutReservationId: older.reservation_token,
+        paddleEnvironment: 'sandbox', requestedPlan: 'monthly', plan: 'monthly',
+        checkoutMode: 'paid_returning', trialEligible: false,
+      },
+    })
+    return older
+  }
+  const olderUnapplied = await addOlderCompletion('sub_older_unapplied_pg', 2)
+  await addOlderCompletion('sub_oldest_finished_pg', 3)
+  await db.query(
+    `INSERT INTO subscriptions (user_id, paddle_environment, paddle_subscription_id, status, latest_event_type)
+     VALUES ($1, 'sandbox', 'sub_oldest_finished_pg', 'cancelled', 'subscription.canceled')`,
+    [userId],
+  )
+
+  // The newest receipt is already applied, but an older verified paid receipt
+  // without a terminal owned projection still prevents another Paddle create.
+  const unresolved = responseRecorder()
+  await createCheckout(request, unresolved, 'postgres-older-unapplied')
+  assert.equal(unresolved.statusCode, 409)
+  assert.equal(unresolved.payload.code, 'checkout_completed')
+  assert.equal(unresolved.payload.transactionId, 'txn_subolderunappliedpg')
+  assert.equal(unresolved.payload.checkoutReservationId, olderUnapplied.reservation_token)
+  assert.equal(createCalls, 1)
+
+  await db.query(
+    `INSERT INTO subscriptions (user_id, paddle_environment, paddle_subscription_id, status, latest_event_type)
+     VALUES ($1, 'sandbox', 'sub_older_unapplied_pg', 'cancelled', 'subscription.canceled')`,
+    [userId],
+  )
   const later = responseRecorder()
   await createCheckout(request, later, 'postgres-new-purchase')
   assert.equal(later.statusCode, 200)

@@ -445,7 +445,7 @@ export async function acquireCheckoutReservation({
   plan,
   testKey,
   now = new Date(),
-  ignoredCompletedReservationId = null,
+  ignoredCompletedReservationIds = [],
 }) {
   const client = await db.connect()
 
@@ -497,6 +497,28 @@ export async function acquireCheckoutReservation({
       return { action: 'price_missing', purchase, user }
     }
 
+    // A completed checkout no longer occupies the open-reservation index. Keep
+    // recent payments in the finalization path until their lifecycle is applied.
+    const completedResult = isTerminalCancellation(user, now) && await client.query(
+      `SELECT id, reservation_token, user_id, paddle_environment, requested_plan, stored_plan,
+              price_id, trial_eligible, checkout_mode, status, paddle_transaction_id,
+              paddle_customer_id, expires_at, created_at, updated_at
+       FROM paddle_checkout_reservations
+       WHERE user_id = $1
+         AND paddle_environment = $2
+         AND status = 'completed'
+         AND updated_at > $3::timestamptz
+         AND id <> ALL($4::uuid[])
+       ORDER BY created_at DESC, id DESC
+       LIMIT 1
+       FOR UPDATE`,
+      [user.id, paddle.environment, new Date(now.getTime() - CHECKOUT_RESERVATION_TTL_MS).toISOString(), ignoredCompletedReservationIds],
+    )
+    if (completedResult?.rows[0]) {
+      await client.query('COMMIT')
+      return { action: 'inspect_completed', reservation: completedResult.rows[0], purchase, user }
+    }
+
     const existingResult = await client.query(
       `SELECT id, reservation_token, user_id, paddle_environment, requested_plan, stored_plan,
               price_id, trial_eligible, checkout_mode, status, paddle_transaction_id,
@@ -528,28 +550,6 @@ export async function acquireCheckoutReservation({
         purchase,
         user,
       }
-    }
-
-    // A completed checkout no longer occupies the open-reservation index. Keep
-    // recent payments in the finalization path until their lifecycle is applied.
-    const completedResult = await client.query(
-      `SELECT id, reservation_token, user_id, paddle_environment, requested_plan, stored_plan,
-              price_id, trial_eligible, checkout_mode, status, paddle_transaction_id,
-              paddle_customer_id, expires_at, created_at, updated_at
-       FROM paddle_checkout_reservations
-       WHERE user_id = $1
-         AND paddle_environment = $2
-         AND status = 'completed'
-         AND updated_at > $3::timestamptz
-         AND id IS DISTINCT FROM $4::uuid
-       ORDER BY created_at DESC
-       LIMIT 1
-       FOR UPDATE`,
-      [user.id, paddle.environment, new Date(now.getTime() - CHECKOUT_RESERVATION_TTL_MS).toISOString(), ignoredCompletedReservationId],
-    )
-    if (isTerminalCancellation(user, now) && completedResult.rows[0]) {
-      await client.query('COMMIT')
-      return { action: 'inspect_completed', reservation: completedResult.rows[0], purchase, user }
     }
 
     const expiresAt = new Date(now.getTime() + CHECKOUT_RESERVATION_TTL_MS).toISOString()
@@ -1007,10 +1007,22 @@ export function completedCheckoutResponse(acquisition, transaction) {
   }
 }
 
-function completedCheckoutBelongsToCancelledLifecycle(acquisition, transaction) {
-  return isTerminalCancellation(acquisition.user)
-    && Boolean(transaction?.subscription_id)
-    && transaction.subscription_id === acquisition.user.paddle_subscription_id
+export async function completedCheckoutHasFinishedLifecycle(acquisition, transaction, db = pool) {
+  if (!isTerminalCancellation(acquisition.user) || !transaction?.subscription_id) return false
+  if (transaction.subscription_id === acquisition.user.paddle_subscription_id) return true
+
+  // Older purchases may also have been applied and later cancelled. Only an
+  // owned terminal subscription projection can clear one of those receipts.
+  const result = await db.query(
+    `SELECT 1 FROM subscriptions
+     WHERE paddle_subscription_id = $1::text
+       AND user_id = $2
+       AND COALESCE(NULLIF(LOWER(paddle_environment), ''), 'production') = $3::text
+       AND LOWER(status) IN ('canceled', 'cancelled')
+     LIMIT 1`,
+    [transaction.subscription_id, acquisition.user.id, acquisition.reservation.paddle_environment],
+  )
+  return result.rowCount > 0
 }
 
 export async function prepareCheckoutSubscriptionState({
@@ -1155,14 +1167,15 @@ export async function createCheckout(req, res, logLabel = 'checkout') {
   }
 
   try {
-    let ignoredCompletedReservationId = null
-    for (let attempt = 0; attempt < 2; attempt += 1) {
+    const ignoredCompletedReservationIds = new Set()
+    let providerRecoveryAttempts = 0
+    while (true) {
       const acquisition = await acquireCheckoutReservation({
         userId: user.id,
         paddle,
         plan,
         testKey,
-        ignoredCompletedReservationId,
+        ignoredCompletedReservationIds: [...ignoredCompletedReservationIds],
       })
 
       if (acquisition.action === 'user_not_found') {
@@ -1189,10 +1202,13 @@ export async function createCheckout(req, res, logLabel = 'checkout') {
       }
       if (acquisition.action === 'purchase_conflict') {
         const superseded = await supersedeCheckoutReservation({ acquisition, paddle })
-        if (superseded.action === 'retry') continue
+        if (superseded.action === 'retry') {
+          if (++providerRecoveryAttempts >= 2) break
+          continue
+        }
         if (superseded.action === 'completed') {
-          if (completedCheckoutBelongsToCancelledLifecycle(acquisition, superseded.transaction)) {
-            ignoredCompletedReservationId = acquisition.reservation.id
+          if (await completedCheckoutHasFinishedLifecycle(acquisition, superseded.transaction)) {
+            ignoredCompletedReservationIds.add(acquisition.reservation.id)
             continue
           }
           return res.status(409).json(completedCheckoutResponse(acquisition, superseded.transaction))
@@ -1228,10 +1244,10 @@ export async function createCheckout(req, res, logLabel = 'checkout') {
       if (acquisition.action === 'inspect_completed') {
         const resolved = await resolveReservedCheckout({ acquisition, paddle })
         if (resolved.action === 'completed') {
-          // A later cancellation of this same purchased lifecycle is a new
-          // purchase opportunity; a different lifecycle still needs finalization.
-          if (completedCheckoutBelongsToCancelledLifecycle(acquisition, resolved.transaction)) {
-            ignoredCompletedReservationId = acquisition.reservation.id
+          // Finished lifecycles can be skipped, but every other completed
+          // checkout must be finalized before another purchase starts.
+          if (await completedCheckoutHasFinishedLifecycle(acquisition, resolved.transaction)) {
+            ignoredCompletedReservationIds.add(acquisition.reservation.id)
             continue
           }
           return res.status(409).json(completedCheckoutResponse(acquisition, resolved.transaction))
@@ -1252,8 +1268,8 @@ export async function createCheckout(req, res, logLabel = 'checkout') {
           }))
         }
         if (resolved.action === 'completed') {
-          if (completedCheckoutBelongsToCancelledLifecycle(acquisition, resolved.transaction)) {
-            ignoredCompletedReservationId = acquisition.reservation.id
+          if (await completedCheckoutHasFinishedLifecycle(acquisition, resolved.transaction)) {
+            ignoredCompletedReservationIds.add(acquisition.reservation.id)
             continue
           }
           return res.status(409).json(completedCheckoutResponse(acquisition, resolved.transaction))
@@ -1270,7 +1286,10 @@ export async function createCheckout(req, res, logLabel = 'checkout') {
             code: 'checkout_in_progress',
           })
         }
-        if (resolved.action === 'retry') continue
+        if (resolved.action === 'retry') {
+          if (++providerRecoveryAttempts >= 2) break
+          continue
+        }
       }
 
       if (acquisition.action !== 'create') {
