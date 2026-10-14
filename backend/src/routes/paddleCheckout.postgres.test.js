@@ -221,6 +221,7 @@ test('a completed returning checkout blocks duplicate Paddle creation until appl
   })
 
   const transactions = new Map()
+  const laterCancellationAt = new Date(Date.now() - 1000).toISOString()
   let createCalls = 0
   t.mock.method(globalThis, 'fetch', async (url, options = {}) => {
     if (options.method === 'POST' && String(url).endsWith('/transactions')) {
@@ -239,8 +240,8 @@ test('a completed returning checkout blocks duplicate Paddle creation until appl
     if (String(url).includes('/subscriptions/sub_new_pg')) {
       return { ok: true, status: 200, json: async () => ({ data: {
         id: 'sub_new_pg', status: 'canceled', customer_id: 'ctm_completed_pg',
-        updated_at: new Date().toISOString(), canceled_at: new Date(Date.now() - 1000).toISOString(),
-        current_billing_period: { ends_at: new Date(Date.now() - 1000).toISOString() },
+        updated_at: new Date().toISOString(), canceled_at: laterCancellationAt,
+        current_billing_period: { ends_at: laterCancellationAt },
         next_billed_at: null, items: [{ price: { id: 'pri_monthly_paid' } }],
       } }) }
     }
@@ -281,8 +282,8 @@ test('a completed returning checkout blocks duplicate Paddle creation until appl
   // must not block an entirely new no-trial purchase.
   await db.query(
     `UPDATE users SET paddle_subscription_id = 'sub_new_pg', subscription_plan = 'monthly',
-                      cancellation_effective_at = NOW() - INTERVAL '1 second' WHERE id = $1`,
-    [userId],
+                      cancellation_effective_at = $2::timestamp WHERE id = $1`,
+    [userId, laterCancellationAt],
   )
   const later = responseRecorder()
   await createCheckout(request, later, 'postgres-new-purchase')
