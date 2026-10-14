@@ -329,6 +329,14 @@ function hasValidAiScoringContractV2VisibleComponents(contract) {
   ))
 }
 
+function hasHighConfidenceAiScoringContractV2(contract) {
+  return String(contract?.score_confidence || '').trim().toLowerCase() === 'high'
+}
+
+function hasBlockingAiScoringContractV2Anomalies(contract) {
+  return normalizeAiScoringContractV2DiagnosticAnomalies(contract?.scoring_anomalies).length > 0
+}
+
 function resolveCandidateMatchScoreValue(candidate = {}) {
   if (candidate?.matchScore && typeof candidate.matchScore === 'object' && !Array.isArray(candidate.matchScore)) {
     return resolveNumericScore(candidate.matchScore.score)
@@ -375,6 +383,7 @@ function buildAiScoringContractV2VisibleScoreApplyDiagnostic({
     applied_visible_score: appliedVisibleScore,
     score_delta: hasBothScores ? Math.round((appliedVisibleScore - originalVisibleScore) * 10) / 10 : null,
     score_confidence: contract?.score_confidence || null,
+    scoring_anomalies: normalizeAiScoringContractV2DiagnosticAnomalies(contract?.scoring_anomalies),
     file_extension: fileExtension ?? parseDiagnostics?.extension ?? parseDiagnostics?.sourceFormat ?? null,
     extraction_method: extractionMethod ?? parseDiagnostics?.extractionMethod ?? parseDiagnostics?.extraction_method ?? null,
     normalizedTextFingerprint: parseDiagnostics?.normalizedTextFingerprint ?? parseDiagnostics?.normalized_text_fingerprint ?? null,
@@ -471,6 +480,8 @@ export function applyAiScoringContractV2VisibleScoreExperiment({
       else if (contract.has_job_description_context !== true) skipReason = 'missing_job_description_context'
       else if (!hasValidAiScoringContractV2VisibleComponents(contract)) skipReason = 'invalid_v2_components'
       else if (!isValidAiScoringContractV2Score(v2Score)) skipReason = 'invalid_v2_score'
+      else if (!hasHighConfidenceAiScoringContractV2(contract)) skipReason = 'insufficient_v2_confidence'
+      else if (hasBlockingAiScoringContractV2Anomalies(contract)) skipReason = 'v2_scoring_anomalies'
       else {
         appliedCandidate = applyAiScoringContractV2VisibleScoreToCandidate(candidate, {
           appliedScore: v2Score,
