@@ -19,6 +19,23 @@ function validPlan(value) {
   return SUPPORTED_PLANS.has(normalized) ? normalized : ''
 }
 
+export function completedCheckoutNavigation(payload = {}) {
+  const transactionId = validTransactionId(payload.transactionId)
+  const checkoutReservationId = validReservationId(payload.checkoutReservationId)
+  const plan = validPlan(payload.plan)
+  if (payload.code !== 'checkout_completed' || !transactionId || !checkoutReservationId || !plan) return null
+
+  const params = new URLSearchParams({
+    transaction: transactionId,
+    checkout: checkoutReservationId,
+    plan,
+  })
+  return {
+    path: `/billing/success?${params}`,
+    state: { transactionId, checkoutReservationId, plan },
+  }
+}
+
 export function resolveBillingSuccessState({
   historyState = {},
   search = '',

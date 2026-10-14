@@ -28,3 +28,11 @@ test('returning checkout uses canonical canceled-state recognition', async () =>
   assert.match(checkout, /isCanceledSubscription\(subscriptionStatus\)/)
   assert.doesNotMatch(checkout, /subscriptionStatus === 'cancelled'/)
 })
+
+test('completed checkout response uses validated correlation before navigation and success sync', async () => {
+  const checkout = await readFile(new URL('./Checkout.jsx', import.meta.url), 'utf8')
+  const billingSuccess = await readFile(new URL('./BillingSuccess.jsx', import.meta.url), 'utf8')
+  assert.match(checkout, /completedCheckoutNavigation\(payload\)/)
+  assert.match(checkout, /navigate\(recovery\.path, \{ state: recovery\.state \}\)/)
+  assert.match(billingSuccess, /syncCompletedCheckout\(\{[\s\S]*transactionId: transactionId \|\| null,[\s\S]*checkoutReservationId: checkoutReservationId \|\| null,/)
+})

@@ -445,6 +445,7 @@ export async function acquireCheckoutReservation({
   plan,
   testKey,
   now = new Date(),
+  ignoredCompletedReservationId = null,
 }) {
   const client = await db.connect()
 
@@ -527,6 +528,28 @@ export async function acquireCheckoutReservation({
         purchase,
         user,
       }
+    }
+
+    // A completed checkout no longer occupies the open-reservation index. Keep
+    // recent payments in the finalization path until their lifecycle is applied.
+    const completedResult = await client.query(
+      `SELECT id, reservation_token, user_id, paddle_environment, requested_plan, stored_plan,
+              price_id, trial_eligible, checkout_mode, status, paddle_transaction_id,
+              paddle_customer_id, expires_at, created_at, updated_at
+       FROM paddle_checkout_reservations
+       WHERE user_id = $1
+         AND paddle_environment = $2
+         AND status = 'completed'
+         AND updated_at > $3::timestamptz
+         AND id IS DISTINCT FROM $4::uuid
+       ORDER BY created_at DESC
+       LIMIT 1
+       FOR UPDATE`,
+      [user.id, paddle.environment, new Date(now.getTime() - CHECKOUT_RESERVATION_TTL_MS).toISOString(), ignoredCompletedReservationId],
+    )
+    if (isTerminalCancellation(user, now) && completedResult.rows[0]) {
+      await client.query('COMMIT')
+      return { action: 'inspect_completed', reservation: completedResult.rows[0], purchase, user }
     }
 
     const expiresAt = new Date(now.getTime() + CHECKOUT_RESERVATION_TTL_MS).toISOString()
@@ -973,6 +996,23 @@ function checkoutResponse({ transaction, user, paddle, purchase }) {
   }
 }
 
+export function completedCheckoutResponse(acquisition, transaction) {
+  return {
+    error: 'This checkout has already completed. Subscription confirmation is in progress.',
+    code: 'checkout_completed',
+    redirectTo: '/billing/success',
+    transactionId: transaction.id,
+    checkoutReservationId: acquisition.reservation.reservation_token,
+    plan: acquisition.reservation.stored_plan,
+  }
+}
+
+function completedCheckoutBelongsToCancelledLifecycle(acquisition, transaction) {
+  return isTerminalCancellation(acquisition.user)
+    && Boolean(transaction?.subscription_id)
+    && transaction.subscription_id === acquisition.user.paddle_subscription_id
+}
+
 export async function prepareCheckoutSubscriptionState({
   user,
   paddle,
@@ -1115,12 +1155,14 @@ export async function createCheckout(req, res, logLabel = 'checkout') {
   }
 
   try {
+    let ignoredCompletedReservationId = null
     for (let attempt = 0; attempt < 2; attempt += 1) {
       const acquisition = await acquireCheckoutReservation({
         userId: user.id,
         paddle,
         plan,
         testKey,
+        ignoredCompletedReservationId,
       })
 
       if (acquisition.action === 'user_not_found') {
@@ -1149,11 +1191,11 @@ export async function createCheckout(req, res, logLabel = 'checkout') {
         const superseded = await supersedeCheckoutReservation({ acquisition, paddle })
         if (superseded.action === 'retry') continue
         if (superseded.action === 'completed') {
-          return res.status(409).json({
-            error: 'This checkout has already completed. Subscription confirmation is in progress.',
-            code: 'checkout_completed',
-            redirectTo: '/billing/success',
-          })
+          if (completedCheckoutBelongsToCancelledLifecycle(acquisition, superseded.transaction)) {
+            ignoredCompletedReservationId = acquisition.reservation.id
+            continue
+          }
+          return res.status(409).json(completedCheckoutResponse(acquisition, superseded.transaction))
         }
         if (superseded.action === 'conflict') {
           return res.status(409).json({
@@ -1183,6 +1225,22 @@ export async function createCheckout(req, res, logLabel = 'checkout') {
           code: 'checkout_in_progress',
         })
       }
+      if (acquisition.action === 'inspect_completed') {
+        const resolved = await resolveReservedCheckout({ acquisition, paddle })
+        if (resolved.action === 'completed') {
+          // A later cancellation of this same purchased lifecycle is a new
+          // purchase opportunity; a different lifecycle still needs finalization.
+          if (completedCheckoutBelongsToCancelledLifecycle(acquisition, resolved.transaction)) {
+            ignoredCompletedReservationId = acquisition.reservation.id
+            continue
+          }
+          return res.status(409).json(completedCheckoutResponse(acquisition, resolved.transaction))
+        }
+        return res.status(409).json({
+          error: 'Completed checkout ownership could not be verified yet. Please retry shortly.',
+          code: resolved.action === 'conflict' ? 'checkout_ownership_conflict' : 'checkout_in_progress',
+        })
+      }
       if (acquisition.action === 'reuse' || acquisition.action === 'recover') {
         const resolved = await resolveReservedCheckout({ acquisition, paddle })
         if (resolved.action === 'reuse') {
@@ -1194,11 +1252,11 @@ export async function createCheckout(req, res, logLabel = 'checkout') {
           }))
         }
         if (resolved.action === 'completed') {
-          return res.status(409).json({
-            error: 'This checkout has already completed. Subscription confirmation is in progress.',
-            code: 'checkout_completed',
-            redirectTo: '/billing/success',
-          })
+          if (completedCheckoutBelongsToCancelledLifecycle(acquisition, resolved.transaction)) {
+            ignoredCompletedReservationId = acquisition.reservation.id
+            continue
+          }
+          return res.status(409).json(completedCheckoutResponse(acquisition, resolved.transaction))
         }
         if (resolved.action === 'conflict') {
           return res.status(409).json({
@@ -1308,10 +1366,13 @@ export async function createCheckout(req, res, logLabel = 'checkout') {
         transaction,
       })
       if (!stored.stored) {
+        if (stored.reservation?.status === 'completed'
+          && stored.reservation.paddle_transaction_id === transaction.id) {
+          return res.status(409).json(completedCheckoutResponse(acquisition, transaction))
+        }
         return res.status(409).json({
           error: 'Checkout state changed while the transaction was being prepared.',
           code: 'checkout_state_changed',
-          redirectTo: stored.reservation?.status === 'completed' ? '/billing/success' : undefined,
         })
       }
 

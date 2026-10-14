@@ -223,6 +223,66 @@ postgresTest('failed-payment mutation rolls back atomically, retries, and comple
   assert.equal(completed.attempt_count, 2)
 })
 
+postgresTest('completed returning checkout activates a cancelled lifecycle after a retryable failure and remains idempotent', async (t) => {
+  t.after(async () => {
+    await pool.query('DROP TABLE IF EXISTS paddle_webhook_events, paddle_webhook_audit, payment_attempts, subscriptions, events, error_logs, users CASCADE')
+  })
+  await resetSchema()
+  const userId = (await pool.query(
+    `INSERT INTO users (paddle_environment, subscription_status, subscription_plan,
+                        paddle_customer_id, paddle_subscription_id, cancellation_effective_at, cancellation_reason)
+     VALUES ('sandbox', 'cancelled', 'starter_monthly', 'ctm_returning_pg', 'sub_previous_pg',
+             NOW() - INTERVAL '1 day', 'customer_request') RETURNING id`,
+  )).rows[0].id
+  const payload = {
+    event_id: 'evt_returning_completed_pg',
+    event_type: 'transaction.completed',
+    occurred_at: '2026-10-14T09:00:00.000Z',
+    data: {
+      id: 'txn_returning_completed_pg',
+      status: 'completed',
+      subscription_id: 'sub_new_returning_pg',
+      customer_id: 'ctm_returning_pg',
+      billing_period: { starts_at: '2026-10-14T09:00:00.000Z', ends_at: '2026-11-14T09:00:00.000Z' },
+      custom_data: { userId, plan: 'starter_monthly', paddleEnvironment: 'sandbox', checkoutMode: 'paid_returning', trialEligible: false },
+    },
+  }
+  const event = storedEvent(payload)
+  await persistVerifiedWebhookInboxEvent({
+    eventId: event.event_id, eventType: event.event_type, payloadHash: event.payload_hash,
+    payload, environment: 'sandbox',
+  })
+
+  // Exercise the durable retry path without changing or manually completing the inbox event.
+  await pool.query(`
+    CREATE FUNCTION fail_returning_activation() RETURNS trigger AS $$
+    BEGIN RAISE EXCEPTION 'injected activation failure'; END;
+    $$ LANGUAGE plpgsql;
+    CREATE TRIGGER inject_returning_activation BEFORE UPDATE ON users
+      FOR EACH ROW EXECUTE FUNCTION fail_returning_activation();
+  `)
+  assert.equal((await processStoredPaddleWebhookEvent(event)).outcome, 'failed')
+  assert.equal((await pool.query('SELECT status FROM paddle_webhook_events WHERE event_id = $1', [event.event_id])).rows[0].status, 'retryable_failed')
+  await pool.query('DROP TRIGGER inject_returning_activation ON users; DROP FUNCTION fail_returning_activation();')
+  await pool.query('UPDATE paddle_webhook_events SET next_retry_at = NOW() WHERE event_id = $1', [event.event_id])
+
+  assert.equal((await processStoredPaddleWebhookEvent(event)).outcome, 'completed')
+  const user = (await pool.query('SELECT * FROM users WHERE id = $1', [userId])).rows[0]
+  assert.equal(user.subscription_status, 'active')
+  assert.equal(user.paddle_customer_id, 'ctm_returning_pg')
+  assert.equal(user.paddle_subscription_id, 'sub_new_returning_pg')
+  assert.equal(user.subscription_plan, 'starter_monthly')
+  assert.equal(user.cancellation_effective_at, null)
+  assert.equal(user.cancellation_reason, null)
+  assert.equal(user.current_period_end.toISOString(), '2026-11-14T09:00:00.000Z')
+  assert.equal(user.next_billing_date.toISOString(), '2026-11-14T09:00:00.000Z')
+
+  const auditCount = (await pool.query('SELECT COUNT(*)::int AS count FROM paddle_webhook_audit WHERE event_type = $1', [event.event_type])).rows[0].count
+  await processStoredPaddleWebhookEvent(event)
+  assert.equal((await pool.query('SELECT COUNT(*)::int AS count FROM paddle_webhook_audit WHERE event_type = $1', [event.event_type])).rows[0].count, auditCount)
+  assert.equal((await pool.query('SELECT attempt_count FROM paddle_webhook_events WHERE event_id = $1', [event.event_id])).rows[0].attempt_count, 2)
+})
+
 postgresTest('concurrent stored-event processors produce one effective claim and one completion', async (t) => {
   t.after(async () => {
     await pool.query('DROP TABLE IF EXISTS paddle_webhook_events, paddle_webhook_audit, payment_attempts, subscriptions, events, error_logs, users CASCADE')

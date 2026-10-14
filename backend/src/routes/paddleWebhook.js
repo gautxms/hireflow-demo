@@ -1162,38 +1162,38 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment, storedEv
                    ELSE COALESCE(quota_anchor_at, $8::timestamp)
                  END,
                  trial_consumed_at = COALESCE(trial_consumed_at, NOW()),
-                 paddle_subscription_id = COALESCE($2, paddle_subscription_id),
-                 paddle_customer_id = COALESCE($3, paddle_customer_id),
-                 subscription_plan = COALESCE($4, subscription_plan),
-                 current_period_end = COALESCE($5, current_period_end),
-                 subscription_renewal_date = COALESCE($5, subscription_renewal_date),
-                 next_billing_date = COALESCE($6, next_billing_date),
+                 paddle_subscription_id = COALESCE($2::text, paddle_subscription_id),
+                 paddle_customer_id = COALESCE($3::text, paddle_customer_id),
+                 subscription_plan = COALESCE($4::text, subscription_plan),
+                 current_period_end = COALESCE($5::timestamp, current_period_end),
+                 subscription_renewal_date = COALESCE($5::timestamp, subscription_renewal_date),
+                 next_billing_date = COALESCE($6::timestamp, next_billing_date),
                  cancellation_effective_at = CASE
-                   WHEN $2 IS DISTINCT FROM paddle_subscription_id THEN NULL
+                   WHEN $2::text IS DISTINCT FROM paddle_subscription_id THEN NULL
                    ELSE cancellation_effective_at
                  END,
                  cancellation_reason = CASE
-                   WHEN $2 IS DISTINCT FROM paddle_subscription_id THEN NULL
+                   WHEN $2::text IS DISTINCT FROM paddle_subscription_id THEN NULL
                    ELSE cancellation_reason
                  END,
-                 paddle_environment = $7,
+                 paddle_environment = $7::text,
                  last_paddle_event_at = CASE
                    WHEN $9::timestamptz IS NULL THEN last_paddle_event_at
                    ELSE GREATEST(COALESCE(last_paddle_event_at, $9::timestamptz), $9::timestamptz)
                  END,
                  updated_at = NOW()
              WHERE id = $1
-               AND ($3 IS NULL OR paddle_customer_id IS NULL OR paddle_customer_id = $3)
-               AND COALESCE(NULLIF(LOWER(paddle_environment), ''), $7) = $7
+               AND ($3::text IS NULL OR paddle_customer_id IS NULL OR paddle_customer_id = $3::text)
+               AND COALESCE(NULLIF(LOWER(paddle_environment), ''), $7::text) = $7::text
                AND (
-                 $2 IS DISTINCT FROM paddle_subscription_id
+                 $2::text IS DISTINCT FROM paddle_subscription_id
                  OR last_paddle_event_at IS NULL
                  OR ($9::timestamptz IS NOT NULL AND $9::timestamptz >= last_paddle_event_at)
                )
                AND (
                  (
-                   $2 IS NOT NULL
-                   AND (paddle_subscription_id IS NULL OR $2 = paddle_subscription_id)
+                   $2::text IS NOT NULL
+                   AND (paddle_subscription_id IS NULL OR $2::text = paddle_subscription_id)
                    AND NOT (
                      LOWER(COALESCE(subscription_status, '')) IN ('canceled', 'cancelled')
                      AND (cancellation_effective_at IS NULL OR cancellation_effective_at <= NOW())
@@ -1201,10 +1201,10 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment, storedEv
                    AND ($5::timestamp IS NULL OR current_period_end IS NULL OR $5::timestamp >= current_period_end)
                  )
                  OR (
-                   $2 IS NOT NULL
-                   AND $4 IS NOT NULL
+                   $2::text IS NOT NULL
+                   AND $4::text IS NOT NULL
                    AND $5::timestamp IS NOT NULL
-                   AND $2 IS DISTINCT FROM paddle_subscription_id
+                   AND $2::text IS DISTINCT FROM paddle_subscription_id
                    AND LOWER(COALESCE(subscription_status, '')) IN ('canceled', 'cancelled')
                    AND (cancellation_effective_at IS NULL OR cancellation_effective_at <= NOW())
                  )

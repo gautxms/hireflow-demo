@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
+  completedCheckoutNavigation,
   PADDLE_LAST_TRANSACTION_STORAGE_KEY,
   resolveBillingSuccessState,
 } from './billingSuccessState.js'
@@ -75,4 +76,23 @@ test('Paddle return preserves Starter and Growth plan codes for the confirmation
   for (const plan of ['starter_monthly', 'starter_annual', 'growth_monthly', 'growth_annual']) {
     assert.equal(resolveBillingSuccessState({ search: `?plan=${plan}` }).plan, plan)
   }
+})
+
+test('completed checkout navigates with validated durable references, including after refresh', () => {
+  const recovery = completedCheckoutNavigation({
+    code: 'checkout_completed', transactionId: 'txn_exact123',
+    checkoutReservationId: '42d85541-3b0e-4b1a-8dca-2525950fbaf0', plan: 'starter_monthly',
+  })
+  assert.deepEqual(recovery.state, {
+    transactionId: 'txn_exact123',
+    checkoutReservationId: '42d85541-3b0e-4b1a-8dca-2525950fbaf0',
+    plan: 'starter_monthly',
+  })
+  assert.deepEqual(resolveBillingSuccessState({
+    search: new URL(recovery.path, 'https://hireflow.test').search,
+    storage: storageWith(),
+  }), { ...recovery.state, message: '' })
+  assert.equal(completedCheckoutNavigation({
+    code: 'checkout_completed', transactionId: 'txn_exact123', checkoutReservationId: 'invalid', plan: 'starter_monthly',
+  }), null)
 })
