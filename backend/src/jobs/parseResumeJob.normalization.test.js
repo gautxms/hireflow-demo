@@ -1119,6 +1119,35 @@ test('v2 visible score experiment skips contracts with internal scoring anomalie
   assert.equal(logs[0].payload.skip_reason, 'v2_scoring_anomalies')
   assert.deepEqual(logs[0].payload.scoring_anomalies, ['weighted_total_mismatch'])
 })
+test('v2 visible score experiment blocks normalized anomalies omitted from diagnostic allowlist', () => {
+  for (const anomaly of [
+    'has_job_description_context_corrected',
+    'below_minimum_and_low_relevant_experience_weighted_total_capped',
+  ]) {
+    const { candidate, logs } = applyV2VisibleScoreExperimentForTest({
+      candidate: buildV2VisibleScoreCandidate({
+        ai_scoring_contract_v2: {
+          ...buildV2VisibleScoreCandidate().ai_scoring_contract_v2,
+          score_confidence: 'high',
+          scoring_anomalies: [anomaly],
+        },
+      }),
+      env: {
+        AI_SCORING_CONTRACT_V2_VISIBLE_APPLY_ENABLED: 'true',
+        AI_SCORING_CONTRACT_V2_VISIBLE_APPLY_ALLOWED_USER_IDS: '24',
+      },
+    })
+
+    assert.equal(candidate.score, 78)
+    assert.equal(candidate.matchScore.score, 78)
+    assert.equal(candidate.fit_assessment.overall_fit_score, 78)
+    assert.equal(candidate.v2_visible_score_experiment, undefined)
+    assert.equal(logs[0].payload.applied, false)
+    assert.equal(logs[0].payload.skip_reason, 'v2_scoring_anomalies')
+    assert.deepEqual(logs[0].payload.scoring_anomalies, [])
+  }
+})
+
 test('v2 visible score experiment updates ranking inputs by applying visible candidate score', () => {
   const candidateA = buildV2VisibleScoreCandidate({ name: 'A', score: 90, matchScore: { score: 90 }, fit_assessment: { overall_fit_score: 90 }, ai_scoring_contract_v2: { ...buildV2VisibleScoreCandidate().ai_scoring_contract_v2, weighted_total_score_recomputed: 40 } })
   const candidateB = buildV2VisibleScoreCandidate({ name: 'B', score: 70, matchScore: { score: 70 }, fit_assessment: { overall_fit_score: 70 }, ai_scoring_contract_v2: { ...buildV2VisibleScoreCandidate().ai_scoring_contract_v2, weighted_total_score_recomputed: 95 } })
