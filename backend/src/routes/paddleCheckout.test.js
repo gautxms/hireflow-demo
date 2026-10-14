@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import {
   buildCheckoutSuccessUrl,
   checkoutResponse,
+  createCheckout,
   completedCheckoutResponse,
   completedCheckoutHasFinishedLifecycle,
   getCheckoutBlockReason,
@@ -20,6 +21,50 @@ import {
 import { reconcilePaddleSubscriptionState } from '../services/paddleSubscriptionReconciliation.js'
 import { markCheckoutReservationCompleted } from '../services/paddleCheckoutReservations.js'
 import { TIERED_PLAN_CODES } from '../config/planCatalog.js'
+import { pool } from '../db/client.js'
+
+test('invalid production origin returns 503 before database reservation or Paddle requests', async (t) => {
+  const previous = {
+    NODE_ENV: process.env.NODE_ENV,
+    APP_ORIGIN: process.env.APP_ORIGIN,
+    FRONTEND_ORIGIN: process.env.FRONTEND_ORIGIN,
+  }
+  t.after(() => {
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) delete process.env[key]
+      else process.env[key] = value
+    }
+  })
+  process.env.NODE_ENV = 'production'
+  process.env.FRONTEND_ORIGIN = 'https://hireflow-backend-production.up.railway.app'
+  let dbCalls = 0
+  let paddleCalls = 0
+  const diagnostics = []
+  t.mock.method(pool, 'query', async () => { dbCalls += 1; throw new Error('database must not be reached') })
+  t.mock.method(globalThis, 'fetch', async () => { paddleCalls += 1; throw new Error('Paddle must not be reached') })
+  t.mock.method(console, 'error', (...args) => diagnostics.push(args))
+
+  for (const origin of [undefined, 'not-a-url', 'http://hireflow.dev', 'https://hireflow.dev/path']) {
+    if (origin === undefined) delete process.env.APP_ORIGIN
+    else process.env.APP_ORIGIN = origin
+    const response = {
+      statusCode: 200,
+      status(code) { this.statusCode = code; return this },
+      json(payload) { this.payload = payload; return this },
+    }
+    await createCheckout({ body: { plan: 'pro_monthly' }, userId: 42, protocol: 'https', get: () => 'hireflow-backend-production.up.railway.app' }, response)
+    assert.equal(response.statusCode, 503)
+    assert.deepEqual(response.payload, {
+      error: 'Checkout is temporarily unavailable due to a configuration problem.',
+      code: 'checkout_configuration_error',
+    })
+  }
+  assert.equal(dbCalls, 0)
+  assert.equal(paddleCalls, 0)
+  assert.equal(diagnostics.length, 4)
+  assert.deepEqual(Object.keys(diagnostics[0][1]).sort(), ['appOriginConfigured', 'environment', 'reason', 'userId'])
+  assert.equal(JSON.stringify(diagnostics).includes('hireflow.dev'), false)
+})
 
 test('Paddle validation diagnostics retain useful fields without logging customer emails', () => {
   const summary = summarizePaddleCheckoutError({

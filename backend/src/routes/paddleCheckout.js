@@ -8,6 +8,7 @@ import { PAID_PLAN_CODES } from '../config/planCatalog.js'
 import { inferPlanFromPaddlePayload } from '../services/paddlePlanChangeRecovery.js'
 import { reconcilePaddleSubscriptionState } from '../services/paddleSubscriptionReconciliation.js'
 import { normalizePaddleTimestamp } from '../utils/paddleTimestamps.js'
+import { resolveCanonicalCheckoutOrigin } from '../config/checkoutOrigin.js'
 
 const router = Router()
 const TEST_MONTHLY_PLAN = 'test-monthly'
@@ -418,10 +419,6 @@ export function getCheckoutBlockReason(user = {}, providerSubscription = null, n
   }
 
   return null
-}
-
-function getAppOrigin(req) {
-  return process.env.APP_ORIGIN || process.env.FRONTEND_ORIGIN || `${req.protocol}://${req.get('host')}`
 }
 
 function checkoutPurchaseMatches(reservation, purchase) {
@@ -1067,6 +1064,20 @@ export async function prepareCheckoutSubscriptionState({
 
 export async function createCheckout(req, res, logLabel = 'checkout') {
   const { plan, testKey } = req.body || {}
+  const checkoutOrigin = resolveCanonicalCheckoutOrigin()
+  if (!checkoutOrigin.origin) {
+    console.error('[Paddle checkout] origin configuration invalid', {
+      environment: checkoutOrigin.environment,
+      appOriginConfigured: checkoutOrigin.configured,
+      reason: checkoutOrigin.reason,
+      userId: req.userId,
+    })
+    return res.status(503).json({
+      error: 'Checkout is temporarily unavailable due to a configuration problem.',
+      code: 'checkout_configuration_error',
+    })
+  }
+  const appOrigin = checkoutOrigin.origin
 
   let user
 
@@ -1270,7 +1281,7 @@ export async function createCheckout(req, res, logLabel = 'checkout') {
             user: acquisition.user,
             paddle,
             purchase: acquisition.purchase,
-            appOrigin: getAppOrigin(req),
+            appOrigin,
           }))
         }
         if (resolved.action === 'completed') {
@@ -1302,7 +1313,6 @@ export async function createCheckout(req, res, logLabel = 'checkout') {
         return res.status(409).json({ error: 'Checkout could not be prepared safely. Please retry.' })
       }
 
-      const appOrigin = getAppOrigin(req)
       const successUrl = buildCheckoutSuccessUrl(appOrigin, acquisition.reservation, acquisition.purchase)
       let paddleResponse
       let paddlePayload

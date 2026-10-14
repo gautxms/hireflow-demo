@@ -42,6 +42,7 @@ A production backend deployment requires these service categories to be configur
 - S3-compatible assembled upload storage for large/chunked uploads (`AWS_REGION`, `AWS_S3_BUCKET`, access credentials).
 - AI provider/model configuration for resume analysis.
 - Paddle production or sandbox API/client/webhook secrets, introductory-trial price IDs, and matching no-trial price IDs for returning subscribers.
+- `APP_ORIGIN=https://hireflow.dev` on the backend for production Paddle checkout; it must be the HTTPS frontend origin without a path, query, or fragment. `FRONTEND_ORIGIN` is a local development fallback only.
 - Email provider settings for verification, password reset, invoices, and customer notifications.
 - Optional file scanning provider configuration.
 
@@ -58,6 +59,7 @@ Resume uploads support PDF, DOC, DOCX, and TXT files. Standard uploads are limit
 - [ ] Verify public prerendered pages load directly by URL.
 - [ ] Verify backend health checks, database connectivity, Redis connectivity, and queue worker startup.
 - [ ] If Paddle is configured, confirm migrations 050-052 are applied, both durable webhook flags are `true`, and `/health` reports `billing.ready: true` before enabling billing traffic.
+- [ ] Confirm Railway has `APP_ORIGIN=https://hireflow.dev` and startup logs show `Paddle checkout origin configuration` with `valid: true`; verify a checkout response's `successUrl` begins `https://hireflow.dev/billing/success` before completing payment.
 - [ ] Verify AI provider credentials/model settings in the target environment.
 - [ ] Verify Paddle checkout, webhook receipt, subscription updates, payment method updates, and invoice access in the target Paddle environment.
 - [ ] For production sandbox testing, follow `docs/PADDLE_SANDBOX_PRODUCTION_TESTING.md`; never change the production deployment default to sandbox.

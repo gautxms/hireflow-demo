@@ -20,6 +20,7 @@ import {
   verifyShortlistBatchAddSchema,
 } from './db/schemaPrerequisites.js'
 import { isResumeQuotaReservationsEnabled } from './services/resumeQuotaReservations.js'
+import { logCheckoutOriginStatus } from './config/checkoutOrigin.js'
 import {
   assertPaddleBillingPrerequisites,
   setPaddleWebhookWorkerState,
@@ -47,6 +48,7 @@ function startRecoveryBillingAdjustmentCron() {
 
 async function start() {
   try {
+    logCheckoutOriginStatus()
     await initializeDatabase()
     await runMigrations()
     await ensurePasswordResetTables()

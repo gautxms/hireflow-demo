@@ -353,6 +353,7 @@ test('concurrent checkout runtime requests make one Paddle create call and reuse
   )
   const userId = userResult.rows[0].id
   const originalEnvironment = {
+    NODE_ENV: process.env.NODE_ENV,
     PADDLE_ENVIRONMENT: process.env.PADDLE_ENVIRONMENT,
     PADDLE_SANDBOX_API_KEY: process.env.PADDLE_SANDBOX_API_KEY,
     PADDLE_SANDBOX_CLIENT_TOKEN: process.env.PADDLE_SANDBOX_CLIENT_TOKEN,
@@ -360,11 +361,12 @@ test('concurrent checkout runtime requests make one Paddle create call and reuse
     APP_ORIGIN: process.env.APP_ORIGIN,
   }
   Object.assign(process.env, {
+    NODE_ENV: 'production',
     PADDLE_ENVIRONMENT: 'sandbox',
     PADDLE_SANDBOX_API_KEY: 'sandbox-api-key',
     PADDLE_SANDBOX_CLIENT_TOKEN: 'sandbox-client-token',
     PADDLE_SANDBOX_MONTHLY_PRICE_ID: 'pri_monthly',
-    APP_ORIGIN: 'https://hireflow.example.test',
+    APP_ORIGIN: 'https://hireflow.dev/',
   })
   t.after(() => {
     for (const [key, value] of Object.entries(originalEnvironment)) {
@@ -375,10 +377,12 @@ test('concurrent checkout runtime requests make one Paddle create call and reuse
 
   let createCalls = 0
   let createdTransaction = null
+  let providerReturnUrl = null
   t.mock.method(globalThis, 'fetch', async (url, options = {}) => {
     if (options.method === 'POST' && String(url).endsWith('/transactions')) {
       createCalls += 1
       const requestBody = JSON.parse(options.body)
+      providerReturnUrl = requestBody.return_url
       await new Promise((resolve) => setTimeout(resolve, 50))
       createdTransaction = {
         id: 'txn_runtime123',
@@ -387,7 +391,7 @@ test('concurrent checkout runtime requests make one Paddle create call and reuse
         subscription_id: null,
         items: requestBody.items,
         custom_data: requestBody.custom_data,
-        checkout: { url: 'https://hireflow.example.test/checkout?_ptxn=txn_runtime123' },
+        checkout: { url: 'https://hireflow.dev/checkout?_ptxn=txn_runtime123' },
       }
       return { ok: true, status: 200, json: async () => ({ data: createdTransaction }) }
     }
@@ -401,7 +405,7 @@ test('concurrent checkout runtime requests make one Paddle create call and reuse
     body: { plan: 'monthly' },
     userId,
     protocol: 'https',
-    get: () => 'hireflow.example.test',
+    get: () => 'hireflow-backend-production.up.railway.app',
   }
   const responses = Array.from({ length: 12 }, responseRecorder)
   await Promise.all(responses.map((response) => createCheckout(request, response, 'postgres-test')))
@@ -417,6 +421,7 @@ test('concurrent checkout runtime requests make one Paddle create call and reuse
     assert.equal(response.payload.checkoutUrl, createdTransaction.checkout.url)
     assert.equal(response.payload.plan, 'monthly')
     const successUrl = new URL(response.payload.successUrl)
+    assert.equal(successUrl.origin, 'https://hireflow.dev')
     assert.equal(successUrl.pathname, '/billing/success')
     assert.equal(successUrl.searchParams.get('transaction'), response.payload.transactionId)
     assert.equal(successUrl.searchParams.get('checkout'), response.payload.checkoutReservationId)
@@ -426,12 +431,14 @@ test('concurrent checkout runtime requests make one Paddle create call and reuse
     successfulResponses.every((response) => response.payload.transactionId === 'txn_runtime123'),
     true,
   )
+  assert.equal(providerReturnUrl, `https://hireflow.dev/billing/success?checkout=${successfulResponses[0].payload.checkoutReservationId}&plan=monthly`)
   assert.equal(successfulResponses.length + inProgressResponses.length, responses.length)
 
   const retry = responseRecorder()
   await createCheckout(request, retry, 'postgres-test-retry')
   assert.equal(retry.statusCode, 200)
   assert.equal(retry.payload.transactionId, 'txn_runtime123')
+  assert.equal(retry.payload.successUrl, `https://hireflow.dev/billing/success?transaction=txn_runtime123&checkout=${retry.payload.checkoutReservationId}&plan=monthly`)
   assert.deepEqual(
     ['checkoutUrl', 'transactionId', 'checkoutReservationId', 'plan', 'successUrl'].map((key) => retry.payload[key]),
     ['checkoutUrl', 'transactionId', 'checkoutReservationId', 'plan', 'successUrl'].map((key) => successfulResponses[0].payload[key]),

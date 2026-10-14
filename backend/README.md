@@ -27,7 +27,7 @@ Set the following environment variables:
 - `PADDLE_API_KEY`
 - `PADDLE_MONTHLY_PRICE_ID`
 - `PADDLE_ANNUAL_PRICE_ID`
-- `APP_ORIGIN` (optional, defaults to `FRONTEND_ORIGIN`)
+- `APP_ORIGIN=https://hireflow.dev` (required for production Paddle checkout; HTTPS origin only, with no path/query/fragment. Local development can use `FRONTEND_ORIGIN`.)
 - `ADMIN_IP_WHITELIST` (set `0.0.0.0/0` to allow all admin login IPs)
 - `AWS_REGION`
 - `AWS_S3_BUCKET`
