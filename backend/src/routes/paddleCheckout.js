@@ -514,7 +514,7 @@ export async function acquireCheckoutReservation({
        FOR UPDATE`,
       [user.id, paddle.environment, new Date(now.getTime() - CHECKOUT_RESERVATION_TTL_MS).toISOString(), ignoredCompletedReservationIds],
     )
-    if (completedResult?.rows[0]) {
+    if (completedResult?.rows?.[0]) {
       await client.query('COMMIT')
       return { action: 'inspect_completed', reservation: completedResult.rows[0], purchase, user }
     }
