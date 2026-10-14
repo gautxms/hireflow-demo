@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
   buildCheckoutSuccessUrl,
+  completedCheckoutResponse,
   getCheckoutBlockReason,
   isTrialEligibleForUser,
   loadCheckoutReservationForSync,
@@ -185,6 +186,19 @@ test('checkout success URL carries the exact reservation and selected plan', () 
   assert.equal(url.pathname, '/billing/success')
   assert.equal(url.searchParams.get('checkout'), '42d85541-3b0e-4b1a-8dca-2525950fbaf0')
   assert.equal(url.searchParams.get('plan'), 'annual')
+})
+
+test('completed checkout recovery returns exact verified correlation, including the purchased plan', () => {
+  const { acquisition, transaction } = checkoutReservationFixture()
+  const result = completedCheckoutResponse(acquisition, { ...transaction, status: 'completed', subscription_id: 'sub_new' })
+  assert.deepEqual(result, {
+    error: 'This checkout has already completed. Subscription confirmation is in progress.',
+    code: 'checkout_completed',
+    redirectTo: '/billing/success',
+    transactionId: transaction.id,
+    checkoutReservationId: acquisition.reservation.reservation_token,
+    plan: 'annual',
+  })
 })
 
 test('completed checkout sync resolves only the authenticated exact reservation', async () => {

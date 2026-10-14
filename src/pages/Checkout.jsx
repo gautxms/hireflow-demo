@@ -5,13 +5,12 @@ import API_BASE from '../config/api'
 import { CHECKOUT_PLAN_DETAILS, getCheckoutPlanFromSearch } from '../config/pricingPlans'
 import { syncCompletedCheckout } from '../utils/paddleSubscriptionSync'
 import { isCanceledSubscription } from '../utils/subscriptionState'
-import { PADDLE_LAST_TRANSACTION_STORAGE_KEY } from '../utils/billingSuccessState'
+import { completedCheckoutNavigation, PADDLE_LAST_TRANSACTION_STORAGE_KEY } from '../utils/billingSuccessState'
 import '../styles/checkout.css'
 
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 const fallbackClientToken = import.meta.env.VITE_PADDLE_CLIENT_TOKEN
-const CHECKOUT_COMPLETED_STORAGE_KEY = 'hireflow_checkout_completed_at'
 const PADDLE_CHECKOUT_ACTIVE_STORAGE_KEY = 'paddle_checkout_active'
 
 function getTestKeyFromQuery() {
@@ -81,27 +80,6 @@ export default function Checkout({ onAuthSuccess }) {
     let paddleRef = null
     let latestTransactionId = null
     let isPaymentFlowCompleted = false
-
-    const markCheckoutCompleted = () => {
-      sessionStorage.setItem(CHECKOUT_COMPLETED_STORAGE_KEY, String(Date.now()))
-    }
-
-    const wasCheckoutRecentlyCompleted = () => {
-      const raw = sessionStorage.getItem(CHECKOUT_COMPLETED_STORAGE_KEY)
-      if (!raw) {
-        return false
-      }
-
-      const completedAt = Number(raw)
-
-      if (!Number.isFinite(completedAt)) {
-        sessionStorage.removeItem(CHECKOUT_COMPLETED_STORAGE_KEY)
-        return false
-      }
-
-      // Prevent reopening the embedded popup when users refresh shortly after paying.
-      return Date.now() - completedAt < 20 * 60 * 1000
-    }
 
     const closePaddleCheckout = () => {
       if (typeof paddleRef?.Checkout?.close === 'function') {
@@ -205,11 +183,6 @@ export default function Checkout({ onAuthSuccess }) {
         return
       }
 
-      if (wasCheckoutRecentlyCompleted()) {
-        navigate('/billing/success')
-        return
-      }
-
       const token = localStorage.getItem(TOKEN_STORAGE_KEY)
 
       if (!token) {
@@ -310,6 +283,12 @@ export default function Checkout({ onAuthSuccess }) {
 
         if (!response.ok) {
           console.error('[Checkout] Response not OK:', { status: response.status, payload })
+          if (payload?.code === 'checkout_completed') {
+            const recovery = completedCheckoutNavigation(payload)
+            if (!recovery) throw new Error('Completed checkout could not be identified. Please retry shortly.')
+            navigate(recovery.path, { state: recovery.state })
+            return
+          }
           if (payload?.redirectTo) {
             navigate(payload.redirectTo)
             return
@@ -420,7 +399,6 @@ export default function Checkout({ onAuthSuccess }) {
               console.log('[Checkout] Payment succeeded despite popup close')
               isPaymentFlowCompleted = true
               setHasSuccessfulTransaction(true)
-              markCheckoutCompleted()
               sessionStorage.removeItem(PADDLE_LAST_TRANSACTION_STORAGE_KEY)
               persistActiveSubscription(token, user, '/billing/success')
               navigate('/billing/success', {
@@ -457,7 +435,6 @@ export default function Checkout({ onAuthSuccess }) {
 
           console.log('[Paddle] checkout.completed received:', { transactionId: completionTransactionId })
           isPaymentFlowCompleted = true
-          markCheckoutCompleted()
           sessionStorage.setItem(PADDLE_LAST_TRANSACTION_STORAGE_KEY, completionTransactionId)
           sessionStorage.removeItem(PADDLE_CHECKOUT_ACTIVE_STORAGE_KEY)
           setTransactionId(completionTransactionId)
