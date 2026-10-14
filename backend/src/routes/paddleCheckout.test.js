@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
   buildCheckoutSuccessUrl,
+  checkoutResponse,
   completedCheckoutResponse,
   completedCheckoutHasFinishedLifecycle,
   getCheckoutBlockReason,
@@ -181,12 +182,32 @@ test('checkout success URL carries the exact reservation and selected plan', () 
     'https://hireflow.dev',
     { reservation_token: '42d85541-3b0e-4b1a-8dca-2525950fbaf0' },
     { storedPlan: 'annual' },
+    'txn_annual123',
   ))
 
   assert.equal(url.origin, 'https://hireflow.dev')
   assert.equal(url.pathname, '/billing/success')
+  assert.equal(url.searchParams.get('transaction'), 'txn_annual123')
   assert.equal(url.searchParams.get('checkout'), '42d85541-3b0e-4b1a-8dca-2525950fbaf0')
   assert.equal(url.searchParams.get('plan'), 'annual')
+})
+
+test('checkout response retains exact durable correlation, independent of Paddle payment link', () => {
+  const { acquisition, transaction, paddle } = checkoutReservationFixture()
+  transaction.checkout.url = 'https://hireflow.dev/checkout?_ptxn=txn_annual123'
+  const response = checkoutResponse({
+    transaction, reservation: acquisition.reservation, user: acquisition.user,
+    paddle, purchase: { storedPlan: 'annual', trialEligible: false, checkoutMode: 'paid_returning' },
+    appOrigin: 'https://hireflow.dev',
+  })
+  assert.equal(response.checkoutUrl, transaction.checkout.url)
+  assert.equal(response.transactionId, transaction.id)
+  assert.equal(response.checkoutReservationId, acquisition.reservation.reservation_token)
+  assert.equal(response.plan, 'annual')
+  assert.equal(response.successUrl, `https://hireflow.dev/billing/success?transaction=${transaction.id}&checkout=${acquisition.reservation.reservation_token}&plan=annual`)
+  assert.equal(new URL(response.successUrl).pathname, '/billing/success')
+  assert.equal(response.trialEligible, false)
+  assert.equal(response.checkoutMode, 'paid_returning')
 })
 
 test('completed checkout recovery returns exact verified correlation, including the purchased plan', () => {

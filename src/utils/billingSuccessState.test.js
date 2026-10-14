@@ -4,6 +4,7 @@ import {
   completedCheckoutNavigation,
   PADDLE_LAST_TRANSACTION_STORAGE_KEY,
   resolveBillingSuccessState,
+  verifiedCheckoutNavigation,
 } from './billingSuccessState.js'
 
 function storageWith(values = {}) {
@@ -29,7 +30,7 @@ test('direct Paddle return recovers the stored transaction and exact checkout re
   })
 })
 
-test('in-app checkout completion keeps its trusted navigation state', () => {
+test('billing success prefers durable URL correlation over stale navigation state', () => {
   const result = resolveBillingSuccessState({
     historyState: {
       transactionId: 'txn_history123',
@@ -42,9 +43,38 @@ test('in-app checkout completion keeps its trusted navigation state', () => {
   })
 
   assert.equal(result.transactionId, 'txn_history123')
-  assert.equal(result.checkoutReservationId, '42d85541-3b0e-4b1a-8dca-2525950fbaf0')
-  assert.equal(result.plan, 'monthly')
+  assert.equal(result.checkoutReservationId, '6b2ca06a-da77-44fc-af0e-c9de45ab14fd')
+  assert.equal(result.plan, 'annual')
   assert.equal(result.message, 'Welcome')
+})
+
+test('verified success URL stays on billing success and survives reload without browser state', () => {
+  const origin = 'https://hireflow.dev'
+  const payload = {
+    checkoutUrl: 'https://hireflow.dev/checkout?_ptxn=txn_growth123',
+    transactionId: 'txn_growth123',
+    checkoutReservationId: '42d85541-3b0e-4b1a-8dca-2525950fbaf0',
+    plan: 'growth_monthly',
+    successUrl: `${origin}/billing/success?transaction=txn_growth123&checkout=42d85541-3b0e-4b1a-8dca-2525950fbaf0&plan=growth_monthly`,
+  }
+  const verified = verifiedCheckoutNavigation(payload, origin)
+  assert.equal(verified.url, payload.successUrl)
+  assert.equal(new URL(verified.url).pathname, '/billing/success')
+  assert.deepEqual(resolveBillingSuccessState({ search: new URL(verified.url).search }), {
+    ...verified.state, message: '',
+  })
+
+  for (const successUrl of [
+    `${origin}/checkout?transaction=txn_growth123&checkout=${payload.checkoutReservationId}&plan=growth_monthly`,
+    payload.successUrl.replace(origin, 'https://attacker.test'),
+    payload.successUrl.replace('txn_growth123', 'bad'),
+    payload.successUrl.replace(payload.checkoutReservationId, 'invalid'),
+    payload.successUrl.replace('growth_monthly', 'pro_monthly'),
+    `${payload.successUrl}&transaction=txn_other123`,
+  ]) {
+    assert.equal(verifiedCheckoutNavigation({ ...payload, successUrl }, origin), null)
+  }
+  assert.equal(verifiedCheckoutNavigation({ ...payload, plan: 'unsupported' }, origin), null)
 })
 
 test('signed-in customer can retry an existing checkout after closing its original tab', () => {

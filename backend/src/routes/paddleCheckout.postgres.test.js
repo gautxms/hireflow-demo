@@ -387,7 +387,7 @@ test('concurrent checkout runtime requests make one Paddle create call and reuse
         subscription_id: null,
         items: requestBody.items,
         custom_data: requestBody.custom_data,
-        checkout: { url: 'https://checkout.paddle.test/pay?_ptxn=txn_runtime123' },
+        checkout: { url: 'https://hireflow.example.test/checkout?_ptxn=txn_runtime123' },
       }
       return { ok: true, status: 200, json: async () => ({ data: createdTransaction }) }
     }
@@ -413,6 +413,15 @@ test('concurrent checkout runtime requests make one Paddle create call and reuse
 
   assert.equal(createCalls, 1)
   assert.equal(successfulResponses.length >= 1, true)
+  for (const response of successfulResponses) {
+    assert.equal(response.payload.checkoutUrl, createdTransaction.checkout.url)
+    assert.equal(response.payload.plan, 'monthly')
+    const successUrl = new URL(response.payload.successUrl)
+    assert.equal(successUrl.pathname, '/billing/success')
+    assert.equal(successUrl.searchParams.get('transaction'), response.payload.transactionId)
+    assert.equal(successUrl.searchParams.get('checkout'), response.payload.checkoutReservationId)
+    assert.equal(successUrl.searchParams.get('plan'), response.payload.plan)
+  }
   assert.equal(
     successfulResponses.every((response) => response.payload.transactionId === 'txn_runtime123'),
     true,
@@ -423,5 +432,9 @@ test('concurrent checkout runtime requests make one Paddle create call and reuse
   await createCheckout(request, retry, 'postgres-test-retry')
   assert.equal(retry.statusCode, 200)
   assert.equal(retry.payload.transactionId, 'txn_runtime123')
+  assert.deepEqual(
+    ['checkoutUrl', 'transactionId', 'checkoutReservationId', 'plan', 'successUrl'].map((key) => retry.payload[key]),
+    ['checkoutUrl', 'transactionId', 'checkoutReservationId', 'plan', 'successUrl'].map((key) => successfulResponses[0].payload[key]),
+  )
   assert.equal(createCalls, 1)
 })

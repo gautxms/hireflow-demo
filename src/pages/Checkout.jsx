@@ -5,7 +5,7 @@ import API_BASE from '../config/api'
 import { CHECKOUT_PLAN_DETAILS, getCheckoutPlanFromSearch } from '../config/pricingPlans'
 import { syncCompletedCheckout } from '../utils/paddleSubscriptionSync'
 import { isCanceledSubscription } from '../utils/subscriptionState'
-import { completedCheckoutNavigation, PADDLE_LAST_TRANSACTION_STORAGE_KEY } from '../utils/billingSuccessState'
+import { completedCheckoutNavigation, verifiedCheckoutNavigation, PADDLE_LAST_TRANSACTION_STORAGE_KEY } from '../utils/billingSuccessState'
 import '../styles/checkout.css'
 
 
@@ -52,6 +52,7 @@ function waitForPaddle(timeoutMs = 5000) {
 
 export default function Checkout({ onAuthSuccess }) {
   const onAuthSuccessRef = useRef(onAuthSuccess)
+  const checkoutNavigationRef = useRef(null)
   const selectedPlan = getCheckoutPlanFromSearch(window.location.search)
   const plan = selectedPlan ? CHECKOUT_PLAN_DETAILS[selectedPlan] : null
   const testKey = selectedPlan === 'test-monthly' ? getTestKeyFromQuery() : ''
@@ -133,11 +134,11 @@ export default function Checkout({ onAuthSuccess }) {
       }
     }
 
-    const syncSubscriptionAfterPayment = async (token, completedTransactionId, attempts = 8, delayMs = 1200) => {
+    const syncSubscriptionAfterPayment = async (token, completedTransactionId, checkoutReservationId, attempts = 8, delayMs = 1200) => {
       for (let attempt = 1; attempt <= attempts; attempt += 1) {
         try {
           if (completedTransactionId) {
-            await syncCompletedCheckout({ apiBase: API_BASE, token, transactionId: completedTransactionId })
+            await syncCompletedCheckout({ apiBase: API_BASE, token, transactionId: completedTransactionId, checkoutReservationId })
           }
 
           const result = await verifySubscriptionStatus(token)
@@ -296,13 +297,7 @@ export default function Checkout({ onAuthSuccess }) {
           throw new Error(payload?.error || payload?.message || `Checkout failed (${response.status})`)
         }
 
-        // Step 2: Extract checkout URL and user email from response
-        // Backend returns: { 
-        //   checkoutUrl: "https://hireflow.dev/billing/success?_ptxn=txn_...",
-        //   userEmail: "user@example.com",
-        //   clientToken: "live_..."
-        // }
-        // clientToken comes from environment variables for better security
+        // Step 2: Verify the backend's exact checkout correlation and success destination.
         const { checkoutUrl, userEmail, clientToken: checkoutClientToken, paddleEnvironment } = payload
         if (!checkoutUrl) {
           console.error('[Checkout] Missing checkoutUrl in response:', payload)
@@ -314,23 +309,23 @@ export default function Checkout({ onAuthSuccess }) {
           throw new Error('User email not provided by server')
         }
 
-        // Extract transaction ID from the URL parameter
-        let initialTransactionId
-        let successRedirectUrl
+        const checkoutNavigation = verifiedCheckoutNavigation(payload, window.location.origin)
+        if (!checkoutNavigation) throw new Error('Invalid checkout success URL from server')
+
+        let checkoutTransactionId
         try {
           const url = new URL(checkoutUrl)
-          initialTransactionId = url.searchParams.get('_ptxn')
-          url.searchParams.delete('_ptxn')
-          successRedirectUrl = url.toString()
+          checkoutTransactionId = url.searchParams.get('_ptxn')
         } catch (e) {
           console.error('[Checkout] Failed to parse checkout URL:', checkoutUrl, e)
           throw new Error('Invalid checkout URL format')
         }
 
-        if (!initialTransactionId) {
-          console.error('[Checkout] Missing transaction ID in checkout URL:', checkoutUrl)
-          throw new Error('Transaction ID not found in checkout URL')
+        if (checkoutTransactionId !== checkoutNavigation.state.transactionId) {
+          throw new Error('Checkout transaction does not match the server response')
         }
+        const initialTransactionId = checkoutNavigation.state.transactionId
+        checkoutNavigationRef.current = checkoutNavigation
         latestTransactionId = initialTransactionId
         setTransactionId(initialTransactionId)
         sessionStorage.setItem(PADDLE_LAST_TRANSACTION_STORAGE_KEY, initialTransactionId)
@@ -390,9 +385,9 @@ export default function Checkout({ onAuthSuccess }) {
 
           try {
             const syncResult = closedTransactionId
-              ? await syncSubscriptionAfterPayment(token, closedTransactionId)
+              ? await syncSubscriptionAfterPayment(token, closedTransactionId, checkoutNavigation.state.checkoutReservationId)
               : await verifySubscriptionStatus(token)
-            const { user, isActive } = syncResult || {}
+            const { isActive } = syncResult || {}
             const outcome = resolveCheckoutCloseState({ isActiveSubscription: isActive, verificationFailed: false })
 
             if (outcome.nextStatus === 'success') {
@@ -400,15 +395,7 @@ export default function Checkout({ onAuthSuccess }) {
               isPaymentFlowCompleted = true
               setHasSuccessfulTransaction(true)
               sessionStorage.removeItem(PADDLE_LAST_TRANSACTION_STORAGE_KEY)
-              persistActiveSubscription(token, user, '/billing/success')
-              navigate('/billing/success', {
-                replace: true,
-                state: {
-                  transactionId: closedTransactionId,
-                  plan: user?.subscription_plan || selectedPlan,
-                  message: outcome.message,
-                },
-              })
+              navigate(checkoutNavigation.path, { state: { ...checkoutNavigation.state, message: outcome.message } })
               return
             }
 
@@ -442,10 +429,7 @@ export default function Checkout({ onAuthSuccess }) {
           setCheckoutOpen(false)
           closePaddleCheckout()
 
-          navigate('/billing/success', {
-            replace: true,
-            state: { transactionId: completionTransactionId, plan: selectedPlan },
-          })
+          navigate(checkoutNavigation.path, { state: checkoutNavigation.state })
         }
 
         const handlePaddleEvent = (eventData) => {
@@ -480,7 +464,7 @@ export default function Checkout({ onAuthSuccess }) {
             transactionId: initialTransactionId,
             settings: {
               allowLogout: false,
-              successUrl: successRedirectUrl,
+              successUrl: checkoutNavigation.url,
             },
           })
           setStatus('opened')
@@ -522,7 +506,7 @@ export default function Checkout({ onAuthSuccess }) {
       try {
         const pendingTransactionId = transactionId || sessionStorage.getItem(PADDLE_LAST_TRANSACTION_STORAGE_KEY)
         if (pendingTransactionId) {
-          await syncCompletedCheckout({ apiBase: API_BASE, token, transactionId: pendingTransactionId })
+          await syncCompletedCheckout({ apiBase: API_BASE, token, transactionId: pendingTransactionId, checkoutReservationId: checkoutNavigationRef.current?.state.checkoutReservationId })
         }
 
         const response = await fetch(`${API_BASE}/auth/me`, {
@@ -557,13 +541,9 @@ export default function Checkout({ onAuthSuccess }) {
 
         window.dispatchEvent(new CustomEvent('hireflow-auth-updated'))
 
-        navigate('/billing/success', {
-          replace: true,
-          state: {
-            transactionId: transactionId || sessionStorage.getItem(PADDLE_LAST_TRANSACTION_STORAGE_KEY),
-            plan: user?.subscription_plan || selectedPlan,
-            message: 'Payment successful! Your subscription is now active.',
-          },
+        const checkoutNavigation = checkoutNavigationRef.current
+        if (checkoutNavigation) navigate(checkoutNavigation.path, {
+          state: { ...checkoutNavigation.state, message: 'Payment successful! Your subscription is now active.' },
         })
       } catch (err) {
         console.error('[Checkout] Poll error:', err)
@@ -571,7 +551,7 @@ export default function Checkout({ onAuthSuccess }) {
     }, 2000)
 
     return () => clearInterval(pollInterval)
-  }, [checkoutOpen, hasSuccessfulTransaction, selectedPlan, transactionId])
+  }, [checkoutOpen, hasSuccessfulTransaction, transactionId])
 
   useEffect(() => () => {
     sessionStorage.removeItem(PADDLE_CHECKOUT_ACTIVE_STORAGE_KEY)

@@ -36,3 +36,15 @@ test('completed checkout response uses validated correlation before navigation a
   assert.match(checkout, /navigate\(recovery\.path, \{ state: recovery\.state \}\)/)
   assert.match(billingSuccess, /syncCompletedCheckout\(\{[\s\S]*transactionId: transactionId \|\| null,[\s\S]*checkoutReservationId: checkoutReservationId \|\| null,/)
 })
+
+test('Paddle completion, close verification, and polling use the validated durable destination', async () => {
+  const checkout = await readFile(new URL('./Checkout.jsx', import.meta.url), 'utf8')
+  assert.match(checkout, /verifiedCheckoutNavigation\(payload, window\.location\.origin\)/)
+  assert.match(checkout, /successUrl: checkoutNavigation\.url/)
+  assert.match(checkout, /checkoutTransactionId !== checkoutNavigation\.state\.transactionId/)
+  assert.match(checkout, /checkout\.completed[\s\S]*?navigate\(checkoutNavigation\.path, \{ state: checkoutNavigation\.state \}\)/)
+  assert.match(checkout, /navigate\(checkoutNavigation\.path, \{ state: \{ \.\.\.checkoutNavigation\.state, message: outcome\.message \} \}\)/)
+  assert.match(checkout, /if \(checkoutNavigation\) navigate\(checkoutNavigation\.path/)
+  assert.doesNotMatch(checkout, /searchParams\.delete\('_ptxn'\)/)
+  assert.doesNotMatch(checkout, /navigate\('\/billing\/success'/)
+})
