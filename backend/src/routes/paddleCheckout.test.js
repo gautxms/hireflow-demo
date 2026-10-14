@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import {
   buildCheckoutSuccessUrl,
   completedCheckoutResponse,
+  completedCheckoutHasFinishedLifecycle,
   getCheckoutBlockReason,
   isTrialEligibleForUser,
   loadCheckoutReservationForSync,
@@ -199,6 +200,33 @@ test('completed checkout recovery returns exact verified correlation, including 
     checkoutReservationId: acquisition.reservation.reservation_token,
     plan: 'annual',
   })
+})
+
+test('only the current cancelled lifecycle or an owned terminal historical projection is finished', async () => {
+  const { acquisition } = checkoutReservationFixture()
+  acquisition.user.subscription_status = 'cancelled'
+  acquisition.user.paddle_subscription_id = 'sub_current'
+  acquisition.reservation.paddle_environment = 'sandbox'
+  let queryCount = 0
+  const db = {
+    async query(sql, params) {
+      queryCount += 1
+      assert.match(sql, /user_id = \$2/)
+      assert.match(sql, /LOWER\(status\) IN \('canceled', 'cancelled'\)/)
+      assert.deepEqual(params, ['sub_historical', acquisition.user.id, 'sandbox'])
+      return { rowCount: 1 }
+    },
+  }
+  assert.equal(await completedCheckoutHasFinishedLifecycle(acquisition, { subscription_id: 'sub_current' }, db), true)
+  assert.equal(queryCount, 0)
+  assert.equal(await completedCheckoutHasFinishedLifecycle(acquisition, { subscription_id: 'sub_historical' }, db), true)
+  assert.equal(queryCount, 1)
+  assert.equal(await completedCheckoutHasFinishedLifecycle(acquisition, { subscription_id: 'sub_unapplied' }, {
+    async query() { return { rowCount: 0 } },
+  }), false)
+  assert.equal(await completedCheckoutHasFinishedLifecycle(acquisition, { subscription_id: null }, db), false)
+  acquisition.user.subscription_status = 'active'
+  assert.equal(await completedCheckoutHasFinishedLifecycle(acquisition, { subscription_id: 'sub_historical' }, db), false)
 })
 
 test('completed checkout sync resolves only the authenticated exact reservation', async () => {
