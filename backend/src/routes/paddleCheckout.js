@@ -174,8 +174,9 @@ export async function loadCheckoutReservationForSync({
   return result.rows[0] || null
 }
 
-export function buildCheckoutSuccessUrl(appOrigin, reservation, purchase) {
+export function buildCheckoutSuccessUrl(appOrigin, reservation, purchase, transactionId) {
   const successUrl = new URL('/billing/success', `${String(appOrigin || '').replace(/\/$/, '')}/`)
+  if (transactionId) successUrl.searchParams.set('transaction', transactionId)
   successUrl.searchParams.set('checkout', reservation.reservation_token)
   successUrl.searchParams.set('plan', purchase.storedPlan)
   return successUrl.toString()
@@ -983,10 +984,13 @@ export async function supersedeCheckoutReservation({ acquisition, paddle, db = p
   return { action: 'retry', transaction }
 }
 
-function checkoutResponse({ transaction, user, paddle, purchase }) {
+export function checkoutResponse({ transaction, reservation, user, paddle, purchase, appOrigin }) {
   return {
     checkoutUrl: transaction.checkout.url,
     transactionId: transaction.id,
+    checkoutReservationId: reservation.reservation_token,
+    plan: reservation.stored_plan,
+    successUrl: buildCheckoutSuccessUrl(appOrigin, reservation, purchase, transaction.id),
     userEmail: user.email,
     clientToken: paddle.clientToken,
     paddleEnvironment: paddle.environment,
@@ -1262,9 +1266,11 @@ export async function createCheckout(req, res, logLabel = 'checkout') {
         if (resolved.action === 'reuse') {
           return res.json(checkoutResponse({
             transaction: resolved.transaction,
+            reservation: acquisition.reservation,
             user: acquisition.user,
             paddle,
             purchase: acquisition.purchase,
+            appOrigin: getAppOrigin(req),
           }))
         }
         if (resolved.action === 'completed') {
@@ -1403,9 +1409,11 @@ export async function createCheckout(req, res, logLabel = 'checkout') {
       })
       return res.json(checkoutResponse({
         transaction,
+        reservation: acquisition.reservation,
         user: acquisition.user,
         paddle,
         purchase: acquisition.purchase,
+        appOrigin,
       }))
     }
 
