@@ -953,8 +953,8 @@ test('v2 visible score experiment skips malformed component and recomputed score
   }
 })
 
-test('v2 visible score experiment applies one validated score source regardless of confidence metadata', () => {
-  for (const scoreConfidence of ['high', 'medium', 'low', null, undefined, '', 'unknown', 'HIGH-ish', {}, []]) {
+test('v2 visible score experiment requires high-confidence metadata', () => {
+  for (const scoreConfidence of ['medium', 'low', null, undefined, '', 'unknown', 'HIGH-ish', {}, []]) {
     const { candidate, logs } = applyV2VisibleScoreExperimentForTest({
       candidate: buildV2VisibleScoreCandidate({
         ai_scoring_contract_v2: {
@@ -969,17 +969,15 @@ test('v2 visible score experiment applies one validated score source regardless 
       },
     })
 
-    assert.equal(candidate.score, 87.7)
-    assert.equal(candidate.matchScore.score, 87.7)
-    assert.equal(candidate.fit_assessment.overall_fit_score, 87.7)
-    assert.equal(candidate.v2_visible_score_experiment.score_source, 'weighted_total_score_recomputed')
-    assert.equal(logs[0].payload.applied, true)
-    assert.equal(logs[0].payload.skip_reason, null)
+    assert.equal(candidate.score, 78)
+    assert.equal(candidate.matchScore.score, 78)
+    assert.equal(candidate.fit_assessment.overall_fit_score, 78)
+    assert.equal(candidate.v2_visible_score_experiment, undefined)
+    assert.equal(logs[0].payload.applied, false)
+    assert.equal(logs[0].payload.skip_reason, 'insufficient_v2_confidence')
   }
 })
-
-
-test('v2 visible score experiment keeps Emily score stable when model confidence changes', () => {
+test('v2 visible score experiment applies Emily score only when confidence is high', () => {
   const emilyContract = {
     scoring_contract_version: 'ai_jd_fit_rubric_v2',
     has_job_description_context: true,
@@ -989,34 +987,41 @@ test('v2 visible score experiment keeps Emily score stable when model confidence
     seniority_progression_score: 72,
     weighted_total_score_recomputed: 71.4,
   }
-  const visibleScores = ['high', 'medium'].map((scoreConfidence) => {
-    const { candidate, logs } = applyV2VisibleScoreExperimentForTest({
-      candidate: buildV2VisibleScoreCandidate({
-        name: 'Emily Chen',
-        score: 76,
-        matchScore: { score: 76, score_out_of_ten: 7.6 },
-        fit_assessment: { overall_fit_score: 76 },
-        ai_scoring_contract_v2: { ...emilyContract, score_confidence: scoreConfidence },
-      }),
-      env: {
-        AI_SCORING_CONTRACT_V2_VISIBLE_APPLY_ENABLED: 'true',
-        AI_SCORING_CONTRACT_V2_VISIBLE_APPLY_ALL_USERS: 'true',
-        AI_SCORING_CONTRACT_V2_VISIBLE_APPLY_MIN_CONFIDENCE: 'high',
-      },
-    })
-
-    assert.equal(candidate.matchScore.score, 71.4)
-    assert.equal(candidate.matchScore.score_out_of_ten, 7.1)
-    assert.equal(candidate.fit_assessment.overall_fit_score, 71.4)
-    assert.equal(candidate.v2_visible_score_experiment.original_visible_score, 76)
-    assert.equal(logs[0].payload.score_confidence, scoreConfidence)
-    assert.equal(logs[0].payload.applied, true)
-    return candidate.score
+  const buildEmilyCandidate = (scoreConfidence) => buildV2VisibleScoreCandidate({
+    name: 'Emily Chen',
+    score: 76,
+    matchScore: { score: 76, score_out_of_ten: 7.6 },
+    fit_assessment: { overall_fit_score: 76 },
+    ai_scoring_contract_v2: { ...emilyContract, score_confidence: scoreConfidence },
   })
+  const env = {
+    AI_SCORING_CONTRACT_V2_VISIBLE_APPLY_ENABLED: 'true',
+    AI_SCORING_CONTRACT_V2_VISIBLE_APPLY_ALL_USERS: 'true',
+    AI_SCORING_CONTRACT_V2_VISIBLE_APPLY_MIN_CONFIDENCE: 'high',
+  }
 
-  assert.deepEqual(visibleScores, [71.4, 71.4])
+  const highConfidence = applyV2VisibleScoreExperimentForTest({
+    candidate: buildEmilyCandidate('high'),
+    env,
+  })
+  assert.equal(highConfidence.candidate.score, 71.4)
+  assert.equal(highConfidence.candidate.matchScore.score_out_of_ten, 7.1)
+  assert.equal(highConfidence.candidate.fit_assessment.overall_fit_score, 71.4)
+  assert.equal(highConfidence.candidate.v2_visible_score_experiment.original_visible_score, 76)
+  assert.equal(highConfidence.logs[0].payload.applied, true)
+
+  const mediumConfidence = applyV2VisibleScoreExperimentForTest({
+    candidate: buildEmilyCandidate('medium'),
+    env,
+  })
+  assert.equal(mediumConfidence.candidate.score, 76)
+  assert.equal(mediumConfidence.candidate.matchScore.score, 76)
+  assert.equal(mediumConfidence.candidate.matchScore.score_out_of_ten, 7.6)
+  assert.equal(mediumConfidence.candidate.fit_assessment.overall_fit_score, 76)
+  assert.equal(mediumConfidence.candidate.v2_visible_score_experiment, undefined)
+  assert.equal(mediumConfidence.logs[0].payload.applied, false)
+  assert.equal(mediumConfidence.logs[0].payload.skip_reason, 'insufficient_v2_confidence')
 })
-
 test('v2 visible score experiment all-users rollout still skips invalid components, missing JD context, and invalid score', () => {
   const invalidCases = [
     {
@@ -1068,7 +1073,7 @@ test('v2 visible score experiment all-users rollout still skips invalid componen
   }
 })
 
-test('v2 visible score experiment ignores configured confidence threshold for a validated contract', () => {
+test('v2 visible score experiment requires high confidence even when threshold configuration is invalid', () => {
   const { candidate, logs } = applyV2VisibleScoreExperimentForTest({
     candidate: buildV2VisibleScoreCandidate({
       ai_scoring_contract_v2: {
@@ -1083,11 +1088,37 @@ test('v2 visible score experiment ignores configured confidence threshold for a 
     },
   })
 
-  assert.equal(candidate.score, 87.7)
-  assert.equal(logs[0].payload.applied, true)
-  assert.equal(logs[0].payload.skip_reason, null)
+  assert.equal(candidate.score, 78)
+  assert.equal(candidate.matchScore.score, 78)
+  assert.equal(candidate.fit_assessment.overall_fit_score, 78)
+  assert.equal(candidate.v2_visible_score_experiment, undefined)
+  assert.equal(logs[0].payload.applied, false)
+  assert.equal(logs[0].payload.skip_reason, 'insufficient_v2_confidence')
 })
 
+test('v2 visible score experiment skips contracts with internal scoring anomalies', () => {
+  const { candidate, logs } = applyV2VisibleScoreExperimentForTest({
+    candidate: buildV2VisibleScoreCandidate({
+      ai_scoring_contract_v2: {
+        ...buildV2VisibleScoreCandidate().ai_scoring_contract_v2,
+        score_confidence: 'high',
+        scoring_anomalies: ['weighted_total_mismatch'],
+      },
+    }),
+    env: {
+      AI_SCORING_CONTRACT_V2_VISIBLE_APPLY_ENABLED: 'true',
+      AI_SCORING_CONTRACT_V2_VISIBLE_APPLY_ALLOWED_USER_IDS: '24',
+    },
+  })
+
+  assert.equal(candidate.score, 78)
+  assert.equal(candidate.matchScore.score, 78)
+  assert.equal(candidate.fit_assessment.overall_fit_score, 78)
+  assert.equal(candidate.v2_visible_score_experiment, undefined)
+  assert.equal(logs[0].payload.applied, false)
+  assert.equal(logs[0].payload.skip_reason, 'v2_scoring_anomalies')
+  assert.deepEqual(logs[0].payload.scoring_anomalies, ['weighted_total_mismatch'])
+})
 test('v2 visible score experiment updates ranking inputs by applying visible candidate score', () => {
   const candidateA = buildV2VisibleScoreCandidate({ name: 'A', score: 90, matchScore: { score: 90 }, fit_assessment: { overall_fit_score: 90 }, ai_scoring_contract_v2: { ...buildV2VisibleScoreCandidate().ai_scoring_contract_v2, weighted_total_score_recomputed: 40 } })
   const candidateB = buildV2VisibleScoreCandidate({ name: 'B', score: 70, matchScore: { score: 70 }, fit_assessment: { overall_fit_score: 70 }, ai_scoring_contract_v2: { ...buildV2VisibleScoreCandidate().ai_scoring_contract_v2, weighted_total_score_recomputed: 95 } })
