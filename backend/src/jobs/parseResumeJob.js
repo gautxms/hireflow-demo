@@ -334,7 +334,7 @@ function hasHighConfidenceAiScoringContractV2(contract) {
 }
 
 function hasBlockingAiScoringContractV2Anomalies(contract) {
-  return normalizeAiScoringContractV2DiagnosticAnomalies(contract?.scoring_anomalies).length > 0
+  return Array.isArray(contract?.scoring_anomalies) && contract.scoring_anomalies.length > 0
 }
 
 function resolveCandidateMatchScoreValue(candidate = {}) {
