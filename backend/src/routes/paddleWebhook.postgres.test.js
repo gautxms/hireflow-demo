@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import crypto from 'node:crypto'
 import { pool } from '../db/client.js'
+import { ensureWebhookTables } from '../services/webhookService.js'
 import { up as addDurableInbox } from '../db/migrations/050-add-durable-paddle-webhook-inbox.js'
 import { up as addRetryScheduling } from '../db/migrations/051-add-paddle-webhook-retry-scheduling.js'
 import { up as backfillVerification } from '../db/migrations/052-backfill-paddle-webhook-verification-gap.js'
@@ -31,6 +32,7 @@ async function resetSchema() {
     DROP TABLE IF EXISTS subscriptions CASCADE;
     DROP TABLE IF EXISTS events CASCADE;
     DROP TABLE IF EXISTS error_logs CASCADE;
+    DROP TABLE IF EXISTS integration_webhook_logs, integration_webhooks CASCADE;
     DROP TABLE IF EXISTS users CASCADE;
 
     CREATE EXTENSION IF NOT EXISTS pgcrypto;
@@ -115,6 +117,7 @@ async function resetSchema() {
   await addDurableInbox(pool)
   await addRetryScheduling(pool)
   await backfillVerification(pool)
+  await ensureWebhookTables()
 }
 
 function storedEvent(payload) {
@@ -131,7 +134,7 @@ function storedEvent(payload) {
 
 postgresTest('failed-payment mutation rolls back atomically, retries, and completes once the fault is removed', async (t) => {
   t.after(async () => {
-    await pool.query('DROP TABLE IF EXISTS paddle_webhook_events, paddle_webhook_audit, payment_attempts, subscriptions, events, error_logs, users CASCADE')
+    await pool.query('DROP TABLE IF EXISTS paddle_webhook_events, paddle_webhook_audit, payment_attempts, subscriptions, events, error_logs, integration_webhook_logs, integration_webhooks, users CASCADE')
   })
   await resetSchema()
   const userResult = await pool.query(
@@ -225,7 +228,7 @@ postgresTest('failed-payment mutation rolls back atomically, retries, and comple
 
 postgresTest('completed returning checkout activates a cancelled lifecycle after a retryable failure and remains idempotent', async (t) => {
   t.after(async () => {
-    await pool.query('DROP TABLE IF EXISTS paddle_webhook_events, paddle_webhook_audit, payment_attempts, subscriptions, events, error_logs, users CASCADE')
+    await pool.query('DROP TABLE IF EXISTS paddle_webhook_events, paddle_webhook_audit, payment_attempts, subscriptions, events, error_logs, integration_webhook_logs, integration_webhooks, users CASCADE')
   })
   await resetSchema()
   const userId = (await pool.query(
@@ -285,7 +288,7 @@ postgresTest('completed returning checkout activates a cancelled lifecycle after
 
 postgresTest('concurrent stored-event processors produce one effective claim and one completion', async (t) => {
   t.after(async () => {
-    await pool.query('DROP TABLE IF EXISTS paddle_webhook_events, paddle_webhook_audit, payment_attempts, subscriptions, events, error_logs, users CASCADE')
+    await pool.query('DROP TABLE IF EXISTS paddle_webhook_events, paddle_webhook_audit, payment_attempts, subscriptions, events, error_logs, integration_webhook_logs, integration_webhooks, users CASCADE')
   })
   await resetSchema()
   const payload = {
