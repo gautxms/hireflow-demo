@@ -1407,12 +1407,30 @@ export function buildPromptWithJobDescription(systemPrompt, jobDescriptionContex
 }
 
 
+function getJobDescriptionPromptCharCount(jobDescriptionContext = null) {
+  const jd = buildCanonicalJobDescriptionScoringContext(jobDescriptionContext)
+  if (!jd.hasContext) return 0
+
+  return [
+    jd.title,
+    jd.description,
+    jd.requirements,
+    jd.responsibilities,
+    jd.additionalInfo,
+    ...(Array.isArray(jd.skills) ? jd.skills : []),
+    jd.experienceMin,
+    jd.experienceMax,
+    jd.location,
+    jd.workMode,
+  ].reduce((total, value) => total + String(value ?? '').length, 0)
+}
+
 function buildPromptMetrics({ prompt, systemPrompt, outputInstruction, jobDescriptionContext, resumeCharCount = null, inputMode = 'document_file' }) {
   return {
     promptCharCount: String(prompt || '').length,
     systemPromptCharCount: String(systemPrompt || '').length,
     outputInstructionCharCount: String(outputInstruction || '').length,
-    jdContextCharCount: String(jobDescriptionContext?.description || '').length + String(jobDescriptionContext?.requirements || '').length,
+    jdContextCharCount: getJobDescriptionPromptCharCount(jobDescriptionContext),
     resumeTextCharCount: Number.isFinite(resumeCharCount) ? resumeCharCount : null,
     inputMode,
   }
@@ -1604,7 +1622,7 @@ ${requestPrompt}`,
     tokenBudgetAttempts: attemptedTokenBudgets,
     promptCharCount: promptMetrics.promptCharCount,
     resumeCharCount: null,
-    jdCharCount: String(jobDescriptionContext?.description || '').length + String(jobDescriptionContext?.requirements || '').length,
+    jdCharCount: getJobDescriptionPromptCharCount(jobDescriptionContext),
   }
 }
 
@@ -1798,7 +1816,7 @@ ${promptText}`,
     tokenBudgetAttempts: attemptedTokenBudgets,
     promptCharCount: promptMetrics.promptCharCount,
     resumeCharCount: null,
-    jdCharCount: String(jobDescriptionContext?.description || '').length + String(jobDescriptionContext?.requirements || '').length,
+    jdCharCount: getJobDescriptionPromptCharCount(jobDescriptionContext),
   }
 }
 
@@ -2010,7 +2028,7 @@ export async function analyzeResumeWithConfiguredFallback(fileBufferBase64, mime
   const rawExtractedText = preparedPayload.extractedText || (isTextPayload ? Buffer.from(String(preparedPayload.fileBufferBase64 || ''), 'base64').toString('utf8') : '')
   const cleanedPayload = isTextPayload ? cleanExtractedTextForPrompt(rawExtractedText, { maxChars: DEFAULT_RESUME_TEXT_PROMPT_CHAR_LIMIT }) : null
   const cleanedBase64 = cleanedPayload ? Buffer.from(cleanedPayload.cleanedText, 'utf8').toString('base64') : preparedPayload.fileBufferBase64
-  const jdCharCount = String(options?.jobDescriptionContext?.description || '').length + String(options?.jobDescriptionContext?.requirements || '').length
+  const jdCharCount = getJobDescriptionPromptCharCount(options?.jobDescriptionContext)
   const complexityEstimator = estimateAnalysisComplexity({
     mimeType: preparedMimeType,
     cleanedResumeCharCount: cleanedPayload?.metrics?.cleanedCharCount || cleanedPayload?.cleanedText?.length || 0,
