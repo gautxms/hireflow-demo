@@ -97,6 +97,14 @@ export function buildCanonicalJobDescriptionScoringContext(jobDescriptionContext
       ?? experienceYears,
   )
 
+  const canonicalFileTextFallback = normalizeCanonicalText(
+    jobDescriptionContext.fileText
+      ?? jobDescriptionContext.file_text
+      ?? jobDescriptionContext.extracted_text
+      ?? jobDescriptionContext.parsed_text
+      ?? jobDescriptionContext.content_text
+      ?? jobDescriptionContext.raw_text,
+  )
   const canonical = {
     hasContext: true,
     title: normalizeCanonicalText(jobDescriptionContext.title),
@@ -116,6 +124,19 @@ export function buildCanonicalJobDescriptionScoringContext(jobDescriptionContext
     workMode: null,
     employmentType: null,
     scoringContextVersion: JOB_DESCRIPTION_SCORING_CONTEXT_VERSION,
+  }
+
+  const hasStructuredScoringDetails = Boolean(
+    canonical.description
+      || canonical.requirements
+      || canonical.responsibilities
+      || canonical.additionalInfo
+      || canonical.skills.length > 0
+      || canonical.experienceMin !== null
+      || canonical.experienceMax !== null,
+  )
+  if (!hasStructuredScoringDetails && canonicalFileTextFallback) {
+    canonical.description = canonicalFileTextFallback
   }
 
   canonical.workMode = resolveJobWorkMode({
