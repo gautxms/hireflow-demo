@@ -1,5 +1,6 @@
 import { pool } from '../db/client.js'
 import { normalizePaddleTimestamp } from '../utils/paddleTimestamps.js'
+import { verifyNewPaidLifecycleCheckoutEvidence } from './paddlePaidLifecycleVerification.js'
 
 function validIsoOrNull(value) {
   return normalizePaddleTimestamp(value)
@@ -14,6 +15,15 @@ function scheduledCancellationEffectiveAt(data = {}) {
   const action = String(scheduledChange?.action || scheduledChange?.type || '').trim().toLowerCase()
   if (!action.includes('cancel')) return null
   return validIsoOrNull(scheduledChange?.effective_at || scheduledChange?.effectiveAt)
+}
+
+function isTerminallyEnded(user = {}, now = new Date()) {
+  const status = String(user.subscription_status || '').trim().toLowerCase()
+  if (!['canceled', 'cancelled'].includes(status)) return false
+  if (!user.cancellation_effective_at) return true
+
+  const effectiveAt = new Date(user.cancellation_effective_at)
+  return Number.isNaN(effectiveAt.getTime()) || effectiveAt <= now
 }
 
 export function getPaddleLifecycleDates(payload, normalizedStatus) {
@@ -56,6 +66,7 @@ export async function applyPaddleSubscriptionLifecycle({
   eventType,
   status,
   plan,
+  priceId = null,
   providerEventAt,
   payload,
 }) {
@@ -66,6 +77,28 @@ export async function applyPaddleSubscriptionLifecycle({
   const dates = getPaddleLifecycleDates(payload, status)
   const isTerminal = status === 'cancelled'
   const serializedPayload = JSON.stringify(payload)
+  const isNewPaidLifecycle = status === 'active'
+    && user.paddle_subscription_id !== subscriptionId
+    && isTerminallyEnded(user)
+
+  if (isNewPaidLifecycle) {
+    if (!dates.currentPeriodStart) {
+      return { applied: false, reason: 'new_paid_lifecycle_period_start_missing', dates }
+    }
+
+    const evidence = await verifyNewPaidLifecycleCheckoutEvidence({
+      db,
+      user,
+      payload,
+      environment,
+      plan,
+      priceId,
+      customerId,
+    })
+    if (!evidence.verified) {
+      return { applied: false, reason: evidence.reason, dates }
+    }
+  }
 
   // This single PostgreSQL statement keeps the operational users cache and the
   // subscriptions projection atomic. The consistency guard deliberately raises
@@ -93,6 +126,8 @@ export async function applyPaddleSubscriptionLifecycle({
              ELSE account.subscription_started_at
            END,
            quota_anchor_at = CASE
+             WHEN $17::boolean AND account.paddle_subscription_id IS DISTINCT FROM $2
+               THEN $10::timestamp
              WHEN $3 = 'active' AND account.subscription_status IN ('trialing', 'trial')
                THEN COALESCE($10::timestamp, NOW())
              WHEN $3 = 'active' THEN COALESCE(account.quota_anchor_at, $10::timestamp)
@@ -144,8 +179,10 @@ export async function applyPaddleSubscriptionLifecycle({
            )
            OR (
              account.paddle_subscription_id IS DISTINCT FROM $2
+             AND $17::boolean
              AND $3 = 'active'
              AND $5::text IS NOT NULL
+             AND $10::timestamp IS NOT NULL
              AND $6::timestamp IS NOT NULL
              AND LOWER(COALESCE(account.subscription_status, '')) IN ('canceled', 'cancelled')
              AND (account.cancellation_effective_at IS NULL OR account.cancellation_effective_at <= NOW())
@@ -231,6 +268,7 @@ export async function applyPaddleSubscriptionLifecycle({
       dates.trialEndsAt,
       isTerminal,
       dates.terminalCancellationAt,
+      isNewPaidLifecycle,
     ],
   )
 

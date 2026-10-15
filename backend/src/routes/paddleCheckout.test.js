@@ -763,6 +763,18 @@ test('checkout transaction reuse requires exact account, environment, plan, pric
 
 test('persistVerifiedCheckoutSubscription replaces a cancelled Annual lifecycle with the verified new Monthly subscription', async () => {
   const calls = []
+  const reservation = {
+    reservation_token: '42d85541-3b0e-4b1a-8dca-2525950fbaf0',
+    paddle_environment: 'sandbox',
+    requested_plan: 'monthly',
+    stored_plan: 'monthly',
+    price_id: 'pri_monthly_paid',
+    checkout_mode: 'paid_returning',
+    trial_eligible: false,
+    status: 'ready',
+    paddle_transaction_id: 'txn_monthly',
+    paddle_customer_id: 'ctm_123',
+  }
   const client = {
     async query(sql, params = []) {
       calls.push({ sql: String(sql), params })
@@ -785,7 +797,16 @@ test('persistVerifiedCheckoutSubscription replaces a cancelled Annual lifecycle 
       status: 'completed',
       customer_id: 'ctm_123',
       subscription_id: 'sub_new_monthly',
-      custom_data: { userId: 42, paddleEnvironment: 'sandbox', checkoutMode: 'paid_returning' },
+      items: [{ price_id: 'pri_monthly_paid', quantity: 1 }],
+      custom_data: {
+        userId: 42,
+        checkoutReservationId: reservation.reservation_token,
+        paddleEnvironment: 'sandbox',
+        requestedPlan: 'monthly',
+        plan: 'monthly',
+        checkoutMode: 'paid_returning',
+        trialEligible: false,
+      },
     },
     subscription: {
       id: 'sub_new_monthly',
@@ -803,6 +824,7 @@ test('persistVerifiedCheckoutSubscription replaces a cancelled Annual lifecycle 
       priceIdsByPlan: { monthly: 'pri_monthly', annual: 'pri_annual' },
       noTrialPriceIdsByPlan: { monthly: 'pri_monthly_paid', annual: 'pri_annual_paid' },
     },
+    reservation,
     now: new Date('2026-07-24T00:00:00.000Z'),
   })
 
@@ -819,10 +841,58 @@ test('persistVerifiedCheckoutSubscription replaces a cancelled Annual lifecycle 
   assert.equal(update.params[5], '2026-08-23T00:00:00.000Z')
   assert.equal(update.params[6], '2026-08-23T00:00:00.000Z')
   assert.equal(update.params[7], '2026-07-23T00:00:00.000Z')
+  assert.equal(update.params[13], true)
+  assert.match(update.sql, /WHEN \$14::boolean THEN \$8::timestamp/)
   assert.match(update.sql, /cancellation_effective_at = NULL/)
   assert.match(update.sql, /cancellation_reason = NULL/)
   assert.equal(calls.some(({ sql }) => /INSERT INTO subscriptions/.test(sql)), true)
   assert.equal(calls.at(-1).sql, 'COMMIT')
+})
+
+test('persistVerifiedCheckoutSubscription preserves the anchor for same-subscription finalization retries', async () => {
+  const calls = []
+  const client = { async query(sql, params = []) {
+    calls.push({ sql: String(sql), params })
+    if (/UPDATE users/.test(sql)) return { rowCount: 1, rows: [{ id: 42 }] }
+    return { rowCount: 1, rows: [] }
+  } }
+  const result = await persistVerifiedCheckoutSubscription({
+    client,
+    user: {
+      id: 42,
+      subscription_status: 'active',
+      subscription_plan: 'growth_annual',
+      paddle_customer_id: 'ctm_123',
+      paddle_subscription_id: 'sub_growth',
+    },
+    transaction: {
+      id: 'txn_growth_retry',
+      status: 'completed',
+      customer_id: 'ctm_123',
+      subscription_id: 'sub_growth',
+      custom_data: { userId: 42, paddleEnvironment: 'sandbox', checkoutMode: 'paid_returning' },
+    },
+    subscription: {
+      id: 'sub_growth',
+      status: 'active',
+      customer_id: 'ctm_123',
+      items: [{ price: { id: 'pri_growth_annual_paid' } }],
+      current_billing_period: {
+        starts_at: '2027-10-15T09:00:00.000Z',
+        ends_at: '2028-10-15T09:00:00.000Z',
+      },
+      next_billed_at: '2028-10-15T09:00:00.000Z',
+    },
+    paddle: {
+      environment: 'sandbox',
+      noTrialPriceIdsByPlan: { growth_annual: 'pri_growth_annual_paid' },
+    },
+  })
+
+  assert.equal(result.synced, true)
+  const update = calls.find(({ sql }) => /UPDATE users/.test(sql))
+  assert.equal(update.params[13], false)
+  assert.match(update.sql, /ELSE COALESCE\(quota_anchor_at, \$8::timestamp, NOW\(\)\)/)
 })
 
 test('persistVerifiedCheckoutSubscription authoritatively recovers the same Past Due Monthly lifecycle and resolves only matching retries', async () => {

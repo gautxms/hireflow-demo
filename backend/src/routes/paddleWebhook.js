@@ -32,6 +32,7 @@ import {
 } from '../services/recoveryBillingAdjustment.js'
 import { markCheckoutReservationCompleted } from '../services/paddleCheckoutReservations.js'
 import { applyPaddleSubscriptionLifecycle } from '../services/paddleSubscriptionLifecycle.js'
+import { verifyNewPaidLifecycleCheckoutEvidence } from '../services/paddlePaidLifecycleVerification.js'
 import { isDurableWebhookInboxEnabled } from '../services/paddleBillingReadiness.js'
 import { requestPaddleWebhookProcessing } from '../services/paddleWebhookProcessingSignal.js'
 import {
@@ -384,6 +385,14 @@ function getStoredSubscriptionPlan(payload, paddleConfig) {
   }
 
   return PAID_PLAN_CODES.includes(plan) ? plan : null
+}
+
+function getStoredSubscriptionPriceId(payload, paddleConfig) {
+  const items = payload?.data?.items || payload?.items || []
+  return items
+    .filter((item) => !isCreditOrRemovalItem(item))
+    .map((item) => getItemPriceId(item))
+    .find((priceId) => planFromPriceId(priceId, paddleConfig)) || null
 }
 
 function getPaymentAmount(payload) {
@@ -1138,10 +1147,85 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment, storedEv
         || null
       const completedPlanChange = getPlanChangeMetadata(payload)
       const isRecoveredPlanChange = isSubscriptionUpdateTransaction(payload) && completedPlanChange?.outcome === 'recovered'
+      const replacingCancelledLifecycle = Boolean(
+        userId
+        && transactionSubscriptionId
+        && transactionSubscriptionId !== user?.paddle_subscription_id
+        && isFinalCancellationUser(user),
+      )
+      let activationPlan = getStoredSubscriptionPlan(payload, paddle)
+      let activationPriceId = getStoredSubscriptionPriceId(payload, paddle)
+      let activationPeriodStart = normalizePaddleTimestamp(payload?.data?.billing_period?.starts_at)
+      let activationPeriodEnd = normalizePaddleTimestamp(payload?.data?.billing_period?.ends_at)
+      let activationNextBillingDate = activationPeriodEnd
       let activationApplied = false
+
+      if (!hasEnvironmentMismatch && !isRecoveredPlanChange && replacingCancelledLifecycle) {
+        const transactionStatus = String(payload?.data?.status || '').trim().toLowerCase()
+        if (transactionStatus && transactionStatus !== 'completed') {
+          const error = new Error('Completed checkout event did not contain a paid transaction')
+          error.code = 'PADDLE_NEW_LIFECYCLE_PAYMENT_UNVERIFIED'
+          throw error
+        }
+        const subscriptionPayload = await paddleApiRequest(
+          `/subscriptions/${encodeURIComponent(transactionSubscriptionId)}`,
+          {},
+          paddle,
+        )
+        const providerSubscription = subscriptionPayload?.data || subscriptionPayload || {}
+        const providerPlan = getStoredSubscriptionPlan(providerSubscription, paddle)
+        const providerPriceId = getStoredSubscriptionPriceId(providerSubscription, paddle)
+        const providerPeriodStart = normalizePaddleTimestamp(providerSubscription?.current_billing_period?.starts_at)
+        const providerPeriodEnd = normalizePaddleTimestamp(providerSubscription?.current_billing_period?.ends_at)
+        const providerNextBillingDate = normalizePaddleTimestamp(providerSubscription?.next_billed_at) || providerPeriodEnd
+        const providerCustomerId = getPaddleCustomerId(providerSubscription)
+
+        if (
+          String(providerSubscription?.status || '').toLowerCase() !== 'active'
+          || providerSubscription?.id !== transactionSubscriptionId
+          || providerCustomerId !== getPaddleCustomerId(payload)
+          || !activationPlan
+          || providerPlan !== activationPlan
+          || !activationPriceId
+          || providerPriceId !== activationPriceId
+          || !providerPeriodStart
+          || !providerPeriodEnd
+          || !providerNextBillingDate
+        ) {
+          const error = new Error('Completed checkout subscription could not be verified as an active paid lifecycle')
+          error.code = 'PADDLE_NEW_LIFECYCLE_VERIFICATION_FAILED'
+          throw error
+        }
+
+        activationPlan = providerPlan
+        activationPriceId = providerPriceId
+        activationPeriodStart = providerPeriodStart
+        activationPeriodEnd = providerPeriodEnd
+        activationNextBillingDate = providerNextBillingDate
+      }
 
       if (!hasEnvironmentMismatch && !isRecoveredPlanChange) {
         await withWebhookTransaction(async (db) => {
+          let verifiedNewPaidLifecycle = false
+          if (replacingCancelledLifecycle) {
+            const evidence = await verifyNewPaidLifecycleCheckoutEvidence({
+              db,
+              user,
+              payload,
+              environment: paddle.environment,
+              plan: activationPlan,
+              priceId: activationPriceId,
+              customerId: getPaddleCustomerId(payload),
+              transactionId,
+            })
+            if (!evidence.verified) {
+              const error = new Error('Completed checkout reservation evidence did not match the new paid lifecycle')
+              error.code = 'PADDLE_NEW_LIFECYCLE_OWNERSHIP_FAILED'
+              throw error
+            }
+            verifiedNewPaidLifecycle = true
+          }
+
           if (userId && transactionId && checkoutReservationId) {
             await markCheckoutReservationCompleted({
               db,
@@ -1158,6 +1242,8 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment, storedEv
              SET subscription_status = 'active',
                  subscription_started_at = COALESCE(subscription_started_at, NOW()),
                  quota_anchor_at = CASE
+                   WHEN $10::boolean AND $2::text IS DISTINCT FROM paddle_subscription_id
+                     THEN $8::timestamp
                    WHEN subscription_status IN ('trialing', 'trial') THEN COALESCE($8::timestamp, NOW())
                    ELSE COALESCE(quota_anchor_at, $8::timestamp)
                  END,
@@ -1203,6 +1289,8 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment, storedEv
                  OR (
                    $2::text IS NOT NULL
                    AND $4::text IS NOT NULL
+                   AND $10::boolean
+                   AND $8::timestamp IS NOT NULL
                    AND $5::timestamp IS NOT NULL
                    AND $2::text IS DISTINCT FROM paddle_subscription_id
                    AND LOWER(COALESCE(subscription_status, '')) IN ('canceled', 'cancelled')
@@ -1213,12 +1301,13 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment, storedEv
               userId,
               transactionSubscriptionId,
               getPaddleCustomerId(payload),
-              getStoredSubscriptionPlan(payload, paddle),
-              normalizePaddleTimestamp(payload?.data?.billing_period?.ends_at),
-              normalizePaddleTimestamp(payload?.data?.billing_period?.ends_at),
+              activationPlan,
+              activationPeriodEnd,
+              activationNextBillingDate,
               paddle.environment,
-              normalizePaddleTimestamp(payload?.data?.billing_period?.starts_at),
+              activationPeriodStart,
               providerEventAt,
+              verifiedNewPaidLifecycle,
             ],
           )
             activationApplied = activationResult.rowCount > 0
@@ -1457,6 +1546,7 @@ async function handlePaddleWebhook(req, res, paddle, strictEnvironment, storedEv
             eventType: lifecycleEventType,
             status: lifecycleStatus,
             plan: getStoredSubscriptionPlan(payload, paddle),
+            priceId: getStoredSubscriptionPriceId(payload, paddle),
             providerEventAt,
             payload,
           })
