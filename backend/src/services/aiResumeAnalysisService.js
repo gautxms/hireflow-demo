@@ -10,6 +10,7 @@ import { normalizeCandidateFieldArray } from '../utils/candidateStructuredFields
 import { EXPERIENCE_FACTS_SOURCE_ENTRIES, normalizeStructuredExperienceEntries } from '../utils/experienceFacts.js'
 import { buildRequirementSemantics, formatRequirementSemanticsForPrompt } from '../utils/requirementSemantics.js'
 import { formatLocationAlignmentForPrompt } from '../utils/locationAlignment.js'
+import { buildCanonicalJobDescriptionScoringContext } from './jobDescriptionScoringContext.js'
 
 const MODEL = AI_MODEL_CONFIG.defaultModel
 const MAX_MONTHLY_BUDGET = Number(process.env.CLAUDE_BUDGET_LIMIT || 100)
@@ -1379,22 +1380,20 @@ export function cleanExtractedTextForPrompt(text, { maxChars = DEFAULT_TEXT_PROM
 
 export function buildPromptWithJobDescription(systemPrompt, jobDescriptionContext = null) {
   const basePrompt = normalizePrompt(systemPrompt)
-  const jdContext = jobDescriptionContext && typeof jobDescriptionContext === 'object'
-    ? jobDescriptionContext
-    : null
-
+  const jdContext = buildCanonicalJobDescriptionScoringContext(jobDescriptionContext)
   const hasJobDescription = Boolean(jdContext?.hasContext)
   const jdSummary = hasJobDescription
     ? [
-        `- Job Description ID: ${formatScalar(jdContext?.jobDescriptionId) || 'unknown'}`,
         `- Title: ${formatScalar(jdContext?.title) || 'Not provided'}`,
         `- Description: ${formatScalar(jdContext?.description) || 'Not provided'}`,
         `- Requirements: ${formatScalar(jdContext?.requirements) || 'Not provided'}`,
+        `- Responsibilities: ${formatScalar(jdContext?.responsibilities) || 'Not provided'}`,
+        `- Additional Information: ${formatScalar(jdContext?.additionalInfo) || 'Not provided'}`,
         `- Skills: ${formatArray(jdContext?.skills) || 'Not provided'}`,
-        `- Experience Years: ${formatScalar(jdContext?.experienceYears) || 'Not provided'}`,
+        `- Minimum Experience Years: ${formatScalar(jdContext?.experienceMin) || 'Not provided'}`,
+        `- Maximum Experience Years: ${formatScalar(jdContext?.experienceMax) || 'Not provided'}`,
         `- Location: ${formatScalar(jdContext?.location) || 'Not provided'}`,
-        `- Work Mode: ${formatScalar(jdContext?.workMode ?? jdContext?.employmentType) || 'Not provided'}`,
-        `- Source: ${formatScalar(jdContext?.source) || 'manual_fields'}`,
+        `- Work Mode: ${formatScalar(jdContext?.workMode) || 'Not provided'}`,
       ].join('\n')
     : `- Missing reason: ${formatScalar(jdContext?.missingReason) || 'job_description_missing'}`
 
@@ -1408,12 +1407,30 @@ export function buildPromptWithJobDescription(systemPrompt, jobDescriptionContex
 }
 
 
+function getJobDescriptionPromptCharCount(jobDescriptionContext = null) {
+  const jd = buildCanonicalJobDescriptionScoringContext(jobDescriptionContext)
+  if (!jd.hasContext) return 0
+
+  return [
+    jd.title,
+    jd.description,
+    jd.requirements,
+    jd.responsibilities,
+    jd.additionalInfo,
+    ...(Array.isArray(jd.skills) ? jd.skills : []),
+    jd.experienceMin,
+    jd.experienceMax,
+    jd.location,
+    jd.workMode,
+  ].reduce((total, value) => total + String(value ?? '').length, 0)
+}
+
 function buildPromptMetrics({ prompt, systemPrompt, outputInstruction, jobDescriptionContext, resumeCharCount = null, inputMode = 'document_file' }) {
   return {
     promptCharCount: String(prompt || '').length,
     systemPromptCharCount: String(systemPrompt || '').length,
     outputInstructionCharCount: String(outputInstruction || '').length,
-    jdContextCharCount: String(jobDescriptionContext?.description || '').length + String(jobDescriptionContext?.requirements || '').length,
+    jdContextCharCount: getJobDescriptionPromptCharCount(jobDescriptionContext),
     resumeTextCharCount: Number.isFinite(resumeCharCount) ? resumeCharCount : null,
     inputMode,
   }
@@ -1605,7 +1622,7 @@ ${requestPrompt}`,
     tokenBudgetAttempts: attemptedTokenBudgets,
     promptCharCount: promptMetrics.promptCharCount,
     resumeCharCount: null,
-    jdCharCount: String(jobDescriptionContext?.description || '').length + String(jobDescriptionContext?.requirements || '').length,
+    jdCharCount: getJobDescriptionPromptCharCount(jobDescriptionContext),
   }
 }
 
@@ -1799,7 +1816,7 @@ ${promptText}`,
     tokenBudgetAttempts: attemptedTokenBudgets,
     promptCharCount: promptMetrics.promptCharCount,
     resumeCharCount: null,
-    jdCharCount: String(jobDescriptionContext?.description || '').length + String(jobDescriptionContext?.requirements || '').length,
+    jdCharCount: getJobDescriptionPromptCharCount(jobDescriptionContext),
   }
 }
 
@@ -1810,7 +1827,7 @@ function getAiScoringContractV2ShadowTimeoutMs(env = process.env) {
 }
 
 function buildAiScoringContractV2SeparateShadowPrompt({ resumeText, jobDescriptionContext }) {
-  const jd = jobDescriptionContext && typeof jobDescriptionContext === 'object' ? jobDescriptionContext : {}
+  const jd = buildCanonicalJobDescriptionScoringContext(jobDescriptionContext)
   const requirementSemantics = formatRequirementSemanticsForPrompt(jd.requirementSemantics || buildRequirementSemantics(jd))
   return [
     'AI Scoring Contract v2 separate shadow-only analysis.',
@@ -1833,10 +1850,13 @@ function buildAiScoringContractV2SeparateShadowPrompt({ resumeText, jobDescripti
     `Title: ${formatScalar(jd.title) || 'Not provided'}`,
     `Description: ${formatScalar(jd.description) || 'Not provided'}`,
     `Requirements: ${formatScalar(jd.requirements) || 'Not provided'}`,
+    `Responsibilities: ${formatScalar(jd.responsibilities) || 'Not provided'}`,
+    `Additional Information: ${formatScalar(jd.additionalInfo) || 'Not provided'}`,
     `Skills: ${formatArray(jd.skills) || 'Not provided'}`,
-    `Experience Years: ${formatScalar(jd.experienceYears) || 'Not provided'}`,
+    `Minimum Experience Years: ${formatScalar(jd.experienceMin) || 'Not provided'}`,
+    `Maximum Experience Years: ${formatScalar(jd.experienceMax) || 'Not provided'}`,
     `Location: ${formatScalar(jd.location) || 'Not provided'}`,
-    `Work Mode: ${formatScalar(jd.workMode ?? jd.employmentType) || 'Not provided'}`,
+    `Work Mode: ${formatScalar(jd.workMode) || 'Not provided'}`,
     requirementSemantics,
     formatLocationAlignmentForPrompt(jd),
     '',
@@ -2008,7 +2028,7 @@ export async function analyzeResumeWithConfiguredFallback(fileBufferBase64, mime
   const rawExtractedText = preparedPayload.extractedText || (isTextPayload ? Buffer.from(String(preparedPayload.fileBufferBase64 || ''), 'base64').toString('utf8') : '')
   const cleanedPayload = isTextPayload ? cleanExtractedTextForPrompt(rawExtractedText, { maxChars: DEFAULT_RESUME_TEXT_PROMPT_CHAR_LIMIT }) : null
   const cleanedBase64 = cleanedPayload ? Buffer.from(cleanedPayload.cleanedText, 'utf8').toString('base64') : preparedPayload.fileBufferBase64
-  const jdCharCount = String(options?.jobDescriptionContext?.description || '').length + String(options?.jobDescriptionContext?.requirements || '').length
+  const jdCharCount = getJobDescriptionPromptCharCount(options?.jobDescriptionContext)
   const complexityEstimator = estimateAnalysisComplexity({
     mimeType: preparedMimeType,
     cleanedResumeCharCount: cleanedPayload?.metrics?.cleanedCharCount || cleanedPayload?.cleanedText?.length || 0,

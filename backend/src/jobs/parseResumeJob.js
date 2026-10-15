@@ -44,6 +44,7 @@ import {
 } from '../services/v3ShadowScoringService.js'
 import { evaluateExperienceRange } from '../utils/experienceRange.js'
 import { buildRequirementSemantics, reconcileCandidateRequirementSemantics } from '../utils/requirementSemantics.js'
+import { buildCanonicalJobDescriptionScoringContext } from '../services/jobDescriptionScoringContext.js'
 import { reconcileCandidateLocationAlignment, resolveJobWorkMode } from '../utils/locationAlignment.js'
 import {
   consumeResumeQuotaAllocation,
@@ -1126,16 +1127,18 @@ function buildSafeJobDescriptionFingerprintSource(jobDescriptionContext = null) 
   if (!jobDescriptionContext?.hasContext) return null
 
   return {
-    source: jobDescriptionContext.source || null,
     title: jobDescriptionContext.title || null,
     description: jobDescriptionContext.description || null,
     requirements: jobDescriptionContext.requirements || null,
+    responsibilities: jobDescriptionContext.responsibilities || null,
+    additionalInfo: jobDescriptionContext.additionalInfo || null,
     skills: Array.isArray(jobDescriptionContext.skills) ? jobDescriptionContext.skills : [],
-    experienceYears: jobDescriptionContext.experienceYears ?? null,
+    experienceMin: jobDescriptionContext.experienceMin ?? null,
+    experienceMax: jobDescriptionContext.experienceMax ?? null,
     location: jobDescriptionContext.location || null,
     workMode: jobDescriptionContext.workMode || null,
-    employmentType: jobDescriptionContext.employmentType || null,
-    fileText: jobDescriptionContext.fileTextAvailable ? (jobDescriptionContext.fileText || null) : null,
+    scoringContextVersion: jobDescriptionContext.scoringContextVersion || null,
+    scoringContextFingerprint: jobDescriptionContext.scoringContextFingerprint || null,
   }
 }
 
@@ -2303,10 +2306,11 @@ export async function runParse(job) {
   let parseMethod = 'anthropic-primary'
   let quotaConsumptionPromise = null
   let scoreContractShadowMetadata = { provider: null, model: null, promptVersion: null, mode: null }
-  const jobDescriptionContext = await fetchJobDescriptionContext({
+  const sourceJobDescriptionContext = await fetchJobDescriptionContext({
     userId: job.data.userId,
     jobDescriptionId: job.data.jobDescriptionId || null,
   })
+  const jobDescriptionContext = buildCanonicalJobDescriptionScoringContext(sourceJobDescriptionContext)
   const aiScoringContractV2ShadowMetadata = {
     userId: job.data.userId ?? null,
     analysisId: analysisId || null,
@@ -2551,10 +2555,12 @@ export async function runParse(job) {
     jobDescriptionId: job.data.jobDescriptionId || null,
     parseDiagnostics: preparedResumePayload.diagnostics || null,
     jobDescriptionContextUsed: Boolean(jobDescriptionContext?.hasContext),
-    jobDescriptionContextSource: jobDescriptionContext?.source || 'none',
+    jobDescriptionContextSource: sourceJobDescriptionContext?.source || 'none',
     jobDescriptionContextMissingReason: jobDescriptionContext?.hasContext
       ? null
-      : (jobDescriptionContext?.missingReason || 'job_description_missing'),
+      : (sourceJobDescriptionContext?.missingReason || jobDescriptionContext?.missingReason || 'job_description_missing'),
+    jobDescriptionScoringContextVersion: jobDescriptionContext?.scoringContextVersion || null,
+    jobDescriptionScoringContextFingerprint: jobDescriptionContext?.scoringContextFingerprint || null,
     candidates: finalCandidates,
   }
 
