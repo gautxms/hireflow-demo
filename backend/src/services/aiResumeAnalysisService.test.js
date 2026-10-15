@@ -22,17 +22,67 @@ test('buildPromptWithJobDescription includes AVAILABLE JD block when context exi
     title: 'Senior Backend Engineer',
     description: 'Build APIs',
     requirements: 'Node.js, PostgreSQL',
+    responsibilities: 'Own API delivery',
+    additionalInfo: 'AWS preferred',
     skills: ['Node.js', 'PostgreSQL'],
-    experienceYears: 5,
+    experienceMin: 5,
+    experienceMax: 8,
     location: 'Remote',
     employmentType: 'Remote',
     source: 'manual_fields',
   })
 
   assert.equal(prompt.includes('Job Description Context:\nAVAILABLE'), true)
-  assert.equal(prompt.includes('Job Description ID: jd-100'), true)
-  assert.equal(prompt.includes('Work Mode: Remote'), true)
+  assert.equal(prompt.includes('Job Description ID: jd-100'), false)
+  assert.equal(prompt.includes('Source: manual_fields'), false)
+  assert.equal(prompt.includes('Responsibilities: Own API delivery'), true)
+  assert.equal(prompt.includes('Additional Information: AWS preferred'), true)
+  assert.equal(prompt.includes('Minimum Experience Years: 5'), true)
+  assert.equal(prompt.includes('Maximum Experience Years: 8'), true)
+  assert.equal(prompt.includes('Work Mode: remote'), true)
   assert.match(prompt, /off-list candidate location is unknown/i)
+})
+
+test('primary and v2 scoring prompts are identical for equivalent manual and uploaded jobs', () => {
+  const manual = {
+    hasContext: true,
+    jobDescriptionId: 'manual-job-id',
+    source: 'manual_fields',
+    title: 'Growth Marketing Manager',
+    description: 'Own pipeline growth.\r\nPartner with Sales.',
+    requirements: '5+ years\r\n• B2B SaaS',
+    responsibilities: 'Build demand-generation programs',
+    additionalInfo: 'HubSpot preferred',
+    skills: ['SEO', 'HubSpot'],
+    experienceMin: 5,
+    experienceMax: 8,
+    location: 'Remote',
+    employmentType: 'Remote',
+  }
+  const uploaded = {
+    ...manual,
+    jobDescriptionId: 'uploaded-job-id',
+    source: 'manual_fields_file_fallback',
+    fileUrl: '/api/job-descriptions/files/private.docx',
+    fileText: 'Raw attachment text must not enter scoring.',
+    requirements: '5+ years\n- B2B SaaS',
+    additionalInfo: undefined,
+    additional_info: 'HubSpot preferred',
+    skills: ['HubSpot', 'SEO'],
+    employmentType: undefined,
+    workMode: 'remote',
+  }
+
+  assert.equal(
+    buildPromptWithJobDescription('Base prompt', uploaded),
+    buildPromptWithJobDescription('Base prompt', manual),
+  )
+
+  const { buildAiScoringContractV2SeparateShadowPrompt } = __testables
+  assert.equal(
+    buildAiScoringContractV2SeparateShadowPrompt({ resumeText: 'Synthetic resume', jobDescriptionContext: uploaded }),
+    buildAiScoringContractV2SeparateShadowPrompt({ resumeText: 'Synthetic resume', jobDescriptionContext: manual }),
+  )
 })
 
 test('buildPromptWithJobDescription prevents ambiguous Hybrid location from becoming a definite failure', () => {
