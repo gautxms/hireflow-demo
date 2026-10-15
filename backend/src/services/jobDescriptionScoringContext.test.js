@@ -69,6 +69,25 @@ test('canonical scoring fingerprint changes when score-bearing job content chang
   assert.notEqual(base.scoringContextFingerprint, changed.scoringContextFingerprint)
 })
 
+test('canonical scoring context preserves extracted text only for sparse legacy file-backed jobs', () => {
+  const first = buildCanonicalJobDescriptionScoringContext({
+    hasContext: true,
+    source: 'file_text',
+    title: 'Legacy Backend Engineer',
+    fileText: 'Required:\r\n• Node.js\r\n• PostgreSQL',
+  })
+  const second = buildCanonicalJobDescriptionScoringContext({
+    hasContext: true,
+    source: 'file_text',
+    title: 'Legacy Backend Engineer',
+    extracted_text: 'Required:\n- Java\n- PostgreSQL',
+  })
+
+  assert.equal(first.description, 'Required:\n- Node.js\n- PostgreSQL')
+  assert.equal('fileText' in first, false)
+  assert.notEqual(first.scoringContextFingerprint, second.scoringContextFingerprint)
+})
+
 test('missing job context remains a safe no-JD scoring context', () => {
   assert.deepEqual(buildCanonicalJobDescriptionScoringContext(null), {
     hasContext: false,
