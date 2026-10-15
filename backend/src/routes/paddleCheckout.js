@@ -7,8 +7,11 @@ import { planFromPaddlePriceId, resolvePaddleConfigForUser, resolvePaddleEnviron
 import { PAID_PLAN_CODES } from '../config/planCatalog.js'
 import { inferPlanFromPaddlePayload } from '../services/paddlePlanChangeRecovery.js'
 import { reconcilePaddleSubscriptionState } from '../services/paddleSubscriptionReconciliation.js'
+import { transactionMatchesCheckoutReservation } from '../services/paddlePaidLifecycleVerification.js'
 import { normalizePaddleTimestamp } from '../utils/paddleTimestamps.js'
 import { resolveCanonicalCheckoutOrigin } from '../config/checkoutOrigin.js'
+
+export { transactionMatchesCheckoutReservation }
 
 const router = Router()
 const TEST_MONTHLY_PLAN = 'test-monthly'
@@ -193,6 +196,7 @@ export async function persistVerifiedCheckoutSubscription({
   transaction,
   subscription,
   paddle,
+  reservation = null,
   now = new Date(),
 }) {
   const checkoutMode = transaction?.custom_data?.checkoutMode
@@ -220,13 +224,35 @@ export async function persistVerifiedCheckoutSubscription({
   const nextBillingDate = normalizePaddleTimestamp(subscription?.next_billed_at) || currentPeriodEnd
   const sameLifecycle = user.paddle_subscription_id === subscription.id
   const canReplaceLifecycle = isTerminalCancellation(user, now)
+  const isNewPaidLifecycle = !sameLifecycle && canReplaceLifecycle
+  const subscriptionPriceId = (subscription?.items || [])
+    .map((item) => item?.price_id || item?.price?.id)
+    .find((candidate) => planFromPaddlePriceId(candidate, paddle) === plan) || null
+  const verifiedNewCheckout = !isNewPaidLifecycle || Boolean(
+    reservation
+    && ['ready', 'completed'].includes(reservation.status)
+    && reservation.paddle_transaction_id === transaction.id
+    && reservation.paddle_customer_id === transaction.customer_id
+    && reservation.stored_plan === plan
+    && reservation.price_id === subscriptionPriceId
+    && reservation.trial_eligible === false
+    && ['paid_returning', 'test'].includes(reservation.checkout_mode)
+    && transactionMatchesCheckoutReservation(transaction, reservation, user),
+  )
 
   const validDates = (isPastDueRecovery
     ? [currentPeriodStart, currentPeriodEnd, nextBillingDate]
-    : [currentPeriodEnd, nextBillingDate])
+    : [currentPeriodEnd, nextBillingDate, ...(isNewPaidLifecycle ? [currentPeriodStart] : [])])
     .every((value) => value && !Number.isNaN(new Date(value).getTime()))
 
-  if (!plan || !validDates || (isPastDueRecovery && plan !== user.subscription_plan) || (!sameLifecycle && user.paddle_subscription_id && !canReplaceLifecycle)) {
+  if (
+    !plan
+    || !validDates
+    || !verifiedNewCheckout
+    || (isPastDueRecovery && plan !== user.subscription_plan)
+    || (sameLifecycle && canReplaceLifecycle)
+    || (!sameLifecycle && user.paddle_subscription_id && !canReplaceLifecycle)
+  ) {
     return { synced: false, reason: 'subscription_not_replaceable' }
   }
 
@@ -245,9 +271,10 @@ export async function persistVerifiedCheckoutSubscription({
            cancellation_reason = NULL,
            subscription_started_at = COALESCE(subscription_started_at, $8, NOW()),
            quota_anchor_at = CASE
+             WHEN $14::boolean THEN $8::timestamp
              WHEN $2 = 'active' AND subscription_status IN ('trialing', 'trial')
                THEN COALESCE($8::timestamp, NOW())
-             ELSE COALESCE($8::timestamp, quota_anchor_at, NOW())
+             ELSE COALESCE(quota_anchor_at, $8::timestamp, NOW())
            END,
            trial_consumed_at = COALESCE(trial_consumed_at, NOW()),
            paddle_environment = $9,
@@ -295,6 +322,7 @@ export async function persistVerifiedCheckoutSubscription({
         normalizeStatus(user.subscription_status),
         user.cancellation_effective_at || null,
         user.last_paddle_event_at || null,
+        isNewPaidLifecycle,
       ],
     )
 
@@ -730,28 +758,6 @@ async function loadProviderSubscription(user, paddle) {
   }
 
   return payload?.data || payload
-}
-
-function transactionPriceIds(transaction = {}) {
-  return (transaction.items || [])
-    .map((item) => item?.price_id || item?.price?.id)
-    .filter(Boolean)
-}
-
-export function transactionMatchesCheckoutReservation(transaction = {}, reservation = {}, user = {}) {
-  const customData = transaction.custom_data || {}
-  const transactionUserId = customData.userId ?? customData.user_id
-  const reservationToken = customData.checkoutReservationId ?? customData.checkout_reservation_id
-
-  return String(transactionUserId || '') === String(user.id || '')
-    && String(reservationToken || '') === String(reservation.reservation_token || '')
-    && customData.paddleEnvironment === reservation.paddle_environment
-    && customData.requestedPlan === reservation.requested_plan
-    && customData.plan === reservation.stored_plan
-    && customData.checkoutMode === reservation.checkout_mode
-    && customData.trialEligible === reservation.trial_eligible
-    && transactionPriceIds(transaction).includes(reservation.price_id)
-    && (!user.paddle_customer_id || transaction.customer_id === user.paddle_customer_id)
 }
 
 function isReusableCheckoutTransaction(transaction = {}) {
@@ -1505,7 +1511,7 @@ router.post('/checkout/sync', requireAuth, generalApiLimiterAuth, async (req, re
   }
 
   try {
-    const reservation = checkoutReservationId
+    let reservation = checkoutReservationId
       ? await loadCheckoutReservationForSync({
         reservationToken: checkoutReservationId,
         userId: user.id,
@@ -1525,6 +1531,17 @@ router.post('/checkout/sync', requireAuth, generalApiLimiterAuth, async (req, re
 
     if (!transaction) {
       return res.status(202).json({ synced: false, result: 'still_pending', reason: 'transaction_pending' })
+    }
+
+    const providerReservationId = transaction?.custom_data?.checkoutReservationId
+      || transaction?.custom_data?.checkout_reservation_id
+      || null
+    if (!reservation && providerReservationId) {
+      reservation = await loadCheckoutReservationForSync({
+        reservationToken: providerReservationId,
+        userId: user.id,
+        environment: paddle.environment,
+      })
     }
 
     const reservationMatches = !reservation || transactionMatchesCheckoutReservation(transaction, reservation, user)
@@ -1552,6 +1569,7 @@ router.post('/checkout/sync', requireAuth, generalApiLimiterAuth, async (req, re
         transaction,
         subscription: dataFromPayload(subscriptionPayload),
         paddle,
+        reservation,
       })
 
       if (!result.synced) {

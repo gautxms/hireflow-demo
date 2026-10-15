@@ -22,6 +22,7 @@ process.env.PADDLE_ENVIRONMENT = 'sandbox'
 process.env.PADDLE_SANDBOX_WEBHOOK_SECRET = process.env.PADDLE_SANDBOX_WEBHOOK_SECRET || 'postgres-test-secret'
 process.env.PADDLE_SANDBOX_MONTHLY_PRICE_ID = process.env.PADDLE_SANDBOX_MONTHLY_PRICE_ID || 'pri_monthly'
 process.env.PADDLE_SANDBOX_ANNUAL_PRICE_ID = process.env.PADDLE_SANDBOX_ANNUAL_PRICE_ID || 'pri_annual'
+process.env.PADDLE_SANDBOX_STARTER_MONTHLY_NO_TRIAL_PRICE_ID = process.env.PADDLE_SANDBOX_STARTER_MONTHLY_NO_TRIAL_PRICE_ID || 'pri_starter_monthly_paid'
 process.env.PADDLE_DURABLE_WEBHOOK_INBOX_ENABLED = 'true'
 
 async function resetSchema() {
@@ -30,6 +31,7 @@ async function resetSchema() {
     DROP TABLE IF EXISTS paddle_webhook_audit CASCADE;
     DROP TABLE IF EXISTS payment_attempts CASCADE;
     DROP TABLE IF EXISTS subscriptions CASCADE;
+    DROP TABLE IF EXISTS paddle_checkout_reservations CASCADE;
     DROP TABLE IF EXISTS events CASCADE;
     DROP TABLE IF EXISTS error_logs CASCADE;
     DROP TABLE IF EXISTS integration_webhook_logs, integration_webhooks CASCADE;
@@ -68,6 +70,26 @@ async function resetSchema() {
       created_at TIMESTAMP DEFAULT NOW(),
       updated_at TIMESTAMP DEFAULT NOW(),
       UNIQUE (paddle_environment, paddle_subscription_id)
+    );
+
+    CREATE TABLE paddle_checkout_reservations (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      reservation_token UUID NOT NULL DEFAULT gen_random_uuid(),
+      user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+      paddle_environment TEXT NOT NULL,
+      requested_plan TEXT NOT NULL,
+      stored_plan TEXT NOT NULL,
+      price_id TEXT NOT NULL,
+      trial_eligible BOOLEAN NOT NULL,
+      checkout_mode TEXT NOT NULL,
+      status TEXT NOT NULL,
+      paddle_transaction_id TEXT,
+      paddle_customer_id TEXT,
+      checkout_url TEXT,
+      provider_status TEXT,
+      failure_code TEXT,
+      created_at TIMESTAMP DEFAULT NOW(),
+      updated_at TIMESTAMP DEFAULT NOW()
     );
 
     CREATE TABLE payment_attempts (
@@ -134,7 +156,7 @@ function storedEvent(payload) {
 
 postgresTest('failed-payment mutation rolls back atomically, retries, and completes once the fault is removed', async (t) => {
   t.after(async () => {
-    await pool.query('DROP TABLE IF EXISTS paddle_webhook_events, paddle_webhook_audit, payment_attempts, subscriptions, events, error_logs, integration_webhook_logs, integration_webhooks, users CASCADE')
+    await pool.query('DROP TABLE IF EXISTS paddle_webhook_events, paddle_webhook_audit, paddle_checkout_reservations, payment_attempts, subscriptions, events, error_logs, integration_webhook_logs, integration_webhooks, users CASCADE')
   })
   await resetSchema()
   const userResult = await pool.query(
@@ -228,15 +250,26 @@ postgresTest('failed-payment mutation rolls back atomically, retries, and comple
 
 postgresTest('completed returning checkout activates a cancelled lifecycle after a retryable failure and remains idempotent', async (t) => {
   t.after(async () => {
-    await pool.query('DROP TABLE IF EXISTS paddle_webhook_events, paddle_webhook_audit, payment_attempts, subscriptions, events, error_logs, integration_webhook_logs, integration_webhooks, users CASCADE')
+    await pool.query('DROP TABLE IF EXISTS paddle_webhook_events, paddle_webhook_audit, paddle_checkout_reservations, payment_attempts, subscriptions, events, error_logs, integration_webhook_logs, integration_webhooks, users CASCADE')
   })
   await resetSchema()
+  const reservationToken = '42d85541-3b0e-4b1a-8dca-2525950fbaf0'
   const userId = (await pool.query(
     `INSERT INTO users (paddle_environment, subscription_status, subscription_plan,
-                        paddle_customer_id, paddle_subscription_id, cancellation_effective_at, cancellation_reason)
+                        paddle_customer_id, paddle_subscription_id, cancellation_effective_at, cancellation_reason,
+                        quota_anchor_at)
      VALUES ('sandbox', 'cancelled', 'starter_monthly', 'ctm_returning_pg', 'sub_previous_pg',
-             NOW() - INTERVAL '1 day', 'customer_request') RETURNING id`,
+             NOW() - INTERVAL '1 day', 'customer_request', '2026-10-01T09:00:00.000Z') RETURNING id`,
   )).rows[0].id
+  await pool.query(
+    `INSERT INTO paddle_checkout_reservations (
+       reservation_token, user_id, paddle_environment, requested_plan, stored_plan,
+       price_id, trial_eligible, checkout_mode, status, paddle_transaction_id, paddle_customer_id
+     ) VALUES ($1::uuid, $2, 'sandbox', 'starter_monthly', 'starter_monthly',
+               'pri_starter_monthly_paid', FALSE, 'paid_returning', 'ready',
+               'txn_returning_completed_pg', 'ctm_returning_pg')`,
+    [reservationToken, userId],
+  )
   const payload = {
     event_id: 'evt_returning_completed_pg',
     event_type: 'transaction.completed',
@@ -247,13 +280,36 @@ postgresTest('completed returning checkout activates a cancelled lifecycle after
       subscription_id: 'sub_new_returning_pg',
       customer_id: 'ctm_returning_pg',
       billing_period: { starts_at: '2026-10-14T09:00:00.000Z', ends_at: '2026-11-14T09:00:00.000Z' },
-      custom_data: { userId, plan: 'starter_monthly', paddleEnvironment: 'sandbox', checkoutMode: 'paid_returning', trialEligible: false },
+      items: [{ price: { id: 'pri_starter_monthly_paid' }, quantity: 1 }],
+      custom_data: {
+        userId,
+        checkoutReservationId: reservationToken,
+        requestedPlan: 'starter_monthly',
+        plan: 'starter_monthly',
+        paddleEnvironment: 'sandbox',
+        checkoutMode: 'paid_returning',
+        trialEligible: false,
+      },
     },
   }
   const event = storedEvent(payload)
   await persistVerifiedWebhookInboxEvent({
     eventId: event.event_id, eventType: event.event_type, payloadHash: event.payload_hash,
     payload, environment: 'sandbox',
+  })
+  t.mock.method(globalThis, 'fetch', async (url) => {
+    if (String(url).endsWith('/subscriptions/sub_new_returning_pg')) {
+      return { ok: true, status: 200, json: async () => ({ data: {
+        id: 'sub_new_returning_pg', status: 'active', customer_id: 'ctm_returning_pg',
+        items: [{ price: { id: 'pri_starter_monthly_paid' }, quantity: 1 }],
+        current_billing_period: {
+          starts_at: '2026-10-14T09:00:00.000Z',
+          ends_at: '2026-11-14T09:00:00.000Z',
+        },
+        next_billed_at: '2026-11-14T09:00:00.000Z',
+      } }) }
+    }
+    throw new Error(`Unexpected Paddle request: ${url}`)
   })
 
   // Exercise the durable retry path without changing or manually completing the inbox event.
@@ -279,6 +335,7 @@ postgresTest('completed returning checkout activates a cancelled lifecycle after
   assert.equal(user.cancellation_reason, null)
   assert.equal(user.current_period_end.toISOString(), '2026-11-14T09:00:00.000Z')
   assert.equal(user.next_billing_date.toISOString(), '2026-11-14T09:00:00.000Z')
+  assert.equal(user.quota_anchor_at.toISOString(), '2026-10-14T09:00:00.000Z')
 
   const auditCount = (await pool.query('SELECT COUNT(*)::int AS count FROM paddle_webhook_audit WHERE event_type = $1', [event.event_type])).rows[0].count
   await processStoredPaddleWebhookEvent(event)
@@ -288,7 +345,7 @@ postgresTest('completed returning checkout activates a cancelled lifecycle after
 
 postgresTest('concurrent stored-event processors produce one effective claim and one completion', async (t) => {
   t.after(async () => {
-    await pool.query('DROP TABLE IF EXISTS paddle_webhook_events, paddle_webhook_audit, payment_attempts, subscriptions, events, error_logs, integration_webhook_logs, integration_webhooks, users CASCADE')
+    await pool.query('DROP TABLE IF EXISTS paddle_webhook_events, paddle_webhook_audit, paddle_checkout_reservations, payment_attempts, subscriptions, events, error_logs, integration_webhook_logs, integration_webhooks, users CASCADE')
   })
   await resetSchema()
   const payload = {

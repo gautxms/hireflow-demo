@@ -2,9 +2,10 @@
 
 ## Scope
 
-HireFlow paid subscriptions include 800 resume analyses in each monthly quota
-period. This allowance is monthly for both monthly and annual subscriptions; an
-annual subscription does not receive 9,600 units up front.
+HireFlow paid subscriptions include 100 Starter, 300 Growth, or 800 Pro resume
+analyses in each monthly quota period. This allowance is monthly for both monthly
+and annual subscriptions; an annual subscription does not receive all twelve
+monthly allowances up front.
 
 The quota foundation introduced a stable billing anchor, an atomic reservation
 ledger, and provider-start accounting in phases. PR 9 makes that ledger
@@ -21,11 +22,20 @@ external AI-provider attempt.
 ## Period contract
 
 - Quota periods use UTC timestamps with an inclusive start and exclusive end.
-- The stable `users.quota_anchor_at` timestamp is normally set once from a
-  provider-backed paid billing-period boundary. The sole recovery exception is
-  a verified overdue recurring renewal after a read-only Past Due period: once
-  Paddle confirms the adjusted billing date, the anchor moves exactly once to
-  that transaction's authoritative captured-payment timestamp.
+- Within one Paddle subscription ID, the stable `users.quota_anchor_at`
+  timestamp is set from a provider-backed paid billing-period boundary and is
+  preserved across renewals, updates, scheduled cancellation, cancellation
+  removal, retries, refreshes, and reconciliation.
+- A verified new paid Paddle subscription ID purchased after the prior
+  subscription is terminally cancelled and its entitlement has ended starts a
+  new quota lifecycle. Its anchor is the new subscription's authoritative
+  `current_billing_period.starts_at`, even when the customer repurchases the
+  same HireFlow plan. Historical usage, reservations, and allocations remain
+  stored; records before the new start are outside the new period.
+- The recovery exception within an existing lifecycle is a verified overdue
+  recurring renewal after a read-only Past Due period: once Paddle confirms the
+  adjusted billing date, the anchor moves exactly once to that transaction's
+  authoritative captured-payment timestamp.
 - Each monthly boundary is derived from that original anchor.
 - Anchors on the 29th, 30th, or 31st clamp to the last day of shorter months and
   return to the original day when a later month supports it.
@@ -51,8 +61,16 @@ external AI-provider attempt.
 | Scheduled cancellation | Paid access and the existing period continue until entitlement ends |
 | Payment failure | Read-only access; no reset while payment remains unpaid |
 | Verified Past Due recurring-payment recovery | After Paddle confirms the adjusted billing date, start one new monthly period at `payments[].captured_at`; duplicate events do not move it again |
-| Reactivation/resubscription for the same user | Reuse the stable anchor; do not grant an extra immediate reset |
+| Reactivation of the same Paddle subscription ID | Preserve the stable anchor; do not grant an extra immediate reset |
+| Verified new paid subscription ID after terminal cancellation | Start a fresh lifecycle at Paddle's authoritative `current_billing_period.starts_at`; the new plan begins with its full monthly allowance |
 | Missing or invalid anchor | Use UTC calendar-month fallback |
+
+A new-lifecycle reset is fail-closed. HireFlow must verify an Active paid
+subscription, a different subscription ID, the ended terminal state, customer
+and user ownership, Paddle environment, checkout reservation and transaction
+identity, plan and price, and the provider period start. Missing provider dates
+or ownership evidence leave processing retryable; request time is never used as
+the new-lifecycle anchor.
 
 ## Counting contract
 

@@ -1227,6 +1227,7 @@ test('POST /api/paddle/webhook acknowledges a signed redelivery of a terminal ev
 })
 
 test('POST /api/paddle/webhook reclaims retryable failures and suppresses later completed duplicates', async (t) => {
+  const reservationToken = '8f85d541-3b0e-4b1a-8dca-2525950fbaf0'
   const payload = {
     event_id: 'evt_retryable_inbox_lifecycle',
     event_type: 'transaction.completed',
@@ -1236,12 +1237,14 @@ test('POST /api/paddle/webhook reclaims retryable failures and suppresses later 
       customer_id: 'ctm_test_123',
       custom_data: {
         userId: 42,
+        checkoutReservationId: reservationToken,
+        requestedPlan: 'monthly',
         plan: 'monthly',
         paddleEnvironment: 'sandbox',
         trialEligible: false,
         checkoutMode: 'paid_returning',
       },
-      billing_period: { ends_at: '2026-08-23T00:00:00.000Z' },
+      billing_period: { starts_at: '2026-07-23T00:00:00.000Z', ends_at: '2026-08-23T00:00:00.000Z' },
       items: [{ price: { id: 'pri_monthly' }, quantity: 1 }],
     },
   }
@@ -1252,6 +1255,23 @@ test('POST /api/paddle/webhook reclaims retryable failures and suppresses later 
   let userUpdateAttempts = 0
   const failedClaimAttempts = []
   const completedClaimAttempts = []
+  const originalFetch = globalThis.fetch
+
+  t.mock.method(globalThis, 'fetch', async (url, options = {}) => {
+    if (String(url).startsWith('http://127.0.0.1:')) return originalFetch(url, options)
+    if (String(url).endsWith('/subscriptions/sub_new_monthly')) {
+      return { ok: true, status: 200, json: async () => ({ data: {
+        id: 'sub_new_monthly', status: 'active', customer_id: 'ctm_test_123',
+        items: [{ price: { id: 'pri_monthly' }, quantity: 1 }],
+        current_billing_period: {
+          starts_at: '2026-07-23T00:00:00.000Z',
+          ends_at: '2026-08-23T00:00:00.000Z',
+        },
+        next_billed_at: '2026-08-23T00:00:00.000Z',
+      } }) }
+    }
+    throw new Error(`Unexpected Paddle request: ${url}`)
+  })
 
   t.mock.method(pool, 'query', async (sql, params) => {
     const query = String(sql)
@@ -1296,6 +1316,21 @@ test('POST /api/paddle/webhook reclaims retryable failures and suppresses later 
           cancellation_effective_at: '2026-07-23T00:00:00.000Z',
         }],
       }
+    }
+    if (query.includes('FROM paddle_checkout_reservations')) {
+      return { rowCount: 1, rows: [{
+        reservation_token: reservationToken,
+        user_id: 42,
+        paddle_environment: 'sandbox',
+        requested_plan: 'monthly',
+        stored_plan: 'monthly',
+        price_id: 'pri_monthly',
+        trial_eligible: false,
+        checkout_mode: 'paid_returning',
+        status: 'ready',
+        paddle_transaction_id: 'txn_retryable_inbox_lifecycle',
+        paddle_customer_id: 'ctm_test_123',
+      }] }
     }
     if (/UPDATE users[\s\S]+subscription_status = 'active'/.test(query)) {
       userUpdateAttempts += 1
@@ -3174,6 +3209,7 @@ test('POST /api/paddle/webhook does not report a stale resulting status when com
 })
 
 test('POST /api/paddle/webhook lets a completed new Monthly checkout replace a terminally cancelled Annual lifecycle', async (t) => {
+  const reservationToken = '42d85541-3b0e-4b1a-8dca-2525950fbaf0'
   const payload = {
     event_id: 'evt_returning_monthly_completed',
     event_type: 'transaction.completed',
@@ -3181,7 +3217,15 @@ test('POST /api/paddle/webhook lets a completed new Monthly checkout replace a t
       id: 'txn_returning_monthly',
       subscription_id: 'sub_new_monthly',
       customer_id: 'ctm_test_123',
-      custom_data: { userId: 42, plan: 'monthly', paddleEnvironment: 'sandbox', trialEligible: false, checkoutMode: 'paid_returning' },
+      custom_data: {
+        userId: 42,
+        checkoutReservationId: reservationToken,
+        requestedPlan: 'monthly',
+        plan: 'monthly',
+        paddleEnvironment: 'sandbox',
+        trialEligible: false,
+        checkoutMode: 'paid_returning',
+      },
       billing_period: {
         starts_at: '2026-07-23T00:00:00.000Z',
         ends_at: '2026-08-23T00:00:00.000Z',
@@ -3191,10 +3235,42 @@ test('POST /api/paddle/webhook lets a completed new Monthly checkout replace a t
   }
   const rawBody = JSON.stringify(payload)
   const calls = []
+  const originalFetch = globalThis.fetch
+
+  t.mock.method(globalThis, 'fetch', async (url, options = {}) => {
+    if (String(url).startsWith('http://127.0.0.1:')) return originalFetch(url, options)
+    if (String(url).endsWith('/subscriptions/sub_new_monthly')) {
+      return { ok: true, status: 200, json: async () => ({ data: {
+        id: 'sub_new_monthly', status: 'active', customer_id: 'ctm_test_123',
+        items: [{ price: { id: 'pri_monthly' }, quantity: 1 }],
+        current_billing_period: {
+          starts_at: '2026-07-23T00:00:00.000Z',
+          ends_at: '2026-08-23T00:00:00.000Z',
+        },
+        next_billed_at: '2026-08-23T00:00:00.000Z',
+      } }) }
+    }
+    throw new Error(`Unexpected Paddle request: ${url}`)
+  })
 
   t.mock.method(pool, 'query', async (sql, params) => {
     calls.push({ sql: String(sql), params })
     if (String(sql).includes('FROM paddle_webhook_events')) return { rowCount: 0, rows: [] }
+    if (String(sql).includes('FROM paddle_checkout_reservations')) {
+      return { rowCount: 1, rows: [{
+        reservation_token: reservationToken,
+        user_id: 42,
+        paddle_environment: 'sandbox',
+        requested_plan: 'monthly',
+        stored_plan: 'monthly',
+        price_id: 'pri_monthly',
+        trial_eligible: false,
+        checkout_mode: 'paid_returning',
+        status: 'ready',
+        paddle_transaction_id: 'txn_returning_monthly',
+        paddle_customer_id: 'ctm_test_123',
+      }] }
+    }
     if (String(sql).includes('FROM users')) {
       return {
         rowCount: 1,
@@ -3219,6 +3295,9 @@ test('POST /api/paddle/webhook lets a completed new Monthly checkout replace a t
   assert.equal(activeUpdate.params[1], 'sub_new_monthly')
   assert.equal(activeUpdate.params[3], 'monthly')
   assert.equal(activeUpdate.params[4], '2026-08-23T00:00:00.000Z')
+  assert.equal(activeUpdate.params[7], '2026-07-23T00:00:00.000Z')
+  assert.equal(activeUpdate.params[9], true)
+  assert.match(activeUpdate.sql, /WHEN \$10::boolean AND \$2::text IS DISTINCT FROM paddle_subscription_id/)
   assert.match(activeUpdate.sql, /\$2::text IS DISTINCT FROM paddle_subscription_id/)
   assert.match(activeUpdate.sql, /\$4::text IS NOT NULL/)
   assert.match(activeUpdate.sql, /\$5::timestamp IS NOT NULL/)
@@ -3228,6 +3307,7 @@ test('POST /api/paddle/webhook lets a completed new Monthly checkout replace a t
 })
 
 test('POST /api/paddle/webhook returns retryable failure if a completed returning checkout cannot replace final cancellation', async (t) => {
+  const reservationToken = '6b2ca06a-da77-44fc-af0e-c9de45ab14fd'
   const payload = {
     event_id: 'evt_returning_monthly_zero_rows',
     event_type: 'transaction.completed',
@@ -3235,15 +3315,55 @@ test('POST /api/paddle/webhook returns retryable failure if a completed returnin
       id: 'txn_returning_zero_rows',
       subscription_id: 'sub_new_monthly',
       customer_id: 'ctm_test_123',
-      custom_data: { userId: 42, plan: 'monthly', paddleEnvironment: 'sandbox', trialEligible: false, checkoutMode: 'paid_returning' },
-      billing_period: { ends_at: '2026-08-23T00:00:00.000Z' },
+      custom_data: {
+        userId: 42,
+        checkoutReservationId: reservationToken,
+        requestedPlan: 'monthly',
+        plan: 'monthly',
+        paddleEnvironment: 'sandbox',
+        trialEligible: false,
+        checkoutMode: 'paid_returning',
+      },
+      billing_period: { starts_at: '2026-07-23T00:00:00.000Z', ends_at: '2026-08-23T00:00:00.000Z' },
       items: [{ price: { id: 'pri_monthly' }, quantity: 1 }],
     },
   }
   const rawBody = JSON.stringify(payload)
+  const originalFetch = globalThis.fetch
+
+  t.mock.method(globalThis, 'fetch', async (url, options = {}) => {
+    if (String(url).startsWith('http://127.0.0.1:')) return originalFetch(url, options)
+    if (String(url).endsWith('/subscriptions/sub_new_monthly')) {
+      return { ok: true, status: 200, json: async () => ({ data: {
+        id: 'sub_new_monthly', status: 'active', customer_id: 'ctm_test_123',
+        items: [{ price: { id: 'pri_monthly' }, quantity: 1 }],
+        current_billing_period: {
+          starts_at: '2026-07-23T00:00:00.000Z',
+          ends_at: '2026-08-23T00:00:00.000Z',
+        },
+        next_billed_at: '2026-08-23T00:00:00.000Z',
+      } }) }
+    }
+    throw new Error(`Unexpected Paddle request: ${url}`)
+  })
 
   t.mock.method(pool, 'query', async (sql) => {
     if (String(sql).includes('FROM paddle_webhook_events')) return { rowCount: 0, rows: [] }
+    if (String(sql).includes('FROM paddle_checkout_reservations')) {
+      return { rowCount: 1, rows: [{
+        reservation_token: reservationToken,
+        user_id: 42,
+        paddle_environment: 'sandbox',
+        requested_plan: 'monthly',
+        stored_plan: 'monthly',
+        price_id: 'pri_monthly',
+        trial_eligible: false,
+        checkout_mode: 'paid_returning',
+        status: 'ready',
+        paddle_transaction_id: 'txn_returning_zero_rows',
+        paddle_customer_id: 'ctm_test_123',
+      }] }
+    }
     if (String(sql).includes('FROM users')) {
       return {
         rowCount: 1,
