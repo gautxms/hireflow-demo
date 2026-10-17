@@ -106,6 +106,53 @@ async function ensureSchema() {
   schemaReady = true
 }
 
+function normalizeSkills(input) {
+  if (!input) {
+    return []
+  }
+
+  if (Array.isArray(input)) {
+    return input.map((skill) => String(skill).trim()).filter(Boolean)
+  }
+
+  if (typeof input === 'string') {
+    const trimmed = input.trim()
+
+    if (!trimmed) {
+      return []
+    }
+
+    try {
+      const parsed = JSON.parse(trimmed)
+      if (Array.isArray(parsed)) {
+        return parsed.map((skill) => String(skill).trim()).filter(Boolean)
+      }
+    } catch {
+      return trimmed.split(',').map((skill) => skill.trim()).filter(Boolean)
+    }
+  }
+
+  return []
+}
+
+function toIntOrNull(value) {
+  if (value === '' || value === null || value === undefined) {
+    return null
+  }
+
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? Math.round(parsed) : null
+}
+
+function toIntOrDefault(value, fallback) {
+  if (value === '' || value === null || value === undefined) {
+    return fallback
+  }
+
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? Math.round(parsed) : fallback
+}
+
 function mapUsageSummary(row) {
   if (!row || row.resume_count === undefined) {
     return undefined
