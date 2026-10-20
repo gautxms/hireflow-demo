@@ -7,6 +7,10 @@ import {
   createJobDescription,
   JobDescriptionValidationError,
 } from '../services/jobDescriptionService.js'
+import {
+  fetchJobDescriptionFile,
+  isStoredJobDescriptionFileUrl,
+} from '../services/jobDescriptionFileStorageService.js'
 import { requireActiveSubscription } from '../middleware/subscriptionCheck.js'
 import { sanitizeFilename } from '../utils/sanitize.js'
 import jobDescriptionPreviewRoutes from './jobDescriptionPreview.js'
@@ -217,8 +221,15 @@ router.get('/:id/attachment', async (req, res) => {
     }
 
     const storedFileUrl = String(row.file_url || '').trim()
-    const filename = path.basename(storedFileUrl)
+    if (isStoredJobDescriptionFileUrl(storedFileUrl)) {
+      const attachment = await fetchJobDescriptionFile({ fileUrl: storedFileUrl })
+      res.set('Cache-Control', 'private, no-store')
+      res.set('Content-Type', attachment.contentType)
+      res.set('Content-Disposition', `attachment; filename="${attachment.fileName}"`)
+      return res.send(attachment.buffer)
+    }
 
+    const filename = path.basename(storedFileUrl)
     if (!filename) {
       return res.status(404).json({ error: 'No attachment found for this job description' })
     }

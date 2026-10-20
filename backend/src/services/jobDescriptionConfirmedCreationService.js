@@ -137,7 +137,11 @@ export async function confirmJobDescriptionCreation({
     const job = await createJobDescription({
       db: client,
       userId,
-      input: { ...input, sourceType: 'file' },
+      input: {
+        ...input,
+        employmentType: input?.employmentType ?? input?.workMode,
+        sourceType: 'file',
+      },
       fileUrl: receipt.file.fileUrl,
     })
     await client.query(

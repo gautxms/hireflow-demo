@@ -1,6 +1,8 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
+  fetchJobDescriptionFile,
+  isStoredJobDescriptionFileUrl,
   JobDescriptionFileStorageError,
   storeJobDescriptionFile,
 } from './jobDescriptionFileStorageService.js'
@@ -40,4 +42,38 @@ test('rejects invalid file content before contacting S3', async () => {
     (error) => error instanceof JobDescriptionFileStorageError && error.code === 'JD_INVALID_FILE',
   )
   assert.equal(sent, false)
+})
+
+test('retrieves only an attachment from the configured private bucket', async () => {
+  const commands = []
+  const fileUrl = `s3://private-hireflow/job-descriptions/42/${'c'.repeat(64)}/role.pdf`
+  const attachment = await fetchJobDescriptionFile(
+    { fileUrl },
+    {
+      bucket: 'private-hireflow',
+      client: {
+        async send(command) {
+          commands.push(command)
+          return { Body: Buffer.from('%PDF stored source'), ContentType: 'application/pdf' }
+        },
+      },
+    },
+  )
+
+  assert.equal(isStoredJobDescriptionFileUrl(fileUrl), true)
+  assert.deepEqual(commands[0].input, {
+    Bucket: 'private-hireflow',
+    Key: `job-descriptions/42/${'c'.repeat(64)}/role.pdf`,
+  })
+  assert.equal(attachment.buffer.toString(), '%PDF stored source')
+  assert.equal(attachment.fileName, 'role.pdf')
+  assert.equal(attachment.contentType, 'application/pdf')
+
+  await assert.rejects(
+    fetchJobDescriptionFile(
+      { fileUrl: fileUrl.replace('private-hireflow', 'another-bucket') },
+      { bucket: 'private-hireflow', client: { async send() { throw new Error('must not send') } } },
+    ),
+    { code: 'JD_STORAGE_REFERENCE_INVALID', status: 404 },
+  )
 })

@@ -1,7 +1,7 @@
 import crypto from 'node:crypto'
 import path from 'node:path'
 import process from 'node:process'
-import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3'
+import { GetObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3'
 
 export const MAX_STORED_JOB_DESCRIPTION_BYTES = 20 * 1024 * 1024
 
@@ -67,6 +67,44 @@ function validateFile(file) {
   return { fileName, contentType }
 }
 
+function parseStoredFileUrl(fileUrl) {
+  try {
+    const parsed = new URL(String(fileUrl || ''))
+    const key = decodeURIComponent(parsed.pathname.replace(/^\/+/, ''))
+    if (parsed.protocol !== 's3:' || !parsed.hostname || !key.startsWith('job-descriptions/')) {
+      throw new Error('invalid storage reference')
+    }
+    return { bucket: parsed.hostname, key }
+  } catch {
+    throw new JobDescriptionFileStorageError(
+      'JD_STORAGE_REFERENCE_INVALID',
+      'The stored job description attachment is unavailable.',
+      404,
+    )
+  }
+}
+
+async function readBody(body) {
+  if (Buffer.isBuffer(body)) return body
+  if (typeof body?.transformToByteArray === 'function') {
+    return Buffer.from(await body.transformToByteArray())
+  }
+  if (body && typeof body[Symbol.asyncIterator] === 'function') {
+    const chunks = []
+    for await (const chunk of body) chunks.push(Buffer.from(chunk))
+    return Buffer.concat(chunks)
+  }
+  throw new JobDescriptionFileStorageError(
+    'JD_STORAGE_READ_FAILED',
+    'The stored job description attachment could not be read.',
+    503,
+  )
+}
+
+export function isStoredJobDescriptionFileUrl(fileUrl) {
+  return String(fileUrl || '').startsWith('s3://')
+}
+
 export async function storeJobDescriptionFile({ userId, file }, dependencies = {}) {
   const subject = String(userId || '').trim()
   if (!subject) throw new TypeError('A user id is required')
@@ -104,5 +142,39 @@ export async function storeJobDescriptionFile({ userId, file }, dependencies = {
     fileSha256,
     fileName,
     contentType,
+  }
+}
+
+export async function fetchJobDescriptionFile({ fileUrl }, dependencies = {}) {
+  const reference = parseStoredFileUrl(fileUrl)
+  const expectedBucket = String(dependencies.bucket || process.env.AWS_S3_BUCKET || '').trim()
+  if (!expectedBucket) {
+    throw new JobDescriptionFileStorageError(
+      'JD_STORAGE_UNAVAILABLE',
+      'Job description file storage is temporarily unavailable.',
+      503,
+    )
+  }
+  if (reference.bucket !== expectedBucket) {
+    throw new JobDescriptionFileStorageError(
+      'JD_STORAGE_REFERENCE_INVALID',
+      'The stored job description attachment is unavailable.',
+      404,
+    )
+  }
+
+  const client = dependencies.client || createDefaultClient()
+  const result = await client.send(new GetObjectCommand({
+    Bucket: reference.bucket,
+    Key: reference.key,
+  }))
+  const fileName = sanitizeFilename(path.basename(reference.key))
+  const fallbackType = ALLOWED_FILES.get(path.extname(fileName).toLowerCase()) || 'application/octet-stream'
+  const storedContentType = String(result.ContentType || '').trim().toLowerCase()
+
+  return {
+    buffer: await readBody(result.Body),
+    fileName,
+    contentType: [...ALLOWED_FILES.values()].includes(storedContentType) ? storedContentType : fallbackType,
   }
 }

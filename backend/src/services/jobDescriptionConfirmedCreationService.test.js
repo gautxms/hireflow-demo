@@ -20,7 +20,12 @@ const storedFile = {
   contentType: 'application/pdf',
 }
 const preview = {
-  fields: { title: 'Backend Engineer', description: 'Full role text', skills: ['Node.js'] },
+  fields: {
+    title: 'Backend Engineer',
+    description: 'Full role text',
+    skills: ['Node.js'],
+    workMode: 'remote',
+  },
   warnings: [],
 }
 
@@ -94,6 +99,7 @@ test('confirmation atomically creates one file-backed job', async () => {
     'RELEASE',
   ])
   const jobInsert = calls.find((call) => call.text.includes('INSERT INTO job_descriptions'))
+  assert.equal(jobInsert.params[14], 'remote')
   assert.equal(jobInsert.params[18], 'file')
   assert.equal(jobInsert.params[20], storedFile.fileUrl)
 })
