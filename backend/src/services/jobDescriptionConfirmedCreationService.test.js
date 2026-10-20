@@ -223,16 +223,21 @@ test('a failed job insert rolls back and releases the client', async () => {
 test('expired unconfirmed previews delete their source file and pending record only', async () => {
   const deletedFiles = []
   const queries = []
+  let claimCount = 0
   const db = {
     async query(sql, params) {
       const text = String(sql)
       queries.push({ text, params })
-      if (text.includes('SELECT id, file_url')) {
-        return { rows: [{ id: 'pending-1', file_url: storedFile.fileUrl }] }
+      if (text.includes('WITH cleanup_candidates')) {
+        claimCount += 1
+        return {
+          rows: claimCount === 1
+            ? [{ id: 'pending-1', file_url: storedFile.fileUrl }]
+            : [],
+        }
       }
       if (text.includes('DELETE FROM job_description_creation_requests')) {
-        assert.match(text, /status = 'pending'/)
-        assert.match(text, /expires_at <= NOW\(\)/)
+        assert.match(text, /status = 'cleaning'/)
         return { rows: [{ id: 'pending-1' }] }
       }
       throw new Error(`Unexpected cleanup query: ${text}`)
@@ -246,5 +251,41 @@ test('expired unconfirmed previews delete their source file and pending record o
 
   assert.equal(cleaned, 1)
   assert.deepEqual(deletedFiles, [storedFile.fileUrl])
-  assert.equal(queries.length, 2)
+  assert.equal(queries.length, 3)
+  assert.match(queries[0].text, /FOR UPDATE SKIP LOCKED/)
+  assert.match(queries[0].text, /SET status = 'cleaning'/)
+  assert.match(queries[0].text, /LIMIT 100/)
+  assert.match(queries[2].text, /WITH cleanup_candidates/)
+})
+
+test('failed preview cleanup releases its claim with retry backoff metadata intact', async (t) => {
+  t.mock.method(console, 'error', () => {})
+  let claimCount = 0
+  const queries = []
+  const db = {
+    async query(sql, params) {
+      const text = String(sql)
+      queries.push({ text, params })
+      if (text.includes('WITH cleanup_candidates')) {
+        claimCount += 1
+        return {
+          rows: claimCount === 1
+            ? [{ id: 'pending-1', file_url: storedFile.fileUrl }]
+            : [],
+        }
+      }
+      if (text.includes("SET status = 'pending'")) return { rows: [] }
+      throw new Error(`Unexpected cleanup query: ${text}`)
+    },
+  }
+
+  const cleaned = await cleanupExpiredJobDescriptionPreviews({
+    db,
+    deleteFile: async () => { throw new Error('temporary S3 failure') },
+  })
+
+  assert.equal(cleaned, 0)
+  assert.match(queries[0].text, /cleanup_attempted_at <= NOW\(\) - INTERVAL '15 minutes'/)
+  assert.match(queries[1].text, /SET status = 'pending'/)
+  assert.match(queries[2].text, /WITH cleanup_candidates/)
 })
