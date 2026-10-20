@@ -124,3 +124,29 @@ test('maps missing and transient S3 reads to distinct attachment errors', async 
     { code: 'JD_STORAGE_READ_FAILED', status: 503 },
   )
 })
+
+test('maps streamed S3 body failures to a retryable storage error', async () => {
+  const fileUrl = `s3://private-hireflow/job-descriptions/42/d0dd847d-4c2f-4ae1-8423-08b24a84dc23/${'f'.repeat(64)}/role.pdf`
+  const brokenBodies = [
+    { async transformToByteArray() { throw new Error('stream reset') } },
+    {
+      async *[Symbol.asyncIterator]() {
+        yield Buffer.from('partial')
+        throw new Error('connection closed')
+      },
+    },
+  ]
+
+  for (const Body of brokenBodies) {
+    await assert.rejects(
+      fetchJobDescriptionFile(
+        { fileUrl },
+        {
+          bucket: 'private-hireflow',
+          client: { async send() { return { Body, ContentType: 'application/pdf' } } },
+        },
+      ),
+      { code: 'JD_STORAGE_READ_FAILED', status: 503 },
+    )
+  }
+})

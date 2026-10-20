@@ -90,13 +90,21 @@ function parseStoredFileUrl(fileUrl) {
 
 async function readBody(body) {
   if (Buffer.isBuffer(body)) return body
-  if (typeof body?.transformToByteArray === 'function') {
-    return Buffer.from(await body.transformToByteArray())
-  }
-  if (body && typeof body[Symbol.asyncIterator] === 'function') {
-    const chunks = []
-    for await (const chunk of body) chunks.push(Buffer.from(chunk))
-    return Buffer.concat(chunks)
+  try {
+    if (typeof body?.transformToByteArray === 'function') {
+      return Buffer.from(await body.transformToByteArray())
+    }
+    if (body && typeof body[Symbol.asyncIterator] === 'function') {
+      const chunks = []
+      for await (const chunk of body) chunks.push(Buffer.from(chunk))
+      return Buffer.concat(chunks)
+    }
+  } catch {
+    throw new JobDescriptionFileStorageError(
+      'JD_STORAGE_READ_FAILED',
+      'The stored job description attachment could not be read.',
+      503,
+    )
   }
   throw new JobDescriptionFileStorageError(
     'JD_STORAGE_READ_FAILED',
