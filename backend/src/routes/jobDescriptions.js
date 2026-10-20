@@ -3,6 +3,10 @@ import path from 'path'
 import multer from 'multer'
 import { Router } from 'express'
 import { pool } from '../db/client.js'
+import {
+  createJobDescription,
+  JobDescriptionValidationError,
+} from '../services/jobDescriptionService.js'
 import { requireActiveSubscription } from '../middleware/subscriptionCheck.js'
 import { sanitizeFilename } from '../utils/sanitize.js'
 import jobDescriptionPreviewRoutes from './jobDescriptionPreview.js'
@@ -307,73 +311,20 @@ router.post('/', requireActiveSubscription, (req, res, next) => {
   try {
     await ensureSchema()
 
-    const title = String(req.body.title || '').trim()
+    const fileUrl = req.file?.filename ? `/api/job-descriptions/files/${req.file.filename}` : null
+    const row = await createJobDescription({
+      db: pool,
+      userId: req.userId,
+      input: req.body,
+      fileUrl,
+    })
 
-    if (!title) {
-      return res.status(400).json({ error: 'title is required' })
+    return res.status(201).json({ item: mapRecord(row) })
+  } catch (error) {
+    if (error instanceof JobDescriptionValidationError) {
+      return res.status(error.status).json({ error: error.message })
     }
 
-    const status = ['draft', 'active', 'archived'].includes(req.body.status)
-      ? req.body.status
-      : 'active'
-
-    const fileUrl = req.file?.filename ? `/api/job-descriptions/files/${req.file.filename}` : null
-
-    const result = await pool.query(
-      `INSERT INTO job_descriptions (
-         user_id,
-         title,
-         description,
-         requirements,
-         responsibilities,
-         skills,
-         experience_years,
-         experience_min,
-         experience_max,
-         location,
-         salary_min,
-         salary_max,
-         salary_currency,
-         department,
-         employment_type,
-         additional_info,
-         priority,
-         archived_reason,
-         source_type,
-         version,
-         file_url,
-         status,
-         updated_at
-       ) VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, NOW())
-       RETURNING *`,
-      [
-        req.userId,
-        title,
-        req.body.description || null,
-        req.body.requirements || null,
-        req.body.responsibilities || null,
-        JSON.stringify(normalizeSkills(req.body.skills)),
-        toIntOrNull(req.body.experienceYears),
-        toIntOrNull(req.body.experienceMin),
-        toIntOrNull(req.body.experienceMax),
-        req.body.location || null,
-        toIntOrNull(req.body.salaryMin),
-        toIntOrNull(req.body.salaryMax),
-        String(req.body.salaryCurrency || 'USD').trim().toUpperCase() || 'USD',
-        req.body.department === undefined ? '' : String(req.body.department || '').trim(),
-        req.body.employmentType === undefined ? 'unspecified' : String(req.body.employmentType || 'unspecified').trim(),
-        req.body.additionalInfo || null,
-        toIntOrDefault(req.body.priority, 0),
-        req.body.archivedReason || null,
-        req.body.sourceType === undefined ? 'manual' : String(req.body.sourceType || 'manual').trim(),
-        toIntOrDefault(req.body.version, 1),
-        fileUrl,
-        status,
-      ],
-    )
-
-    return res.status(201).json({ item: mapRecord(result.rows[0]) })
-  } catch (error) {
     console.error('[JobDescriptions] create failed:', error)
     return res.status(500).json({ error: 'Unable to create job description' })
   }
