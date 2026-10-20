@@ -229,7 +229,10 @@ router.get('/:id/attachment', async (req, res) => {
 
     const storedFileUrl = String(row.file_url || '').trim()
     if (isStoredJobDescriptionFileUrl(storedFileUrl)) {
-      const attachment = await fetchJobDescriptionFile({ fileUrl: storedFileUrl })
+      const attachment = await fetchJobDescriptionFile({
+        fileUrl: storedFileUrl,
+        userId: req.userId,
+      })
       res.set('Cache-Control', 'private, no-store')
       res.set('Content-Type', attachment.contentType)
       res.set('Content-Disposition', `attachment; filename="${attachment.fileName}"`)
@@ -425,6 +428,19 @@ router.put('/:id', requireActiveSubscription, (req, res, next) => {
     const status = ['draft', 'active', 'archived'].includes(req.body.status)
       ? req.body.status
       : prev.status
+
+    const requestedFileUrl = String(req.body.fileUrl || '').trim()
+    if (
+      requestedFileUrl
+      && requestedFileUrl !== String(prev.file_url || '')
+    ) {
+      await client.query('ROLLBACK')
+      transactionStarted = false
+      return res.status(400).json({
+        code: 'JD_ATTACHMENT_REFERENCE_INVALID',
+        error: 'Attachment references cannot be changed directly.',
+      })
+    }
 
     const fileUrl = req.file?.filename
       ? `/api/job-descriptions/files/${req.file.filename}`

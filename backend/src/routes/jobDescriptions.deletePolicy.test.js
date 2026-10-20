@@ -33,6 +33,11 @@ test('attachment replacement detaches the original receipt before cleanup', () =
   assert.match(source, /Replaced attachment cleanup deferred/)
 })
 
+test('attachment references cannot be moved between accounts', () => {
+  assert.match(source, /fetchJobDescriptionFile\(\{[\s\S]*fileUrl: storedFileUrl,[\s\S]*userId: req\.userId/)
+  assert.match(source, /Attachment references cannot be changed directly\./)
+})
+
 test('hard deletion and duplication serialize on the source job row', () => {
   const locks = source.match(/FOR UPDATE/g) || []
   assert.ok(locks.length >= 3)

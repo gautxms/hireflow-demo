@@ -80,6 +80,14 @@ test('retrieves only an attachment from the configured private bucket', async ()
     ),
     { code: 'JD_STORAGE_REFERENCE_INVALID', status: 404 },
   )
+
+  await assert.rejects(
+    fetchJobDescriptionFile(
+      { fileUrl, userId: 7 },
+      { bucket: 'private-hireflow', client: { async send() { throw new Error('must not send') } } },
+    ),
+    { code: 'JD_STORAGE_REFERENCE_INVALID', status: 404 },
+  )
 })
 
 test('deletes an expired preview object from its configured bucket', async () => {

@@ -43,6 +43,10 @@ function sanitizeFilename(filename) {
   return `${stem}${extension}`
 }
 
+function storageOwnerSegment(userId) {
+  return String(userId || '').trim().replace(/[^a-zA-Z0-9_-]/g, '_')
+}
+
 function validateFile(file) {
   if (!Buffer.isBuffer(file?.buffer) || file.buffer.length === 0) {
     throw new JobDescriptionFileStorageError('JD_FILE_REQUIRED', 'Choose a PDF or DOCX job description.')
@@ -78,7 +82,7 @@ function parseStoredFileUrl(fileUrl) {
     ) {
       throw new Error('invalid storage reference')
     }
-    return { bucket: parsed.hostname, key }
+    return { bucket: parsed.hostname, key, owner: key.split('/')[1] }
   } catch {
     throw new JobDescriptionFileStorageError(
       'JD_STORAGE_REFERENCE_INVALID',
@@ -132,7 +136,7 @@ export async function storeJobDescriptionFile({ userId, file, previewId = crypto
 
   const { fileName, contentType } = validateFile(file)
   const fileSha256 = crypto.createHash('sha256').update(file.buffer).digest('hex')
-  const ownerSegment = subject.replace(/[^a-zA-Z0-9_-]/g, '_')
+  const ownerSegment = storageOwnerSegment(subject)
   const previewSegment = String(previewId).toLowerCase()
   if (!/^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(previewSegment)) {
     throw new TypeError('A valid preview id is required')
@@ -161,7 +165,7 @@ export async function storeJobDescriptionFile({ userId, file, previewId = crypto
   }
 }
 
-export async function fetchJobDescriptionFile({ fileUrl }, dependencies = {}) {
+export async function fetchJobDescriptionFile({ fileUrl, userId }, dependencies = {}) {
   const reference = parseStoredFileUrl(fileUrl)
   const expectedBucket = String(dependencies.bucket || process.env.AWS_S3_BUCKET || '').trim()
   if (!expectedBucket) {
@@ -172,6 +176,13 @@ export async function fetchJobDescriptionFile({ fileUrl }, dependencies = {}) {
     )
   }
   if (reference.bucket !== expectedBucket) {
+    throw new JobDescriptionFileStorageError(
+      'JD_STORAGE_REFERENCE_INVALID',
+      'The stored job description attachment is unavailable.',
+      404,
+    )
+  }
+  if (userId !== undefined && reference.owner !== storageOwnerSegment(userId)) {
     throw new JobDescriptionFileStorageError(
       'JD_STORAGE_REFERENCE_INVALID',
       'The stored job description attachment is unavailable.',
