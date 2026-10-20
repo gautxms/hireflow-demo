@@ -121,7 +121,7 @@ export function isStoredJobDescriptionFileUrl(fileUrl) {
   return String(fileUrl || '').startsWith('s3://')
 }
 
-export async function storeJobDescriptionFile({ userId, file, previewId = crypto.randomUUID() }, dependencies = {}) {
+export function planJobDescriptionFileStorage({ userId, file, previewId = crypto.randomUUID() }, dependencies = {}) {
   const subject = String(userId || '').trim()
   if (!subject) throw new TypeError('A user id is required')
 
@@ -142,26 +142,39 @@ export async function storeJobDescriptionFile({ userId, file, previewId = crypto
     throw new TypeError('A valid preview id is required')
   }
   const key = `job-descriptions/${ownerSegment}/${previewSegment}/${fileSha256}/${fileName}`
-  const client = dependencies.client || createDefaultClient()
-
-  await client.send(new PutObjectCommand({
-    Bucket: bucket,
-    Key: key,
-    Body: file.buffer,
-    ContentType: contentType,
-    ContentDisposition: `attachment; filename="${fileName}"`,
-    ServerSideEncryption: 'AES256',
-    Metadata: {
-      sha256: fileSha256,
-      owner: ownerSegment,
-    },
-  }))
 
   return {
     fileUrl: `s3://${bucket}/${key}`,
     fileSha256,
     fileName,
     contentType,
+    bucket,
+    key,
+  }
+}
+
+export async function storeJobDescriptionFile(args, dependencies = {}) {
+  const planned = planJobDescriptionFileStorage(args, dependencies)
+  const client = dependencies.client || createDefaultClient()
+
+  await client.send(new PutObjectCommand({
+    Bucket: planned.bucket,
+    Key: planned.key,
+    Body: args.file.buffer,
+    ContentType: planned.contentType,
+    ContentDisposition: `attachment; filename="${planned.fileName}"`,
+    ServerSideEncryption: 'AES256',
+    Metadata: {
+      sha256: planned.fileSha256,
+      owner: storageOwnerSegment(args.userId),
+    },
+  }))
+
+  return {
+    fileUrl: planned.fileUrl,
+    fileSha256: planned.fileSha256,
+    fileName: planned.fileName,
+    contentType: planned.contentType,
   }
 }
 

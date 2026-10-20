@@ -38,6 +38,11 @@ async function storeWithDefaultService(args) {
   return storeJobDescriptionFile(args)
 }
 
+async function planWithDefaultService(args) {
+  const { planJobDescriptionFileStorage } = await import('./jobDescriptionFileStorageService.js')
+  return planJobDescriptionFileStorage(args)
+}
+
 async function previewWithDefaultService(file) {
   const { previewJobDescription } = await import('./jobDescriptionPreviewService.js')
   return previewJobDescription(file)
@@ -58,44 +63,52 @@ export async function prepareJobDescriptionCreation({
 
   const secret = resolveSigningSecret(signingSecret)
   const previewFile = dependencies.previewFile || previewWithDefaultService
+  const planFile = dependencies.planFile || planWithDefaultService
   const storeFile = dependencies.storeFile || storeWithDefaultService
   const previewId = dependencies.previewId || crypto.randomUUID()
   const preview = await previewFile(file)
-  const storedFile = await storeFile({ userId, file, previewId })
-  let receipt
+  const plannedFile = await planFile({ userId, file, previewId })
+  const receipt = issueJobDescriptionPreviewReceipt({
+    userId,
+    preview,
+    storedFile: plannedFile,
+    secret,
+    now: dependencies.now === undefined ? Date.now() : dependencies.now,
+    previewId,
+  })
+  await db.query(
+    `INSERT INTO job_description_creation_requests (
+       user_id,
+       preview_id,
+       file_sha256,
+       preview_sha256,
+       file_url,
+       expires_at,
+       status
+     ) VALUES ($1, $2, $3, $4, $5, $6, 'pending')`,
+    [
+      userId,
+      receipt.previewId,
+      plannedFile.fileSha256,
+      receipt.previewSha256,
+      plannedFile.fileUrl,
+      receipt.expiresAt,
+    ],
+  )
 
   try {
-    receipt = issueJobDescriptionPreviewReceipt({
-      userId,
-      preview,
-      storedFile,
-      secret,
-      now: dependencies.now === undefined ? Date.now() : dependencies.now,
-      previewId,
-    })
-    await db.query(
-      `INSERT INTO job_description_creation_requests (
-         user_id,
-         preview_id,
-         file_sha256,
-         preview_sha256,
-         file_url,
-         expires_at,
-         status
-       ) VALUES ($1, $2, $3, $4, $5, $6, 'pending')`,
-      [
-        userId,
-        receipt.previewId,
-        storedFile.fileSha256,
-        receipt.previewSha256,
-        storedFile.fileUrl,
-        receipt.expiresAt,
-      ],
-    )
+    await storeFile({ userId, file, previewId })
   } catch (error) {
-    const deleteFile = dependencies.deleteFile || deleteWithDefaultService
-    await deleteFile({ fileUrl: storedFile.fileUrl }).catch((cleanupError) => {
-      console.error('[JobDescriptionPreview] Failed to remove untracked source file:', cleanupError)
+    await db.query(
+      `UPDATE job_description_creation_requests
+       SET expires_at = NOW(),
+           cleanup_attempted_at = NULL
+       WHERE user_id = $1
+         AND preview_id = $2
+         AND status = 'pending'`,
+      [userId, receipt.previewId],
+    ).catch((cleanupError) => {
+      console.error('[JobDescriptionPreview] Failed to expire upload intent:', cleanupError)
     })
     throw error
   }
@@ -105,8 +118,8 @@ export async function prepareJobDescriptionCreation({
     previewToken: receipt.token,
     previewExpiresAt: receipt.expiresAt,
     sourceFile: {
-      name: storedFile.fileName,
-      sha256: storedFile.fileSha256,
+      name: plannedFile.fileName,
+      sha256: plannedFile.fileSha256,
     },
   }
 }

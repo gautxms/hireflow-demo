@@ -33,11 +33,13 @@ const preview = {
 
 async function prepare() {
   const preparationQueries = []
+  let intentPersisted = false
   return prepareJobDescriptionCreation(
     {
       db: {
         async query(sql, params) {
           preparationQueries.push({ sql: String(sql), params })
+          intentPersisted = true
           return { rows: [] }
         },
       },
@@ -52,7 +54,9 @@ async function prepare() {
         assert.equal(received, file)
         return preview
       },
+      planFile: async () => storedFile,
       storeFile: async (received) => {
+        assert.equal(intentPersisted, true)
         assert.deepEqual(received, {
           userId: 42,
           file,
@@ -84,8 +88,8 @@ test('previews first, persists the source file, and returns a signed confirmatio
   assert.equal(receipt.expiresAt, prepared.previewExpiresAt)
 })
 
-test('removes the isolated source file if pending-preview tracking fails', async () => {
-  const deletedFiles = []
+test('does not upload the source file if durable intent tracking fails', async () => {
+  let uploaded = false
   await assert.rejects(
     prepareJobDescriptionCreation(
       {
@@ -98,13 +102,45 @@ test('removes the isolated source file if pending-preview tracking fails', async
         now,
         previewId: 'd0dd847d-4c2f-4ae1-8423-08b24a84dc23',
         previewFile: async () => preview,
-        storeFile: async () => storedFile,
-        deleteFile: async ({ fileUrl }) => deletedFiles.push(fileUrl),
+        planFile: async () => storedFile,
+        storeFile: async () => { uploaded = true },
       },
     ),
     /database unavailable/,
   )
-  assert.deepEqual(deletedFiles, [storedFile.fileUrl])
+  assert.equal(uploaded, false)
+})
+
+test('a failed upload keeps its durable intent and makes it immediately cleanable', async () => {
+  const queries = []
+  await assert.rejects(
+    prepareJobDescriptionCreation(
+      {
+        db: {
+          async query(sql, params) {
+            queries.push({ text: String(sql), params })
+            return { rows: [] }
+          },
+        },
+        userId: 42,
+        file,
+        signingSecret: secret,
+      },
+      {
+        now,
+        previewId: 'd0dd847d-4c2f-4ae1-8423-08b24a84dc23',
+        previewFile: async () => preview,
+        planFile: async () => storedFile,
+        storeFile: async () => { throw new Error('upload interrupted') },
+      },
+    ),
+    /upload interrupted/,
+  )
+
+  assert.equal(queries.length, 2)
+  assert.match(queries[0].text, /INSERT INTO job_description_creation_requests/)
+  assert.match(queries[1].text, /SET expires_at = NOW\(\)/)
+  assert.deepEqual(queries[1].params, [42, 'd0dd847d-4c2f-4ae1-8423-08b24a84dc23'])
 })
 
 test('confirmation atomically creates one file-backed job', async () => {
