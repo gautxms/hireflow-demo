@@ -10,6 +10,7 @@ import {
 import {
   fetchJobDescriptionFile,
   isStoredJobDescriptionFileUrl,
+  JobDescriptionFileStorageError,
 } from '../services/jobDescriptionFileStorageService.js'
 import { requireActiveSubscription } from '../middleware/subscriptionCheck.js'
 import { sanitizeFilename } from '../utils/sanitize.js'
@@ -238,6 +239,9 @@ router.get('/:id/attachment', async (req, res) => {
     return res.sendFile(filePath)
   } catch (error) {
     console.error('[JobDescriptions] attachment fetch failed:', error)
+    if (error instanceof JobDescriptionFileStorageError) {
+      return res.status(error.status).json({ code: error.code, error: error.message })
+    }
     return res.status(404).json({ error: 'Attachment not found' })
   }
 })
