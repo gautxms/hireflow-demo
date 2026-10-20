@@ -10,6 +10,7 @@ import { logEmailConfigStatus } from './services/emailService.js'
 import { initializeJobQueue } from './services/jobQueue.js'
 import { registerParseResumeJobProcessor } from './jobs/parseResumeJob.js'
 import { startChunkUploadCleanupCron } from './services/fileUploadService.js'
+import { startJobDescriptionPreviewCleanupCron } from './services/jobDescriptionConfirmedCreationService.js'
 import { ensureWebhookTables } from './services/webhookService.js'
 import { ensureNotificationTables } from './services/notificationService.js'
 import { validateAiProviderModelConfiguration } from './services/aiProviderConfigService.js'
@@ -138,6 +139,7 @@ async function start() {
     startRecoveryBillingAdjustmentCron()
     startAnalyticsCron()
     startChunkUploadCleanupCron()
+    startJobDescriptionPreviewCleanupCron({ db: pool })
 
     app.listen(port, () => {
       console.log(`✓ Backend listening on port ${port}`)

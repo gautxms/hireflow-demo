@@ -1,10 +1,13 @@
 import test, { after } from 'node:test'
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import express from 'express'
 import jwt from 'jsonwebtoken'
 import previewRouter from './jobDescriptionPreview.js'
 import { requireAuth } from '../middleware/authMiddleware.js'
 import { pool } from '../db/client.js'
+
+const routeSource = readFileSync(new URL('./jobDescriptionPreview.js', import.meta.url), 'utf8')
 
 after(async () => {
   await pool.end().catch(() => {})
@@ -67,3 +70,9 @@ test('active subscribers get validation errors without creating a job or calling
   assert.equal(invalid.body.code, 'JD_INVALID_FILE')
   assert.equal(queries, 2)
 })
+
+test('successful previews are persisted and return a confirmation receipt', () => {
+  assert.match(routeSource, /prepareJobDescriptionCreation\(\{[\s\S]*db: pool,[\s\S]*userId: req\.userId,[\s\S]*file: req\.file/)
+  assert.doesNotMatch(routeSource, /await previewJobDescription\(req\.file\)/)
+})
+

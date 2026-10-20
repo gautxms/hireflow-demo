@@ -22,3 +22,26 @@ test('schema initialization does not backfill intentionally open-ended experienc
   assert.doesNotMatch(source, /UPDATE\s+job_descriptions[\s\S]*experience_min\s*=\s*COALESCE/i)
   assert.doesNotMatch(source, /UPDATE\s+job_descriptions[\s\S]*experience_max\s*=\s*COALESCE/i)
 })
+
+test('confirmed previews use the signed-token creation path', () => {
+  assert.match(source, /confirmJobDescriptionCreation\(\{[\s\S]*previewToken/)
+  assert.match(source, /status\(confirmed\.created \? 201 : 200\)/)
+})
+
+test('attachment replacement detaches the original receipt before cleanup', () => {
+  assert.match(source, /SET job_description_id = NULL,[\s\S]*cleanup_attempted_at = NULL/)
+  assert.match(source, /Replaced attachment cleanup deferred/)
+})
+
+test('attachment references cannot be moved between accounts', () => {
+  assert.match(source, /fetchJobDescriptionFile\(\{[\s\S]*fileUrl: storedFileUrl,[\s\S]*userId: req\.userId/)
+  assert.match(source, /Attachment references cannot be changed directly\./)
+})
+
+test('hard deletion and duplication serialize on the source job row', () => {
+  const locks = source.match(/FOR UPDATE/g) || []
+  assert.ok(locks.length >= 3)
+  assert.match(source, /router\.delete\('\/:id'[\s\S]*BEGIN[\s\S]*FOR UPDATE[\s\S]*DELETE FROM job_descriptions/)
+  assert.match(source, /router\.post\('\/:id\/duplicate'[\s\S]*BEGIN[\s\S]*FOR UPDATE[\s\S]*INSERT INTO job_descriptions/)
+})
+

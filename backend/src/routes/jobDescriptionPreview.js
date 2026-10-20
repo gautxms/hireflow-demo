@@ -1,11 +1,14 @@
 import { Router } from 'express'
 import rateLimit from 'express-rate-limit'
 import multer from 'multer'
+import { pool } from '../db/client.js'
 import { requireActiveSubscription } from '../middleware/subscriptionCheck.js'
+import { prepareJobDescriptionCreation } from '../services/jobDescriptionConfirmedCreationService.js'
+import { JobDescriptionFileStorageError } from '../services/jobDescriptionFileStorageService.js'
+import { JobDescriptionPreviewReceiptError } from '../services/jobDescriptionPreviewReceiptService.js'
 import {
   JobDescriptionPreviewError,
   MAX_JD_PREVIEW_FILE_BYTES,
-  previewJobDescription,
 } from '../services/jobDescriptionPreviewService.js'
 
 const router = Router()
@@ -35,10 +38,18 @@ router.post('/preview', requireActiveSubscription, previewLimiter, (req, res, ne
 }, async (req, res) => {
   res.set('Cache-Control', 'no-store')
   try {
-    const preview = await previewJobDescription(req.file)
+    const preview = await prepareJobDescriptionCreation({
+      db: pool,
+      userId: req.userId,
+      file: req.file,
+    })
     return res.json(preview)
   } catch (error) {
-    if (error instanceof JobDescriptionPreviewError) {
+    if (
+      error instanceof JobDescriptionPreviewError
+      || error instanceof JobDescriptionFileStorageError
+      || error instanceof JobDescriptionPreviewReceiptError
+    ) {
       return res.status(error.status).json({ code: error.code, error: error.message })
     }
     console.error('[JobDescriptionPreview] extraction failed:', { code: error?.code || error?.name || 'UNKNOWN_ERROR' })
@@ -47,3 +58,4 @@ router.post('/preview', requireActiveSubscription, previewLimiter, (req, res, ne
 })
 
 export default router
+

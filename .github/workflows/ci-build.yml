@@ -56,8 +56,15 @@ jobs:
         run: >-
           node --test
           backend/src/services/jobDescriptionService.test.js
+          backend/src/services/jobDescriptionPreviewReceiptService.test.js
+          backend/src/services/jobDescriptionFileStorageService.test.js
+          backend/src/services/jobDescriptionConfirmedCreationService.test.js
+          backend/src/db/migrations/056-add-job-description-creation-requests.test.js
           backend/src/services/jobDescriptionPreviewService.test.js
           backend/src/routes/jobDescriptionPreview.test.js
+          backend/src/routes/jobDescriptions.access.test.js
+          backend/src/routes/jobDescriptions.deletePolicy.test.js
+          src/components/jobDescriptionFormState.test.js
           src/components/jobDescriptionPrefill.test.js
 
       - name: Checkout concurrency and ownership tests
@@ -115,3 +122,4 @@ jobs:
 
       - name: Build
         run: npm run build
+
