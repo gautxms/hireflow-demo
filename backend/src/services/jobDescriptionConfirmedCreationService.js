@@ -228,34 +228,49 @@ export async function confirmJobDescriptionCreation({
 export async function cleanupExpiredJobDescriptionPreviews({ db, deleteFile } = {}) {
   if (!db?.query) throw new TypeError('A database query interface is required')
   const removeFile = deleteFile || deleteWithDefaultService
+  const runStartedAt = new Date().toISOString()
   let cleaned = 0
 
   while (true) {
     const claimed = await db.query(
       `WITH cleanup_candidates AS (
-         SELECT id
+         SELECT id, status
          FROM job_description_creation_requests
          WHERE (
              status = 'pending'
              AND expires_at <= NOW()
              AND (
                cleanup_attempted_at IS NULL
-               OR cleanup_attempted_at <= NOW() - INTERVAL '15 minutes'
+               OR cleanup_attempted_at <= $1::timestamptz - INTERVAL '15 minutes'
              )
            ) OR (
              status = 'cleaning'
-             AND cleanup_attempted_at <= NOW() - INTERVAL '15 minutes'
+             AND cleanup_attempted_at <= $1::timestamptz - INTERVAL '15 minutes'
+           ) OR (
+             status = 'completed'
+             AND job_description_id IS NULL
+             AND (
+               cleanup_attempted_at IS NULL
+               OR cleanup_attempted_at <= $1::timestamptz - INTERVAL '15 minutes'
+             )
+           ) OR (
+             status = 'deleting'
+             AND cleanup_attempted_at <= $1::timestamptz - INTERVAL '15 minutes'
            )
          ORDER BY expires_at ASC
          FOR UPDATE SKIP LOCKED
          LIMIT 100
        )
        UPDATE job_description_creation_requests creation_request
-       SET status = 'cleaning',
+       SET status = CASE
+             WHEN cleanup_candidates.status IN ('completed', 'deleting') THEN 'deleting'
+             ELSE 'cleaning'
+           END,
            cleanup_attempted_at = NOW()
        FROM cleanup_candidates
        WHERE creation_request.id = cleanup_candidates.id
-       RETURNING creation_request.id, creation_request.file_url`,
+       RETURNING creation_request.id, creation_request.file_url, creation_request.status`,
+      [runStartedAt],
     )
 
     if (claimed.rows.length === 0) break
@@ -263,22 +278,34 @@ export async function cleanupExpiredJobDescriptionPreviews({ db, deleteFile } = 
     for (const row of claimed.rows) {
       try {
         await removeFile({ fileUrl: row.file_url })
-        const deleted = await db.query(
-          `DELETE FROM job_description_creation_requests
-           WHERE id = $1
-             AND status = 'cleaning'
-           RETURNING id`,
-          [row.id],
-        )
-        if (deleted.rows[0]) cleaned += 1
+        const completed = row.status === 'deleting'
+          ? await db.query(
+            `UPDATE job_description_creation_requests
+             SET status = 'deleted'
+             WHERE id = $1
+               AND status = 'deleting'
+             RETURNING id`,
+            [row.id],
+          )
+          : await db.query(
+            `DELETE FROM job_description_creation_requests
+             WHERE id = $1
+               AND status = 'cleaning'
+             RETURNING id`,
+            [row.id],
+          )
+        if (completed.rows[0]) cleaned += 1
       } catch (error) {
         console.error('[JobDescriptionPreview] Cleanup failed for preview', row.id, error)
         try {
           await db.query(
             `UPDATE job_description_creation_requests
-             SET status = 'pending'
+             SET status = CASE
+                   WHEN status = 'deleting' THEN 'completed'
+                   ELSE 'pending'
+                 END
              WHERE id = $1
-               AND status = 'cleaning'`,
+               AND status IN ('cleaning', 'deleting')`,
             [row.id],
           )
         } catch (resetError) {
@@ -289,6 +316,49 @@ export async function cleanupExpiredJobDescriptionPreviews({ db, deleteFile } = 
   }
 
   return cleaned
+}
+
+export async function cleanupDeletedJobDescriptionFile({
+  db,
+  userId,
+  fileUrl,
+  deleteFile,
+}) {
+  if (!db?.query) throw new TypeError('A database query interface is required')
+  const removeFile = deleteFile || deleteWithDefaultService
+  const claim = await db.query(
+    `UPDATE job_description_creation_requests
+     SET status = 'deleting',
+         cleanup_attempted_at = NOW()
+     WHERE user_id = $1
+       AND file_url = $2
+       AND job_description_id IS NULL
+       AND status = 'completed'
+     RETURNING id, file_url`,
+    [userId, fileUrl],
+  )
+  if (!claim.rows[0]) return false
+
+  try {
+    await removeFile({ fileUrl: claim.rows[0].file_url })
+    await db.query(
+      `UPDATE job_description_creation_requests
+       SET status = 'deleted'
+       WHERE id = $1
+         AND status = 'deleting'`,
+      [claim.rows[0].id],
+    )
+    return true
+  } catch (error) {
+    await db.query(
+      `UPDATE job_description_creation_requests
+       SET status = 'completed'
+       WHERE id = $1
+         AND status = 'deleting'`,
+      [claim.rows[0].id],
+    )
+    throw error
+  }
 }
 
 export function startJobDescriptionPreviewCleanupCron({ db, deleteFile } = {}) {

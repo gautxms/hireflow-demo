@@ -9,7 +9,7 @@ export async function up(client) {
       file_url TEXT NOT NULL,
       job_description_id UUID REFERENCES job_descriptions(id) ON DELETE SET NULL,
       status TEXT NOT NULL DEFAULT 'pending'
-        CHECK (status IN ('pending', 'processing', 'completed', 'cleaning')),
+        CHECK (status IN ('pending', 'processing', 'completed', 'cleaning', 'deleting', 'deleted')),
       expires_at TIMESTAMPTZ NOT NULL,
       cleanup_attempted_at TIMESTAMPTZ,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -27,6 +27,6 @@ export async function up(client) {
   await client.query(`
     CREATE INDEX IF NOT EXISTS idx_job_description_creation_requests_expired
       ON job_description_creation_requests (expires_at, cleanup_attempted_at)
-      WHERE status IN ('pending', 'cleaning')
+      WHERE status IN ('pending', 'cleaning', 'completed', 'deleting')
   `)
 }

@@ -12,6 +12,7 @@ import {
   isStoredJobDescriptionFileUrl,
   JobDescriptionFileStorageError,
 } from '../services/jobDescriptionFileStorageService.js'
+import { cleanupDeletedJobDescriptionFile } from '../services/jobDescriptionConfirmedCreationService.js'
 import { requireActiveSubscription } from '../middleware/subscriptionCheck.js'
 import { sanitizeFilename } from '../utils/sanitize.js'
 import jobDescriptionPreviewRoutes from './jobDescriptionPreview.js'
@@ -485,12 +486,24 @@ router.delete('/:id', requireActiveSubscription, async (req, res) => {
       }
 
       const deleted = await pool.query(
-        `DELETE FROM job_descriptions WHERE id = $1 AND user_id = $2 RETURNING id`,
+        `DELETE FROM job_descriptions WHERE id = $1 AND user_id = $2 RETURNING id, file_url`,
         [req.params.id, req.userId],
       )
 
       if (!deleted.rows[0]) {
         return res.status(404).json({ error: 'Job description not found' })
+      }
+
+      if (isStoredJobDescriptionFileUrl(deleted.rows[0].file_url)) {
+        try {
+          await cleanupDeletedJobDescriptionFile({
+            db: pool,
+            userId: req.userId,
+            fileUrl: deleted.rows[0].file_url,
+          })
+        } catch (error) {
+          console.error('[JobDescriptions] Hard-delete attachment cleanup deferred:', error)
+        }
       }
 
       return res.json({ ok: true, deleted: true, usageSummary })

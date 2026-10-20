@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
+  cleanupDeletedJobDescriptionFile,
   cleanupExpiredJobDescriptionPreviews,
   confirmJobDescriptionCreation,
   prepareJobDescriptionCreation,
@@ -232,7 +233,7 @@ test('expired unconfirmed previews delete their source file and pending record o
         claimCount += 1
         return {
           rows: claimCount === 1
-            ? [{ id: 'pending-1', file_url: storedFile.fileUrl }]
+            ? [{ id: 'pending-1', file_url: storedFile.fileUrl, status: 'cleaning' }]
             : [],
         }
       }
@@ -253,8 +254,11 @@ test('expired unconfirmed previews delete their source file and pending record o
   assert.deepEqual(deletedFiles, [storedFile.fileUrl])
   assert.equal(queries.length, 3)
   assert.match(queries[0].text, /FOR UPDATE SKIP LOCKED/)
-  assert.match(queries[0].text, /SET status = 'cleaning'/)
+  assert.match(queries[0].text, /ELSE 'cleaning'/)
   assert.match(queries[0].text, /LIMIT 100/)
+  assert.match(queries[0].text, /cleanup_attempted_at <= \$1::timestamptz - INTERVAL '15 minutes'/)
+  assert.equal(queries[0].params.length, 1)
+  assert.equal(queries[2].params[0], queries[0].params[0])
   assert.match(queries[2].text, /WITH cleanup_candidates/)
 })
 
@@ -270,11 +274,11 @@ test('failed preview cleanup releases its claim with retry backoff metadata inta
         claimCount += 1
         return {
           rows: claimCount === 1
-            ? [{ id: 'pending-1', file_url: storedFile.fileUrl }]
+            ? [{ id: 'pending-1', file_url: storedFile.fileUrl, status: 'cleaning' }]
             : [],
         }
       }
-      if (text.includes("SET status = 'pending'")) return { rows: [] }
+      if (text.includes('SET status = CASE')) return { rows: [] }
       throw new Error(`Unexpected cleanup query: ${text}`)
     },
   }
@@ -285,7 +289,37 @@ test('failed preview cleanup releases its claim with retry backoff metadata inta
   })
 
   assert.equal(cleaned, 0)
-  assert.match(queries[0].text, /cleanup_attempted_at <= NOW\(\) - INTERVAL '15 minutes'/)
-  assert.match(queries[1].text, /SET status = 'pending'/)
+  assert.match(queries[0].text, /cleanup_attempted_at <= \$1::timestamptz - INTERVAL '15 minutes'/)
+  assert.match(queries[1].text, /ELSE 'pending'/)
   assert.match(queries[2].text, /WITH cleanup_candidates/)
+  assert.equal(queries[2].params[0], queries[0].params[0])
+})
+
+test('hard-deleted jobs remove their S3 object while retaining a replay tombstone', async () => {
+  const queries = []
+  const deletedFiles = []
+  const db = {
+    async query(sql, params) {
+      const text = String(sql)
+      queries.push({ text, params })
+      if (text.includes("SET status = 'deleting'")) {
+        return { rows: [{ id: 'completed-1', file_url: storedFile.fileUrl }] }
+      }
+      if (text.includes("SET status = 'deleted'")) return { rows: [] }
+      throw new Error(`Unexpected hard-delete cleanup query: ${text}`)
+    },
+  }
+
+  const removed = await cleanupDeletedJobDescriptionFile({
+    db,
+    userId: 42,
+    fileUrl: storedFile.fileUrl,
+    deleteFile: async ({ fileUrl }) => deletedFiles.push(fileUrl),
+  })
+
+  assert.equal(removed, true)
+  assert.deepEqual(deletedFiles, [storedFile.fileUrl])
+  assert.match(queries[0].text, /job_description_id IS NULL/)
+  assert.match(queries[0].text, /status = 'completed'/)
+  assert.match(queries[1].text, /SET status = 'deleted'/)
 })
