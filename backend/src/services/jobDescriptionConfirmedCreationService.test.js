@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
+  cleanupExpiredJobDescriptionPreviews,
   confirmJobDescriptionCreation,
   prepareJobDescriptionCreation,
 } from './jobDescriptionConfirmedCreationService.js'
@@ -30,8 +31,19 @@ const preview = {
 }
 
 async function prepare() {
+  const preparationQueries = []
   return prepareJobDescriptionCreation(
-    { userId: 42, file, signingSecret: secret },
+    {
+      db: {
+        async query(sql, params) {
+          preparationQueries.push({ sql: String(sql), params })
+          return { rows: [] }
+        },
+      },
+      userId: 42,
+      file,
+      signingSecret: secret,
+    },
     {
       now,
       previewId: 'd0dd847d-4c2f-4ae1-8423-08b24a84dc23',
@@ -40,11 +52,20 @@ async function prepare() {
         return preview
       },
       storeFile: async (received) => {
-        assert.deepEqual(received, { userId: 42, file })
+        assert.deepEqual(received, {
+          userId: 42,
+          file,
+          previewId: 'd0dd847d-4c2f-4ae1-8423-08b24a84dc23',
+        })
         return storedFile
       },
     },
-  )
+  ).then((result) => {
+    assert.equal(preparationQueries.length, 1)
+    assert.match(preparationQueries[0].sql, /INSERT INTO job_description_creation_requests/)
+    assert.match(preparationQueries[0].sql, /'pending'/)
+    return result
+  })
 }
 
 test('previews first, persists the source file, and returns a signed confirmation token', async () => {
@@ -62,6 +83,29 @@ test('previews first, persists the source file, and returns a signed confirmatio
   assert.equal(receipt.expiresAt, prepared.previewExpiresAt)
 })
 
+test('removes the isolated source file if pending-preview tracking fails', async () => {
+  const deletedFiles = []
+  await assert.rejects(
+    prepareJobDescriptionCreation(
+      {
+        db: { async query() { throw new Error('database unavailable') } },
+        userId: 42,
+        file,
+        signingSecret: secret,
+      },
+      {
+        now,
+        previewId: 'd0dd847d-4c2f-4ae1-8423-08b24a84dc23',
+        previewFile: async () => preview,
+        storeFile: async () => storedFile,
+        deleteFile: async ({ fileUrl }) => deletedFiles.push(fileUrl),
+      },
+    ),
+    /database unavailable/,
+  )
+  assert.deepEqual(deletedFiles, [storedFile.fileUrl])
+})
+
 test('confirmation atomically creates one file-backed job', async () => {
   const prepared = await prepare()
   const calls = []
@@ -70,7 +114,7 @@ test('confirmation atomically creates one file-backed job', async () => {
     async query(sql, params) {
       const text = String(sql)
       calls.push({ text, params })
-      if (text.includes('INSERT INTO job_description_creation_requests')) return { rows: [{ id: 'request-1' }] }
+      if (text.includes("SET status = 'processing'")) return { rows: [{ id: 'request-1' }] }
       if (text.includes('INSERT INTO job_descriptions')) return { rows: [job] }
       return { rows: [] }
     },
@@ -92,7 +136,7 @@ test('confirmation atomically creates one file-backed job', async () => {
   })
   assert.deepEqual(calls.map((call) => call.text === 'RELEASE' ? call.text : call.text.trim().split(/\s+/).slice(0, 2).join(' ')), [
     'BEGIN',
-    'INSERT INTO',
+    'UPDATE job_description_creation_requests',
     'INSERT INTO',
     'UPDATE job_description_creation_requests',
     'COMMIT',
@@ -111,7 +155,7 @@ test('a retry returns the existing job without creating a duplicate', async () =
   const client = {
     async query(sql) {
       const text = String(sql)
-      if (text.includes('INSERT INTO job_description_creation_requests')) return { rows: [] }
+      if (text.includes("SET status = 'processing'")) return { rows: [] }
       if (text.includes('SELECT job_description.*')) return { rows: [existingJob] }
       if (text.includes('INSERT INTO job_descriptions')) jobInsertCount += 1
       return { rows: [] }
@@ -155,7 +199,7 @@ test('a failed job insert rolls back and releases the client', async () => {
     async query(sql) {
       const text = String(sql)
       calls.push(text.trim())
-      if (text.includes('INSERT INTO job_description_creation_requests')) return { rows: [{ id: 'request-1' }] }
+      if (text.includes("SET status = 'processing'")) return { rows: [{ id: 'request-1' }] }
       if (text.includes('INSERT INTO job_descriptions')) throw new Error('database unavailable')
       return { rows: [] }
     },
@@ -174,4 +218,33 @@ test('a failed job insert rolls back and releases the client', async () => {
   )
   assert.equal(calls.at(-2), 'ROLLBACK')
   assert.equal(calls.at(-1), 'RELEASE')
+})
+
+test('expired unconfirmed previews delete their source file and pending record only', async () => {
+  const deletedFiles = []
+  const queries = []
+  const db = {
+    async query(sql, params) {
+      const text = String(sql)
+      queries.push({ text, params })
+      if (text.includes('SELECT id, file_url')) {
+        return { rows: [{ id: 'pending-1', file_url: storedFile.fileUrl }] }
+      }
+      if (text.includes('DELETE FROM job_description_creation_requests')) {
+        assert.match(text, /status = 'pending'/)
+        assert.match(text, /expires_at <= NOW\(\)/)
+        return { rows: [{ id: 'pending-1' }] }
+      }
+      throw new Error(`Unexpected cleanup query: ${text}`)
+    },
+  }
+
+  const cleaned = await cleanupExpiredJobDescriptionPreviews({
+    db,
+    deleteFile: async ({ fileUrl }) => deletedFiles.push(fileUrl),
+  })
+
+  assert.equal(cleaned, 1)
+  assert.deepEqual(deletedFiles, [storedFile.fileUrl])
+  assert.equal(queries.length, 2)
 })

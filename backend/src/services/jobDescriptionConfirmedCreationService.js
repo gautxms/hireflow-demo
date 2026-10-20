@@ -1,3 +1,4 @@
+import crypto from 'node:crypto'
 import process from 'node:process'
 import { createJobDescription } from './jobDescriptionService.js'
 import {
@@ -14,6 +15,8 @@ export class JobDescriptionConfirmedCreationError extends Error {
     this.status = status
   }
 }
+
+const PREVIEW_CLEANUP_INTERVAL_MS = 60 * 60 * 1000
 
 function resolveSigningSecret(explicitSecret) {
   const secret = explicitSecret
@@ -40,24 +43,62 @@ async function previewWithDefaultService(file) {
   return previewJobDescription(file)
 }
 
+async function deleteWithDefaultService(args) {
+  const { deleteJobDescriptionFile } = await import('./jobDescriptionFileStorageService.js')
+  return deleteJobDescriptionFile(args)
+}
+
 export async function prepareJobDescriptionCreation({
+  db,
   userId,
   file,
   signingSecret,
 }, dependencies = {}) {
+  if (!db?.query) throw new TypeError('A database query interface is required')
+
   const secret = resolveSigningSecret(signingSecret)
   const previewFile = dependencies.previewFile || previewWithDefaultService
   const storeFile = dependencies.storeFile || storeWithDefaultService
+  const previewId = dependencies.previewId || crypto.randomUUID()
   const preview = await previewFile(file)
-  const storedFile = await storeFile({ userId, file })
-  const receipt = issueJobDescriptionPreviewReceipt({
-    userId,
-    preview,
-    storedFile,
-    secret,
-    now: dependencies.now === undefined ? Date.now() : dependencies.now,
-    previewId: dependencies.previewId,
-  })
+  const storedFile = await storeFile({ userId, file, previewId })
+  let receipt
+
+  try {
+    receipt = issueJobDescriptionPreviewReceipt({
+      userId,
+      preview,
+      storedFile,
+      secret,
+      now: dependencies.now === undefined ? Date.now() : dependencies.now,
+      previewId,
+    })
+    await db.query(
+      `INSERT INTO job_description_creation_requests (
+         user_id,
+         preview_id,
+         file_sha256,
+         preview_sha256,
+         file_url,
+         expires_at,
+         status
+       ) VALUES ($1, $2, $3, $4, $5, $6, 'pending')`,
+      [
+        userId,
+        receipt.previewId,
+        storedFile.fileSha256,
+        receipt.previewSha256,
+        storedFile.fileUrl,
+        receipt.expiresAt,
+      ],
+    )
+  } catch (error) {
+    const deleteFile = dependencies.deleteFile || deleteWithDefaultService
+    await deleteFile({ fileUrl: storedFile.fileUrl }).catch((cleanupError) => {
+      console.error('[JobDescriptionPreview] Failed to remove untracked source file:', cleanupError)
+    })
+    throw error
+  }
 
   return {
     ...preview,
@@ -93,15 +134,23 @@ export async function confirmJobDescriptionCreation({
     transactionStarted = true
 
     const claim = await client.query(
-      `INSERT INTO job_description_creation_requests (
-         user_id,
-         preview_id,
-         file_sha256,
-         preview_sha256
-       ) VALUES ($1, $2, $3, $4)
-       ON CONFLICT (user_id, preview_id) DO NOTHING
+      `UPDATE job_description_creation_requests
+       SET status = 'processing'
+       WHERE user_id = $1
+         AND preview_id = $2
+         AND file_sha256 = $3
+         AND preview_sha256 = $4
+         AND file_url = $5
+         AND status = 'pending'
+         AND expires_at > NOW()
        RETURNING id`,
-      [userId, receipt.previewId, receipt.file.fileSha256, receipt.previewSha256],
+      [
+        userId,
+        receipt.previewId,
+        receipt.file.fileSha256,
+        receipt.previewSha256,
+        receipt.file.fileUrl,
+      ],
     )
 
     if (!claim.rows[0]) {
@@ -114,8 +163,16 @@ export async function confirmJobDescriptionCreation({
            AND creation_request.preview_id = $2
            AND creation_request.file_sha256 = $3
            AND creation_request.preview_sha256 = $4
+           AND creation_request.file_url = $5
+           AND creation_request.status = 'completed'
          LIMIT 1`,
-        [userId, receipt.previewId, receipt.file.fileSha256, receipt.previewSha256],
+        [
+          userId,
+          receipt.previewId,
+          receipt.file.fileSha256,
+          receipt.previewSha256,
+          receipt.file.fileUrl,
+        ],
       )
 
       if (!existing.rows[0]) {
@@ -147,6 +204,7 @@ export async function confirmJobDescriptionCreation({
     await client.query(
       `UPDATE job_description_creation_requests
        SET job_description_id = $2,
+           status = 'completed',
            completed_at = NOW()
        WHERE id = $1`,
       [claim.rows[0].id, job.id],
@@ -165,4 +223,51 @@ export async function confirmJobDescriptionCreation({
   } finally {
     client.release()
   }
+}
+
+export async function cleanupExpiredJobDescriptionPreviews({ db, deleteFile } = {}) {
+  if (!db?.query) throw new TypeError('A database query interface is required')
+  const removeFile = deleteFile || deleteWithDefaultService
+  const result = await db.query(
+    `SELECT id, file_url
+     FROM job_description_creation_requests
+     WHERE status = 'pending'
+       AND expires_at <= NOW()
+     ORDER BY expires_at ASC
+     LIMIT 100`,
+  )
+  let cleaned = 0
+
+  for (const row of result.rows) {
+    try {
+      await removeFile({ fileUrl: row.file_url })
+      const deleted = await db.query(
+        `DELETE FROM job_description_creation_requests
+         WHERE id = $1
+           AND status = 'pending'
+           AND expires_at <= NOW()
+         RETURNING id`,
+        [row.id],
+      )
+      if (deleted.rows[0]) cleaned += 1
+    } catch (error) {
+      console.error('[JobDescriptionPreview] Cleanup failed for preview', row.id, error)
+    }
+  }
+
+  return cleaned
+}
+
+export function startJobDescriptionPreviewCleanupCron({ db, deleteFile } = {}) {
+  const runCleanup = () => cleanupExpiredJobDescriptionPreviews({ db, deleteFile })
+    .then((count) => {
+      if (count > 0) console.log(`[JobDescriptionPreview] Cleaned up ${count} expired source file(s)`)
+    })
+    .catch((error) => {
+      console.error('[JobDescriptionPreview] Cleanup cron failed:', error)
+    })
+
+  const interval = setInterval(runCleanup, PREVIEW_CLEANUP_INTERVAL_MS)
+  void runCleanup()
+  return interval
 }

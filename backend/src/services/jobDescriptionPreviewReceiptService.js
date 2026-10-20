@@ -105,6 +105,8 @@ export function issueJobDescriptionPreviewReceipt({
 
   return {
     token,
+    previewId: payload.jti,
+    previewSha256: payload.previewSha256,
     expiresAt: new Date(payload.exp * 1000).toISOString(),
   }
 }

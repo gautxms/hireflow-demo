@@ -1,7 +1,7 @@
 import crypto from 'node:crypto'
 import path from 'node:path'
 import process from 'node:process'
-import { GetObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3'
+import { DeleteObjectCommand, GetObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3'
 
 export const MAX_STORED_JOB_DESCRIPTION_BYTES = 20 * 1024 * 1024
 
@@ -71,7 +71,11 @@ function parseStoredFileUrl(fileUrl) {
   try {
     const parsed = new URL(String(fileUrl || ''))
     const key = decodeURIComponent(parsed.pathname.replace(/^\/+/, ''))
-    if (parsed.protocol !== 's3:' || !parsed.hostname || !key.startsWith('job-descriptions/')) {
+    if (
+      parsed.protocol !== 's3:'
+      || !parsed.hostname
+      || !/^job-descriptions\/[a-zA-Z0-9_-]+\/[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}\/[a-f0-9]{64}\/[a-zA-Z0-9._-]+$/.test(key)
+    ) {
       throw new Error('invalid storage reference')
     }
     return { bucket: parsed.hostname, key }
@@ -105,7 +109,7 @@ export function isStoredJobDescriptionFileUrl(fileUrl) {
   return String(fileUrl || '').startsWith('s3://')
 }
 
-export async function storeJobDescriptionFile({ userId, file }, dependencies = {}) {
+export async function storeJobDescriptionFile({ userId, file, previewId = crypto.randomUUID() }, dependencies = {}) {
   const subject = String(userId || '').trim()
   if (!subject) throw new TypeError('A user id is required')
 
@@ -121,7 +125,11 @@ export async function storeJobDescriptionFile({ userId, file }, dependencies = {
   const { fileName, contentType } = validateFile(file)
   const fileSha256 = crypto.createHash('sha256').update(file.buffer).digest('hex')
   const ownerSegment = subject.replace(/[^a-zA-Z0-9_-]/g, '_')
-  const key = `job-descriptions/${ownerSegment}/${fileSha256}/${fileName}`
+  const previewSegment = String(previewId).toLowerCase()
+  if (!/^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(previewSegment)) {
+    throw new TypeError('A valid preview id is required')
+  }
+  const key = `job-descriptions/${ownerSegment}/${previewSegment}/${fileSha256}/${fileName}`
   const client = dependencies.client || createDefaultClient()
 
   await client.send(new PutObjectCommand({
@@ -177,4 +185,22 @@ export async function fetchJobDescriptionFile({ fileUrl }, dependencies = {}) {
     fileName,
     contentType: [...ALLOWED_FILES.values()].includes(storedContentType) ? storedContentType : fallbackType,
   }
+}
+
+export async function deleteJobDescriptionFile({ fileUrl }, dependencies = {}) {
+  const reference = parseStoredFileUrl(fileUrl)
+  const expectedBucket = String(dependencies.bucket || process.env.AWS_S3_BUCKET || '').trim()
+  if (!expectedBucket || reference.bucket !== expectedBucket) {
+    throw new JobDescriptionFileStorageError(
+      'JD_STORAGE_REFERENCE_INVALID',
+      'The stored job description attachment is unavailable.',
+      404,
+    )
+  }
+
+  const client = dependencies.client || createDefaultClient()
+  await client.send(new DeleteObjectCommand({
+    Bucket: reference.bucket,
+    Key: reference.key,
+  }))
 }

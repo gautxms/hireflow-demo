@@ -6,7 +6,11 @@ export async function up(client) {
       preview_id UUID NOT NULL,
       file_sha256 TEXT NOT NULL CHECK (file_sha256 ~ '^[a-f0-9]{64}$'),
       preview_sha256 TEXT NOT NULL CHECK (preview_sha256 ~ '^[a-f0-9]{64}$'),
+      file_url TEXT NOT NULL,
       job_description_id UUID REFERENCES job_descriptions(id) ON DELETE SET NULL,
+      status TEXT NOT NULL DEFAULT 'pending'
+        CHECK (status IN ('pending', 'processing', 'completed')),
+      expires_at TIMESTAMPTZ NOT NULL,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       completed_at TIMESTAMPTZ,
       UNIQUE (user_id, preview_id)
@@ -17,5 +21,11 @@ export async function up(client) {
     CREATE UNIQUE INDEX IF NOT EXISTS idx_job_description_creation_requests_job
       ON job_description_creation_requests (job_description_id)
       WHERE job_description_id IS NOT NULL
+  `)
+
+  await client.query(`
+    CREATE INDEX IF NOT EXISTS idx_job_description_creation_requests_expired
+      ON job_description_creation_requests (expires_at)
+      WHERE status = 'pending'
   `)
 }
