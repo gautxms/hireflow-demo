@@ -12,7 +12,12 @@ import {
   isStoredJobDescriptionFileUrl,
   JobDescriptionFileStorageError,
 } from '../services/jobDescriptionFileStorageService.js'
-import { cleanupDeletedJobDescriptionFile } from '../services/jobDescriptionConfirmedCreationService.js'
+import {
+  cleanupDeletedJobDescriptionFile,
+  confirmJobDescriptionCreation,
+  JobDescriptionConfirmedCreationError,
+} from '../services/jobDescriptionConfirmedCreationService.js'
+import { JobDescriptionPreviewReceiptError } from '../services/jobDescriptionPreviewReceiptService.js'
 import { requireActiveSubscription } from '../middleware/subscriptionCheck.js'
 import { sanitizeFilename } from '../utils/sanitize.js'
 import jobDescriptionPreviewRoutes from './jobDescriptionPreview.js'
@@ -327,6 +332,30 @@ router.post('/', requireActiveSubscription, (req, res, next) => {
   try {
     await ensureSchema()
 
+    const previewToken = String(req.body.previewToken || '').trim()
+    if (previewToken) {
+      if (req.file?.path) {
+        await fs.unlink(req.file.path).catch((error) => {
+          console.error('[JobDescriptions] Failed to remove redundant confirmation upload:', error)
+        })
+        return res.status(400).json({
+          code: 'JD_CONFIRMATION_FILE_NOT_ALLOWED',
+          error: 'Do not upload the source file again when confirming a preview.',
+        })
+      }
+
+      const confirmed = await confirmJobDescriptionCreation({
+        db: pool,
+        userId: req.userId,
+        input: req.body,
+        previewToken,
+      })
+      return res.status(confirmed.created ? 201 : 200).json({
+        item: mapRecord(confirmed.job),
+        created: confirmed.created,
+      })
+    }
+
     const fileUrl = req.file?.filename ? `/api/job-descriptions/files/${req.file.filename}` : null
     const row = await createJobDescription({
       db: pool,
@@ -337,8 +366,12 @@ router.post('/', requireActiveSubscription, (req, res, next) => {
 
     return res.status(201).json({ item: mapRecord(row) })
   } catch (error) {
-    if (error instanceof JobDescriptionValidationError) {
-      return res.status(error.status).json({ error: error.message })
+    if (
+      error instanceof JobDescriptionValidationError
+      || error instanceof JobDescriptionConfirmedCreationError
+      || error instanceof JobDescriptionPreviewReceiptError
+    ) {
+      return res.status(error.status).json({ code: error.code, error: error.message })
     }
 
     console.error('[JobDescriptions] create failed:', error)
@@ -359,14 +392,24 @@ router.put('/:id', requireActiveSubscription, (req, res, next) => {
     return res.status(400).json({ error: error.message || 'Invalid file upload request' })
   })
 }, async (req, res) => {
+  let client
+  let transactionStarted = false
   try {
     await ensureSchema()
-    const existing = await pool.query(
-      `SELECT * FROM job_descriptions WHERE id = $1 AND user_id = $2 LIMIT 1`,
+    client = await pool.connect()
+    await client.query('BEGIN')
+    transactionStarted = true
+    const existing = await client.query(
+      `SELECT *
+       FROM job_descriptions
+       WHERE id = $1 AND user_id = $2
+       FOR UPDATE`,
       [req.params.id, req.userId],
     )
 
     if (!existing.rows[0]) {
+      await client.query('ROLLBACK')
+      transactionStarted = false
       return res.status(404).json({ error: 'Job description not found' })
     }
 
@@ -374,6 +417,8 @@ router.put('/:id', requireActiveSubscription, (req, res, next) => {
     const title = String(req.body.title || prev.title).trim()
 
     if (!title) {
+      await client.query('ROLLBACK')
+      transactionStarted = false
       return res.status(400).json({ error: 'title is required' })
     }
 
@@ -384,8 +429,12 @@ router.put('/:id', requireActiveSubscription, (req, res, next) => {
     const fileUrl = req.file?.filename
       ? `/api/job-descriptions/files/${req.file.filename}`
       : (req.body.fileUrl || prev.file_url)
+    const replacedStoredFileUrl = isStoredJobDescriptionFileUrl(prev.file_url)
+      && String(prev.file_url) !== String(fileUrl || '')
+      ? prev.file_url
+      : null
 
-    const result = await pool.query(
+    const result = await client.query(
       `UPDATE job_descriptions
        SET title = $3,
            description = $4,
@@ -444,17 +493,117 @@ router.put('/:id', requireActiveSubscription, (req, res, next) => {
       ],
     )
 
+    if (replacedStoredFileUrl) {
+      await client.query(
+        `UPDATE job_description_creation_requests
+         SET job_description_id = NULL,
+             cleanup_attempted_at = NULL
+         WHERE user_id = $1
+           AND job_description_id = $2
+           AND file_url = $3
+           AND status = 'completed'`,
+        [req.userId, req.params.id, replacedStoredFileUrl],
+      )
+    }
+
+    await client.query('COMMIT')
+    transactionStarted = false
+
+    if (replacedStoredFileUrl) {
+      try {
+        await cleanupDeletedJobDescriptionFile({
+          db: pool,
+          userId: req.userId,
+          fileUrl: replacedStoredFileUrl,
+        })
+      } catch (error) {
+        console.error('[JobDescriptions] Replaced attachment cleanup deferred:', error)
+      }
+    }
+
     return res.json({ item: mapRecord(result.rows[0]) })
   } catch (error) {
+    if (transactionStarted) await client.query('ROLLBACK').catch(() => {})
     console.error('[JobDescriptions] update failed:', error)
     return res.status(500).json({ error: 'Unable to update job description' })
+  } finally {
+    client?.release()
   }
 })
 
 router.delete('/:id', requireActiveSubscription, async (req, res) => {
+  let client
+  let transactionStarted = false
   try {
     await ensureSchema()
     const hardDelete = String(req.query.hardDelete || 'false') === 'true'
+
+    if (hardDelete) {
+      client = await pool.connect()
+      await client.query('BEGIN')
+      transactionStarted = true
+
+      const locked = await client.query(
+        `SELECT id, file_url
+         FROM job_descriptions
+         WHERE id = $1 AND user_id = $2
+         FOR UPDATE`,
+        [req.params.id, req.userId],
+      )
+      if (!locked.rows[0]) {
+        await client.query('ROLLBACK')
+        transactionStarted = false
+        return res.status(404).json({ error: 'Job description not found' })
+      }
+
+      const usageResult = await client.query(
+        `SELECT COUNT(DISTINCT r.id)::int AS resume_count,
+                COUNT(pj.id)::int AS parse_job_count
+         FROM job_descriptions jd
+         LEFT JOIN resumes r
+           ON r.job_description_id = jd.id
+          AND r.user_id = jd.user_id
+         LEFT JOIN parse_jobs pj
+           ON pj.resume_id = r.id
+         WHERE jd.id = $1 AND jd.user_id = $2
+         GROUP BY jd.id`,
+        [req.params.id, req.userId],
+      )
+      const usageSummary = mapUsageSummary(usageResult.rows[0])
+      if ((usageSummary?.resumeCount || 0) > 0 || (usageSummary?.parseJobCount || 0) > 0) {
+        await client.query('ROLLBACK')
+        transactionStarted = false
+        return res.status(409).json({
+          error: 'Hard delete blocked because this job has linked resumes or analyses. Archive instead.',
+          usageSummary,
+        })
+      }
+
+      const deleted = await client.query(
+        `DELETE FROM job_descriptions
+         WHERE id = $1 AND user_id = $2
+         RETURNING id, file_url`,
+        [req.params.id, req.userId],
+      )
+      await client.query('COMMIT')
+      transactionStarted = false
+      client.release()
+      client = null
+
+      if (isStoredJobDescriptionFileUrl(deleted.rows[0]?.file_url)) {
+        try {
+          await cleanupDeletedJobDescriptionFile({
+            db: pool,
+            userId: req.userId,
+            fileUrl: deleted.rows[0].file_url,
+          })
+        } catch (error) {
+          console.error('[JobDescriptions] Hard-delete attachment cleanup deferred:', error)
+        }
+      }
+
+      return res.json({ ok: true, deleted: true, usageSummary })
+    }
 
     const usageResult = await pool.query(
       `SELECT COUNT(DISTINCT r.id)::int AS resume_count,
@@ -477,38 +626,6 @@ router.delete('/:id', requireActiveSubscription, async (req, res) => {
 
     const usageSummary = mapUsageSummary(usageRow)
 
-    if (hardDelete) {
-      if ((usageSummary?.resumeCount || 0) > 0 || (usageSummary?.parseJobCount || 0) > 0) {
-        return res.status(409).json({
-          error: 'Hard delete blocked because this job has linked resumes or analyses. Archive instead.',
-          usageSummary,
-        })
-      }
-
-      const deleted = await pool.query(
-        `DELETE FROM job_descriptions WHERE id = $1 AND user_id = $2 RETURNING id, file_url`,
-        [req.params.id, req.userId],
-      )
-
-      if (!deleted.rows[0]) {
-        return res.status(404).json({ error: 'Job description not found' })
-      }
-
-      if (isStoredJobDescriptionFileUrl(deleted.rows[0].file_url)) {
-        try {
-          await cleanupDeletedJobDescriptionFile({
-            db: pool,
-            userId: req.userId,
-            fileUrl: deleted.rows[0].file_url,
-          })
-        } catch (error) {
-          console.error('[JobDescriptions] Hard-delete attachment cleanup deferred:', error)
-        }
-      }
-
-      return res.json({ ok: true, deleted: true, usageSummary })
-    }
-
     const archived = await pool.query(
       `UPDATE job_descriptions
        SET status = 'archived', updated_at = NOW()
@@ -523,26 +640,39 @@ router.delete('/:id', requireActiveSubscription, async (req, res) => {
 
     return res.json({ ok: true, archived: true, usageSummary })
   } catch (error) {
+    if (transactionStarted) await client?.query('ROLLBACK').catch(() => {})
     console.error('[JobDescriptions] delete failed:', error)
     return res.status(500).json({ error: 'Unable to delete job description' })
+  } finally {
+    client?.release()
   }
 })
 
 router.post('/:id/duplicate', requireActiveSubscription, async (req, res) => {
+  let client
+  let transactionStarted = false
   try {
     await ensureSchema()
-    const source = await pool.query(
-      `SELECT * FROM job_descriptions WHERE id = $1 AND user_id = $2 LIMIT 1`,
+    client = await pool.connect()
+    await client.query('BEGIN')
+    transactionStarted = true
+    const source = await client.query(
+      `SELECT *
+       FROM job_descriptions
+       WHERE id = $1 AND user_id = $2
+       FOR UPDATE`,
       [req.params.id, req.userId],
     )
 
     if (!source.rows[0]) {
+      await client.query('ROLLBACK')
+      transactionStarted = false
       return res.status(404).json({ error: 'Job description not found' })
     }
 
     const sourceRow = source.rows[0]
 
-    const duplicate = await pool.query(
+    const duplicate = await client.query(
       `INSERT INTO job_descriptions (
         user_id,
         title,
@@ -590,11 +720,18 @@ router.post('/:id/duplicate', requireActiveSubscription, async (req, res) => {
       ],
     )
 
+    await client.query('COMMIT')
+    transactionStarted = false
+
     return res.status(201).json({ item: mapRecord(duplicate.rows[0]) })
   } catch (error) {
+    if (transactionStarted) await client?.query('ROLLBACK').catch(() => {})
     console.error('[JobDescriptions] duplicate failed:', error)
     return res.status(500).json({ error: 'Unable to duplicate job description' })
+  } finally {
+    client?.release()
   }
 })
 
 export default router
+

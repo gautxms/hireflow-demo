@@ -59,6 +59,7 @@ const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 export default function JobDescriptionForm({ initialValue, resetToken, onSubmit, onCancel, isSubmitting, readOnly = false }) {
   const [formState, setFormState] = useState(blankState)
   const [jdFile, setJdFile] = useState(null)
+  const [previewToken, setPreviewToken] = useState('')
   const [errors, setErrors] = useState({})
   const [attachmentError, setAttachmentError] = useState('')
   const [importMessage, setImportMessage] = useState('')
@@ -85,6 +86,7 @@ export default function JobDescriptionForm({ initialValue, resetToken, onSubmit,
     setImportMessage('')
     setIsExtracting(false)
     setJdFile(null)
+    setPreviewToken('')
     setDescriptionExpanded(!initialValue?.fileUrl)
     return () => {
       previewControllerRef.current?.abort()
@@ -115,6 +117,7 @@ export default function JobDescriptionForm({ initialValue, resetToken, onSubmit,
     previewSequenceRef.current += 1
     if (fileInputRef.current) fileInputRef.current.value = ''
     setJdFile(null)
+    setPreviewToken('')
     setIsExtracting(false)
     setAttachmentError('')
     setImportMessage('')
@@ -127,6 +130,7 @@ export default function JobDescriptionForm({ initialValue, resetToken, onSubmit,
 
     previewControllerRef.current?.abort()
     const requestId = ++previewSequenceRef.current
+    setPreviewToken('')
     setAttachmentError('')
     setImportMessage('')
 
@@ -172,8 +176,10 @@ export default function JobDescriptionForm({ initialValue, resetToken, onSubmit,
       const payload = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(payload.error || 'Could not fill the job fields from this file.')
       if (!payload.fields || typeof payload.fields !== 'object') throw new Error('The job details could not be read. Enter them manually or try another file.')
+      if (!payload.previewToken || typeof payload.previewToken !== 'string') throw new Error('The job preview could not be confirmed. Please upload the file again.')
       if (controller.signal.aborted || requestId !== previewSequenceRef.current) return
 
+      setPreviewToken(payload.previewToken)
       setFormState((prev) => {
         const merged = mergeJobDescriptionPreview(prev, payload.fields, manualEditsRef.current)
         autoFilledFieldsRef.current = merged.autoFilledFields
@@ -247,7 +253,9 @@ export default function JobDescriptionForm({ initialValue, resetToken, onSubmit,
       payload.append(key, String(value))
     })
 
-    if (jdFile) {
+    if (previewToken) {
+      payload.append('previewToken', previewToken)
+    } else if (jdFile) {
       payload.append('jdFile', jdFile)
     }
 
@@ -330,3 +338,4 @@ export default function JobDescriptionForm({ initialValue, resetToken, onSubmit,
     </form>
   )
 }
+

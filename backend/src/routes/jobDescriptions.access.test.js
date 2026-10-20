@@ -6,6 +6,7 @@ import jwt from 'jsonwebtoken'
 import jobDescriptionsRouter from './jobDescriptions.js'
 import { requireAuth } from '../middleware/authMiddleware.js'
 import { pool } from '../db/client.js'
+import { issueJobDescriptionPreviewReceipt } from '../services/jobDescriptionPreviewReceiptService.js'
 
 const OWNED_JOB_ID = '11111111-1111-4111-8111-111111111111'
 const OTHER_USER_JOB_ID = '99999999-9999-4999-8999-999999999999'
@@ -200,3 +201,52 @@ test('read-only subscription states remain blocked from every job description mu
     false,
   )
 })
+
+test('confirmed preview creation consumes the receipt without another file upload', async (t) => {
+  process.env.JWT_SECRET = 'test-secret'
+  const job = persistedJobDescriptionRow()
+  job.file_url = 's3://hireflow/job-descriptions/42/preview/hash/role.pdf'
+  job.source_type = 'file'
+  const receipt = issueJobDescriptionPreviewReceipt({
+    userId: 42,
+    preview: { fields: { title: job.title }, warnings: [] },
+    storedFile: {
+      fileUrl: job.file_url,
+      fileSha256: 'b'.repeat(64),
+      fileName: 'role.pdf',
+      contentType: 'application/pdf',
+    },
+    secret: process.env.JWT_SECRET,
+    previewId: 'd0dd847d-4c2f-4ae1-8423-08b24a84dc23',
+  })
+
+  t.mock.method(pool, 'query', async (sql) => {
+    const text = String(sql)
+    if (/FROM users/.test(text)) return { rows: [{ id: 42, subscription_status: 'active' }] }
+    if (/CREATE TABLE IF NOT EXISTS job_descriptions/.test(text)) return { rows: [] }
+    throw new Error(`Unexpected pool query: ${text}`)
+  })
+  const client = {
+    async query(sql) {
+      const text = String(sql)
+      if (text === 'BEGIN' || text === 'COMMIT') return { rows: [] }
+      if (text.includes("SET status = 'processing'")) return { rows: [{ id: 'request-1' }] }
+      if (text.includes('INSERT INTO job_descriptions')) return { rows: [job] }
+      if (text.includes('SET job_description_id')) return { rows: [] }
+      throw new Error(`Unexpected confirmation query: ${text}`)
+    },
+    release() {},
+  }
+  t.mock.method(pool, 'connect', async () => client)
+
+  const response = await requestJson(createJobDescriptionsApp(), '/job-descriptions', {
+    method: 'POST',
+    body: { title: job.title, previewToken: receipt.token },
+  })
+
+  assert.equal(response.status, 201)
+  assert.equal(response.body.created, true)
+  assert.equal(response.body.item.id, job.id)
+  assert.equal(response.body.item.fileUrl, job.file_url)
+})
+

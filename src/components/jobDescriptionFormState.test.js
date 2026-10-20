@@ -82,3 +82,10 @@ test('job experience number inputs guard against focused mouse wheel changes', (
   assert.match(formSource, /id="job-experience-min"[\s\S]*onWheel=\{handleNumberWheel\}/)
   assert.match(formSource, /id="job-experience-max"[\s\S]*onWheel=\{handleNumberWheel\}/)
 })
+
+test('job file previews propagate their receipt instead of uploading the file twice', () => {
+  assert.match(formSource, /setPreviewToken\(payload\.previewToken\)/)
+  assert.match(formSource, /if \(previewToken\) \{[\s\S]*payload\.append\('previewToken', previewToken\)/)
+  assert.match(formSource, /else if \(jdFile\) \{[\s\S]*payload\.append\('jdFile', jdFile\)/)
+})
+
