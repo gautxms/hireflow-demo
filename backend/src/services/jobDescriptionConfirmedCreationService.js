@@ -249,6 +249,11 @@ export async function cleanupExpiredJobDescriptionPreviews({ db, deleteFile } = 
            ) OR (
              status = 'completed'
              AND job_description_id IS NULL
+             AND NOT EXISTS (
+               SELECT 1
+               FROM job_descriptions job_description
+               WHERE job_description.file_url = job_description_creation_requests.file_url
+             )
              AND (
                cleanup_attempted_at IS NULL
                OR cleanup_attempted_at <= $1::timestamptz - INTERVAL '15 minutes'
@@ -334,6 +339,11 @@ export async function cleanupDeletedJobDescriptionFile({
        AND file_url = $2
        AND job_description_id IS NULL
        AND status = 'completed'
+       AND NOT EXISTS (
+         SELECT 1
+         FROM job_descriptions job_description
+         WHERE job_description.file_url = job_description_creation_requests.file_url
+       )
      RETURNING id, file_url`,
     [userId, fileUrl],
   )

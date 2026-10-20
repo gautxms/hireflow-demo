@@ -172,10 +172,28 @@ export async function fetchJobDescriptionFile({ fileUrl }, dependencies = {}) {
   }
 
   const client = dependencies.client || createDefaultClient()
-  const result = await client.send(new GetObjectCommand({
-    Bucket: reference.bucket,
-    Key: reference.key,
-  }))
+  let result
+  try {
+    result = await client.send(new GetObjectCommand({
+      Bucket: reference.bucket,
+      Key: reference.key,
+    }))
+  } catch (error) {
+    const status = Number(error?.$metadata?.httpStatusCode || 0)
+    const name = String(error?.name || error?.Code || error?.code || '')
+    if (status === 404 || ['NoSuchKey', 'NotFound'].includes(name)) {
+      throw new JobDescriptionFileStorageError(
+        'JD_FILE_NOT_FOUND',
+        'The stored job description attachment was not found.',
+        404,
+      )
+    }
+    throw new JobDescriptionFileStorageError(
+      'JD_STORAGE_READ_FAILED',
+      'The stored job description attachment could not be read.',
+      503,
+    )
+  }
   const fileName = sanitizeFilename(path.basename(reference.key))
   const fallbackType = ALLOWED_FILES.get(path.extname(fileName).toLowerCase()) || 'application/octet-stream'
   const storedContentType = String(result.ContentType || '').trim().toLowerCase()

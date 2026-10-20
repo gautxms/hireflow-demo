@@ -95,3 +95,32 @@ test('deletes an expired preview object from its configured bucket', async () =>
     Key: `job-descriptions/42/d0dd847d-4c2f-4ae1-8423-08b24a84dc23/${'d'.repeat(64)}/role.pdf`,
   })
 })
+
+test('maps missing and transient S3 reads to distinct attachment errors', async () => {
+  const fileUrl = `s3://private-hireflow/job-descriptions/42/d0dd847d-4c2f-4ae1-8423-08b24a84dc23/${'e'.repeat(64)}/role.pdf`
+  await assert.rejects(
+    fetchJobDescriptionFile(
+      { fileUrl },
+      {
+        bucket: 'private-hireflow',
+        client: {
+          async send() {
+            const error = new Error('missing')
+            error.name = 'NoSuchKey'
+            error.$metadata = { httpStatusCode: 404 }
+            throw error
+          },
+        },
+      },
+    ),
+    { code: 'JD_FILE_NOT_FOUND', status: 404 },
+  )
+
+  await assert.rejects(
+    fetchJobDescriptionFile(
+      { fileUrl },
+      { bucket: 'private-hireflow', client: { async send() { throw new Error('network timeout') } } },
+    ),
+    { code: 'JD_STORAGE_READ_FAILED', status: 503 },
+  )
+})
