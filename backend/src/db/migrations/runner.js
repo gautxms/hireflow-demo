@@ -57,6 +57,7 @@ const migrationFiles = [
   '053-protect-paddle-checkout-ownership',
   '054-add-paddle-reconciliation-cadence',
   '055-allow-tiered-subscription-plans',
+  '056-add-job-description-creation-requests',
 ]
 
 async function ensureMigrationsTable(client) {
