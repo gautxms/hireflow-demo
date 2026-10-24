@@ -4,6 +4,7 @@ import './AuthPage.css'
 import BackButton from './BackButton'
 import API_BASE from '../config/api'
 import BrandLogo from './BrandLogo'
+import { getSafeOAuthReturnTo } from '../utils/oauthReturnTo'
 
 async function parseResponsePayload(response) {
   const contentType = response.headers.get('content-type') || ''
@@ -31,7 +32,11 @@ export default function LoginPage({ onAuthSuccess, onGoToSignup, onForgotPasswor
     setLoading(true)
 
     try {
-      const response = await fetch(`${API_BASE}/auth/login`, {
+      // OAuth authorization runs on hireflow.dev, so its login must set the
+      // HTTP-only session cookie on that same origin even when normal API
+      // traffic is configured to use api.hireflow.dev directly.
+      const loginApiBase = getSafeOAuthReturnTo() ? '/api' : API_BASE
+      const response = await fetch(`${loginApiBase}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',

@@ -1,4 +1,5 @@
 import rateLimit from 'express-rate-limit'
+import crypto from 'node:crypto'
 import { resolveMonthlyResumeAnalysisLimit } from '../config/resumeAnalysisQuota.js'
 
 const LOCALHOST_IPS = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1'])
@@ -145,6 +146,43 @@ export const generalApiLimiterAuth = rateLimit({
     message: 'Too many API requests. Please try again in 1 hour.',
     windowMs: 60 * 60 * 1000,
     keyExtractor: (req) => String(req.userId || req.ip),
+  }),
+})
+
+function getMcpLimiterKey(req) {
+  const authorization = String(req.headers.authorization || '')
+  if (/^Bearer\s+/i.test(authorization)) {
+    return `token:${crypto.createHash('sha256').update(authorization).digest('hex')}`
+  }
+  return `ip:${req.ip}`
+}
+
+export const mcpLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 240,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: getMcpLimiterKey,
+  skip: isLocalhostRequest,
+  handler: buildRateLimitHandler({
+    scope: 'MCP requests',
+    message: 'Too many MCP requests. Please try again later.',
+    windowMs: 15 * 60 * 1000,
+    keyExtractor: getMcpLimiterKey,
+  }),
+})
+
+export const mcpOAuthLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 120,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: isLocalhostRequest,
+  handler: buildRateLimitHandler({
+    scope: 'MCP OAuth requests',
+    message: 'Too many OAuth requests. Please try again later.',
+    windowMs: 15 * 60 * 1000,
+    keyExtractor: (req) => req.ip,
   }),
 })
 

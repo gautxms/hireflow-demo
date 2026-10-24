@@ -21,6 +21,22 @@
   ],
   "rewrites": [
     {
+      "source": "/.well-known/oauth-protected-resource",
+      "destination": "https://hireflow-backend-production.up.railway.app/.well-known/oauth-protected-resource"
+    },
+    {
+      "source": "/.well-known/oauth-authorization-server",
+      "destination": "https://hireflow-backend-production.up.railway.app/.well-known/oauth-authorization-server"
+    },
+    {
+      "source": "/oauth/(.*)",
+      "destination": "https://hireflow-backend-production.up.railway.app/oauth/$1"
+    },
+    {
+      "source": "/mcp",
+      "destination": "https://hireflow-backend-production.up.railway.app/mcp"
+    },
+    {
       "source": "/api/(.*)",
       "destination": "https://hireflow-backend-production.up.railway.app/api/$1"
     },

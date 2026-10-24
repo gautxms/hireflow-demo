@@ -81,6 +81,7 @@ import { canAccessProductDashboard, guardAuthenticatedRoute, guardSubscriptionRo
 import { FEATURE_KEYS, isFeatureEnabled } from './config/featureFlags'
 import { buildReadOnlyWorkspaceNotice, buildResolvedAccessContext, canViewHistoricalWorkspaceModule } from './appAccessRuntime'
 import { ACCOUNT_ACCESS_REFRESH_EVENT, ACCOUNT_ACCESS_REFRESH_INTERVAL_MS, ACCOUNT_ACCESS_REFRESH_WAKEUP_RECHECK_MS, getAccountAccessPollingStartDelay, shouldPollAccountAccess } from './utils/accountAccessRefresh'
+import { getSafeOAuthReturnTo } from './utils/oauthReturnTo'
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 const USER_STORAGE_KEY = 'hireflow_user_profile'
@@ -1563,6 +1564,11 @@ export default function App() {
     setUserProfile(nextUserProfile)
     setAccessResolution({ status: 'resolving', error: '' })
     setAuthPrompt('')
+    const oauthReturnTo = getSafeOAuthReturnTo()
+    if (oauthReturnTo) {
+      window.location.assign(oauthReturnTo)
+      return
+    }
     navigate(redirectPath)
   }
 
