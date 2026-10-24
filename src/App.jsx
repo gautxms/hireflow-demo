@@ -81,6 +81,7 @@ import { canAccessProductDashboard, guardAuthenticatedRoute, guardSubscriptionRo
 import { FEATURE_KEYS, isFeatureEnabled } from './config/featureFlags'
 import { buildReadOnlyWorkspaceNotice, buildResolvedAccessContext, canViewHistoricalWorkspaceModule } from './appAccessRuntime'
 import { ACCOUNT_ACCESS_REFRESH_EVENT, ACCOUNT_ACCESS_REFRESH_INTERVAL_MS, ACCOUNT_ACCESS_REFRESH_WAKEUP_RECHECK_MS, getAccountAccessPollingStartDelay, shouldPollAccountAccess } from './utils/accountAccessRefresh'
+import { getSafeOAuthReturnTo, shouldRedirectAuthenticatedAuthRoute } from './utils/oauthReturnTo'
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 const USER_STORAGE_KEY = 'hireflow_user_profile'
@@ -1563,6 +1564,11 @@ export default function App() {
     setUserProfile(nextUserProfile)
     setAccessResolution({ status: 'resolving', error: '' })
     setAuthPrompt('')
+    const oauthReturnTo = getSafeOAuthReturnTo()
+    if (oauthReturnTo) {
+      window.location.assign(oauthReturnTo)
+      return
+    }
     navigate(redirectPath)
   }
 
@@ -1716,8 +1722,13 @@ export default function App() {
   }, [isAuthenticated, pathname, subscriptionStatus, syncAuthenticatedUser, userProfile])
 
   useEffect(() => {
-    // Authenticated users are intentionally redirected away from auth forms to the home route.
-    if (isAuthenticated && (pathname === '/signup' || pathname === '/login')) {
+    // Keep the OAuth login visible when a stored token exists but the canonical
+    // origin still needs its HTTP-only session cookie.
+    if (shouldRedirectAuthenticatedAuthRoute({
+      isAuthenticated,
+      pathname,
+      oauthReturnTo: getSafeOAuthReturnTo(),
+    })) {
       navigate('/')
     }
   }, [isAuthenticated, pathname])

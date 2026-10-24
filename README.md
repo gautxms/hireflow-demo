@@ -25,6 +25,7 @@ HireFlow supports a structured first-pass screening workflow:
 - **Shortlists and reports:** Organize candidates into shortlists and export/report on hiring workflows.
 - **Billing and subscriptions:** Paddle-backed checkout, subscription management, payment method updates, invoice access, and webhook handling.
 - **Authentication and sessions:** Email/password auth, verification/password-reset flows, HTTP-only auth cookies, and admin session controls.
+- **ChatGPT plugin:** OAuth-protected MCP tools preview an attached PDF/DOCX and create a job only after explicit confirmation.
 - **Operational safeguards:** Rate limiting, upload limits, optional file scanning, CI lint/build checks, and production-safe logging defaults.
 
 ## Tech stack
@@ -134,6 +135,7 @@ CI is expected to run blocking lint and build checks before launch changes are m
 - The Express backend requires PostgreSQL, Redis, secrets, AI provider configuration, email configuration, and billing configuration for production use.
 - Configure Paddle webhooks, enable the mandatory durable inbox and retry worker, confirm `/health` reports `billing.ready: true`, and verify CORS/origin settings before accepting paid users.
 - See `README_DEPLOYMENT.md` for deployment-specific notes.
+- See `docs/CHATGPT_PLUGIN_SETUP.md` for MCP, OAuth, and ChatGPT connection setup.
 
 ## Security/privacy notes
 

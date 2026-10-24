@@ -35,9 +35,16 @@ import adminUxRoutes from './routes/admin/ux.js'
 import webhooksRoutes from './routes/webhooks.js'
 import telemetryRoutes from './routes/telemetry.js'
 import usageRoutes from './routes/usage.js'
+import mcpOAuthRoutes from './routes/mcpOAuth.js'
+import { handleMcpRequest } from './routes/mcp.js'
 import { requireAuth } from './middleware/authMiddleware.js'
 import { adminActionAuditMiddleware, requireAdminAuth } from './middleware/adminAuth.js'
-import { generalApiLimiterAuth, generalApiLimiterUnauth } from './middleware/rateLimiter.js'
+import {
+  generalApiLimiterAuth,
+  generalApiLimiterUnauth,
+  mcpLimiter,
+  mcpOAuthLimiter,
+} from './middleware/rateLimiter.js'
 import { AI_MODEL_CONFIG, isValidModelFormat } from './config/aiModels.js'
 import { pool } from './db/client.js'
 import { verifyYearsExperienceDecimalSchema, verifyShortlistBatchAddSchema } from './db/schemaPrerequisites.js'
@@ -99,8 +106,11 @@ app.use(cors(corsOptions))
 
 // Keep Paddle webhook ahead of JSON parsing so route-level raw body handling still works.
 app.use('/api/paddle/webhook', paddleWebhookRoutes)
-app.use(express.json())
 app.use(cookieParser())
+app.use(['/oauth', '/.well-known'], mcpOAuthLimiter)
+app.use(mcpOAuthRoutes)
+app.all('/mcp', mcpLimiter, express.json({ limit: '1mb' }), handleMcpRequest)
+app.use(express.json())
 
 app.get('/health', async (_req, res) => {
   const aiModelWarnings = []

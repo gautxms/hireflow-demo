@@ -58,6 +58,7 @@ const migrationFiles = [
   '054-add-paddle-reconciliation-cadence',
   '055-allow-tiered-subscription-plans',
   '056-add-job-description-creation-requests',
+  '057-add-mcp-oauth',
 ]
 
 async function ensureMigrationsTable(client) {

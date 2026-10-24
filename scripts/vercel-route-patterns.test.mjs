@@ -25,3 +25,24 @@ test('dashboard descendant coverage is required, not merely a source containing 
   assert.equal(hasNoindexHeader(withoutDashboardDescendants, '/dashboard'), true)
   assert.equal(hasNoindexHeader(withoutDashboardDescendants, '/dashboard/legacy'), false)
 })
+
+test('MCP discovery, OAuth, and transport routes proxy to the production backend before SPA rewrites', () => {
+  assert.deepEqual(vercelConfig.rewrites.slice(0, 4), [
+    {
+      source: '/.well-known/oauth-protected-resource',
+      destination: 'https://hireflow-backend-production.up.railway.app/.well-known/oauth-protected-resource',
+    },
+    {
+      source: '/.well-known/oauth-authorization-server',
+      destination: 'https://hireflow-backend-production.up.railway.app/.well-known/oauth-authorization-server',
+    },
+    {
+      source: '/oauth/(.*)',
+      destination: 'https://hireflow-backend-production.up.railway.app/oauth/$1',
+    },
+    {
+      source: '/mcp',
+      destination: 'https://hireflow-backend-production.up.railway.app/mcp',
+    },
+  ])
+})
