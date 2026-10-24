@@ -10,3 +10,8 @@ export function getSafeOAuthReturnTo(locationLike = window.location) {
     return ''
   }
 }
+
+export function shouldRedirectAuthenticatedAuthRoute({ isAuthenticated, pathname, oauthReturnTo }) {
+  if (!isAuthenticated || (pathname !== '/login' && pathname !== '/signup')) return false
+  return !(pathname === '/login' && oauthReturnTo)
+}

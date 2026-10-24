@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { getSafeOAuthReturnTo } from './oauthReturnTo.js'
+import { getSafeOAuthReturnTo, shouldRedirectAuthenticatedAuthRoute } from './oauthReturnTo.js'
 
 test('OAuth login return target accepts only the same-origin authorize endpoint', () => {
   const authorize = '/oauth/authorize?client_id=chatgpt&state=opaque'
@@ -18,4 +18,22 @@ test('OAuth login return target accepts only the same-origin authorize endpoint'
     origin: 'https://hireflow.dev',
     search: `?returnTo=${encodeURIComponent('/dashboard')}`,
   }), '')
+})
+
+test('an existing local session does not skip the same-origin OAuth login', () => {
+  assert.equal(shouldRedirectAuthenticatedAuthRoute({
+    isAuthenticated: true,
+    pathname: '/login',
+    oauthReturnTo: '/oauth/authorize?state=opaque',
+  }), false)
+  assert.equal(shouldRedirectAuthenticatedAuthRoute({
+    isAuthenticated: true,
+    pathname: '/login',
+    oauthReturnTo: '',
+  }), true)
+  assert.equal(shouldRedirectAuthenticatedAuthRoute({
+    isAuthenticated: true,
+    pathname: '/signup',
+    oauthReturnTo: '/oauth/authorize?state=opaque',
+  }), true)
 })

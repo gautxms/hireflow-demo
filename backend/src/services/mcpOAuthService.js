@@ -327,11 +327,11 @@ export async function verifyMcpAccessToken({ db, token, requiredScopes = [], env
 
   const result = await db.query(
     `SELECT token.id AS token_id, token.user_id, token.client_id, token.scope, token.resource,
-            token.access_expires_at, user.email, user.company, user.mcp_profile_id,
-            user.email_verified, user.deleted_at, user.subscription_status,
-            user.cancellation_effective_at, user.current_period_end
+            token.access_expires_at, account.email, account.company, account.mcp_profile_id,
+            account.email_verified, account.deleted_at, account.subscription_status,
+            account.cancellation_effective_at, account.current_period_end
      FROM mcp_oauth_tokens token
-     JOIN users user ON user.id = token.user_id
+     JOIN users account ON account.id = token.user_id
      WHERE token.access_token_hash = $1
        AND token.revoked_at IS NULL
      LIMIT 1`,

@@ -126,7 +126,9 @@ test('authorization codes are one-time hashed records exchanged with PKCE', asyn
 test('access-token verification enforces resource and scopes and returns stable profile identity', async () => {
   const now = new Date('2026-10-24T12:00:00Z')
   const db = {
-    async query(_sql, params) {
+    async query(sql, params) {
+      assert.match(sql, /JOIN users account ON account\.id = token\.user_id/)
+      assert.doesNotMatch(sql, /JOIN users user\b/)
       assert.equal(params[0], crypto.createHash('sha256').update('secret-token').digest('hex'))
       return { rows: [{
         token_id: 'token-id',
