@@ -326,6 +326,9 @@ export async function createResumeAnalysis({
           jobDescriptionId: normalizedJobId,
           quotaAllocationId,
         })
+        if (parseJob?.id === undefined || parseJob?.id === null || parseJob.id === '') {
+          throw new Error('Resume parse queue did not return a job id')
+        }
       } catch (error) {
         if (quotaAllocationId) {
           await releaseAllocation({
@@ -341,13 +344,13 @@ export async function createResumeAnalysis({
         `INSERT INTO analysis_items (analysis_id, resume_id, parse_job_id)
          VALUES ($1, $2, $3)
          ON CONFLICT (analysis_id, resume_id) DO NOTHING`,
-        [analysisId, resumeId, parseJob.jobId],
+        [analysisId, resumeId, String(parseJob.id)],
       )
       results.push({
         name: metadata.originalFilename,
         status: 'queued',
         resumeId: String(resumeId),
-        parseJobId: String(parseJob.jobId),
+        parseJobId: String(parseJob.id),
       })
     }
 

@@ -48,7 +48,7 @@ test('confirmed analysis creation enforces job ownership and queues scanned resu
       assert.equal(analysisId, '00000000-0000-4000-8000-000000000202')
       assert.equal(jobDescriptionId, '00000000-0000-4000-8000-000000000201')
       assert.equal(quotaAllocationId, '00000000-0000-4000-8000-000000000205')
-      return { jobId: 'parse-job-1' }
+      return { id: 'parse-job-1' }
     },
     releaseReservation: async (input) => { released.push(input) },
   })
@@ -57,6 +57,15 @@ test('confirmed analysis creation enforces job ownership and queues scanned resu
   assert.equal(result.queued, 1)
   assert.equal(result.failed, 0)
   assert.equal(result.files[0].name, 'candidate.pdf')
+  assert.equal(result.files[0].parseJobId, 'parse-job-1')
+  assert.deepEqual(
+    queries.find(({ sql }) => sql.includes('INSERT INTO analysis_items')).params,
+    [
+      '00000000-0000-4000-8000-000000000202',
+      '00000000-0000-4000-8000-000000000203',
+      'parse-job-1',
+    ],
+  )
   assert.equal(queries.find(({ sql }) => sql.includes('FROM job_descriptions')).params[1], 42)
   assert.deepEqual(
     queries.find(({ sql }) => sql.includes('INSERT INTO analyses')).params,
