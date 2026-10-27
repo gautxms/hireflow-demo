@@ -3,6 +3,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
   buildAuthorizationServerMetadata,
+  buildOAuthConsentContentSecurityPolicy,
   buildMcpAuthChallenge,
   buildProtectedResourceMetadata,
   exchangeAuthorizationCode,
@@ -58,6 +59,41 @@ test('authorization validation accepts ChatGPT CIMD and rejects audience substit
     () => validateAuthorizationRequest(authorizationInput({ resource: 'https://evil.example/mcp' }), productionEnv),
     (error) => error instanceof McpOAuthError && error.code === 'invalid_target',
   )
+})
+
+test('OAuth consent CSP allows only the registered callback origin', () => {
+  const request = validateAuthorizationRequest(authorizationInput(), productionEnv)
+  const policy = buildOAuthConsentContentSecurityPolicy(request, productionEnv)
+
+  assert.equal(
+    policy,
+    "default-src 'none'; style-src 'unsafe-inline'; form-action 'self' https://chatgpt.com; base-uri 'none'; frame-ancestors 'none'",
+  )
+  assert.doesNotMatch(policy, /\*/)
+
+  assert.throws(
+    () => buildOAuthConsentContentSecurityPolicy({
+      ...request,
+      redirectUri: 'https://evil.example/callback',
+    }, productionEnv),
+    (error) => error instanceof McpOAuthError && error.code === 'invalid_request',
+  )
+})
+
+test('OAuth consent CSP derives the origin from an explicitly configured redirect', () => {
+  const configuredEnv = {
+    ...productionEnv,
+    MCP_OAUTH_CLIENT_ID: 'hireflow-test-client',
+    MCP_OAUTH_REDIRECT_URIS: 'https://client.example/oauth/callback',
+  }
+  const request = validateAuthorizationRequest(authorizationInput({
+    client_id: 'hireflow-test-client',
+    redirect_uri: 'https://client.example/oauth/callback',
+  }), configuredEnv)
+  const policy = buildOAuthConsentContentSecurityPolicy(request, configuredEnv)
+
+  assert.match(policy, /form-action 'self' https:\/\/client\.example;/)
+  assert.doesNotMatch(policy, /oauth\/callback/)
 })
 
 test('authorization codes are one-time hashed records exchanged with PKCE', async () => {
