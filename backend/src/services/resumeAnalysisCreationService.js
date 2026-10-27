@@ -24,7 +24,7 @@ import {
   reserveResumeQuotaUnits,
   ResumeQuotaExceededError,
 } from './resumeQuotaReservations.js'
-import { scanFileBuffer } from './virusScanService.js'
+import { isScanResultSafe, scanFileBuffer } from './virusScanService.js'
 
 export const MAX_RESUME_ANALYSIS_FILES = 20
 export const MAX_RESUME_ANALYSIS_FILE_BYTES = 25 * 1024 * 1024
@@ -258,21 +258,15 @@ export async function createResumeAnalysis({
         file.mimetype,
         metadata.originalFilename,
       ) || metadata.normalizedMimeType || file.mimetype
-      const scanResult = await scanFile(file.buffer, {
-        filename: metadata.storageFilename,
-        originalFilename: metadata.originalFilename,
-        originalMimeType: metadata.originalMimeType,
-        fileExtension: metadata.fileExtension || null,
-        mimetype: effectiveMimeType,
-        userId,
-        analysisId,
-      })
+      const scanResult = await scanFile(file.buffer, metadata.originalFilename)
 
-      if (!scanResult.ok) {
+      if (!isScanResultSafe(scanResult)) {
         results.push({
           name: metadata.originalFilename,
           status: 'failed',
-          reason: scanResult.reason || 'File security scan failed.',
+          reason: scanResult?.malicious
+            ? 'Malware detected in file scan.'
+            : scanResult?.details?.reason || scanResult?.details?.message || 'File security scan failed.',
         })
         continue
       }
@@ -291,7 +285,7 @@ export async function createResumeAnalysis({
           effectiveMimeType,
           scanResult.status || 'clean',
           scanResult.details ? JSON.stringify(scanResult.details) : null,
-          scanResult.sha256 || null,
+          crypto.createHash('sha256').update(file.buffer).digest('hex'),
           metadata.originalFilename,
           metadata.fileExtension || null,
           metadata.originalMimeType,

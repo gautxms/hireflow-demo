@@ -39,7 +39,10 @@ test('confirmed analysis creation enforces job ownership and queues scanned resu
       assert.equal(requestedUploads, 1)
       return { reservationId: '00000000-0000-4000-8000-000000000204' }
     },
-    scanFile: async () => ({ ok: true, status: 'clean', sha256: 'a'.repeat(64) }),
+    scanFile: async (_buffer, filename) => {
+      assert.equal(filename, 'candidate.pdf')
+      return { provider: 'clamav', status: 'clean', malicious: false, details: {} }
+    },
     allocateQuota: async ({ resumeId }) => {
       assert.equal(resumeId, '00000000-0000-4000-8000-000000000203')
       return { allocation: { id: '00000000-0000-4000-8000-000000000205' } }
@@ -109,13 +112,18 @@ test('analysis creation records scan failures without enqueueing unsafe files', 
     files: [resumeFile('unsafe.pdf')],
   }, {
     prepareQuota: async () => ({ reservationId: null }),
-    scanFile: async () => ({ ok: false, reason: 'Malware detected' }),
+    scanFile: async () => ({
+      provider: 'clamav',
+      status: 'malicious',
+      malicious: true,
+      details: {},
+    }),
     enqueue: async () => { enqueued = true },
   })
 
   assert.equal(result.status, 'failed')
   assert.equal(result.queued, 0)
   assert.equal(result.failed, 1)
-  assert.equal(result.files[0].reason, 'Malware detected')
+  assert.equal(result.files[0].reason, 'Malware detected in file scan.')
   assert.equal(enqueued, false)
 })
