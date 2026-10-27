@@ -160,6 +160,20 @@ export function validateAuthorizationRequest(input, env = process.env) {
   }
 }
 
+export function buildOAuthConsentContentSecurityPolicy(request, env = process.env) {
+  const config = getMcpOAuthConfig(env)
+  const clientId = String(request?.clientId || '').trim()
+  const redirectUri = String(request?.redirectUri || '').trim()
+  const registeredRedirectUris = config.clients.get(clientId)
+
+  if (!registeredRedirectUris?.has(redirectUri)) {
+    throw new McpOAuthError('invalid_request', 'redirect_uri is not registered.', 400)
+  }
+
+  const redirectOrigin = new URL(redirectUri).origin
+  return `default-src 'none'; style-src 'unsafe-inline'; form-action 'self' ${redirectOrigin}; base-uri 'none'; frame-ancestors 'none'`
+}
+
 export async function issueAuthorizationCode({ db, userId, request, now = new Date() }) {
   const code = randomToken('hfac')
   const expiresAt = new Date(now.getTime() + AUTHORIZATION_CODE_TTL_MS)
