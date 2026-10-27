@@ -1,12 +1,17 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { downloadOpenAIFile, HIRE_FLOW_MCP_TOOLS } from './hireflowMcpServer.js'
+import {
+  downloadOpenAIFile,
+  downloadOpenAIResumeFile,
+  HIRE_FLOW_MCP_TOOLS,
+} from './hireflowMcpServer.js'
 
 test('MCP tool catalog exposes profile, native file input, and confirmed creation contracts', () => {
   assert.deepEqual(HIRE_FLOW_MCP_TOOLS.map((tool) => tool.name), [
     'get_current_profile',
     'preview_job_description',
     'create_job_from_preview',
+    'create_resume_analysis',
   ])
 
   const profile = HIRE_FLOW_MCP_TOOLS[0]
@@ -26,6 +31,16 @@ test('MCP tool catalog exposes profile, native file input, and confirmed creatio
   const create = HIRE_FLOW_MCP_TOOLS[2]
   assert.deepEqual(create.inputSchema.properties.confirmed.const, true)
   assert.ok(create.inputSchema.required.includes('confirmed'))
+
+  const createAnalysis = HIRE_FLOW_MCP_TOOLS[3]
+  assert.deepEqual(createAnalysis._meta['openai/fileParams'], ['files'])
+  assert.deepEqual(createAnalysis.securitySchemes, [{
+    type: 'oauth2',
+    scopes: ['mcp:profile', 'analyses:write'],
+  }])
+  assert.equal(createAnalysis.inputSchema.properties.confirmed.const, true)
+  assert.equal(createAnalysis.inputSchema.properties.files.minItems, 1)
+  assert.equal(createAnalysis.inputSchema.properties.files.maxItems, 20)
 })
 
 test('ChatGPT file downloads enforce host, redirects, and byte limits', async () => {
@@ -58,5 +73,37 @@ test('ChatGPT file downloads enforce host, redirects, and byte limits', async ()
       }),
     }),
     /20MB or smaller/,
+  )
+})
+
+test('ChatGPT resume downloads accept supported resume formats and enforce 25MB', async () => {
+  const doc = Buffer.from('legacy word resume')
+  const downloaded = await downloadOpenAIResumeFile({
+    download_url: 'https://files.oaiusercontent.com/private/resume.doc?signature=redacted',
+    file_id: 'file_resume_123',
+    mime_type: 'application/msword',
+    file_name: 'resume.doc',
+  }, {
+    fetchImpl: async (_url, options) => {
+      assert.equal(options.redirect, 'error')
+      assert.match(options.headers.Accept, /application\/msword/)
+      return new Response(doc, { status: 200, headers: { 'content-type': 'application/msword' } })
+    },
+  })
+  assert.equal(downloaded.originalname, 'resume.doc')
+  assert.equal(downloaded.mimetype, 'application/msword')
+  assert.deepEqual(downloaded.buffer, doc)
+
+  await assert.rejects(
+    downloadOpenAIResumeFile({
+      download_url: 'https://files.oaiusercontent.com/resume.pdf',
+      file_id: 'file_resume_123',
+    }, {
+      fetchImpl: async () => new Response('small', {
+        status: 200,
+        headers: { 'content-length': String(25 * 1024 * 1024 + 1) },
+      }),
+    }),
+    /25MB or smaller/,
   )
 })

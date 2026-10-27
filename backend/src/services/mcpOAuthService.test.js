@@ -38,7 +38,7 @@ test('OAuth discovery advertises one canonical HTTPS resource and PKCE', () => {
   assert.deepEqual(buildProtectedResourceMetadata(productionEnv), {
     resource: 'https://hireflow.dev/mcp',
     authorization_servers: ['https://hireflow.dev'],
-    scopes_supported: [MCP_SCOPES.PROFILE, MCP_SCOPES.JOBS_WRITE],
+    scopes_supported: [MCP_SCOPES.PROFILE, MCP_SCOPES.JOBS_WRITE, MCP_SCOPES.ANALYSES_WRITE],
     resource_documentation: 'https://hireflow.dev',
   })
   const metadata = buildAuthorizationServerMetadata(productionEnv)
@@ -47,6 +47,11 @@ test('OAuth discovery advertises one canonical HTTPS resource and PKCE', () => {
   assert.equal(metadata.client_id_metadata_document_supported, true)
   assert.deepEqual(metadata.code_challenge_methods_supported, ['S256'])
   assert.deepEqual(metadata.token_endpoint_auth_methods_supported, ['none'])
+  assert.deepEqual(metadata.scopes_supported, [
+    MCP_SCOPES.PROFILE,
+    MCP_SCOPES.JOBS_WRITE,
+    MCP_SCOPES.ANALYSES_WRITE,
+  ])
 })
 
 test('authorization validation accepts ChatGPT CIMD and rejects audience substitution', () => {

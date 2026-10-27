@@ -8,6 +8,11 @@ import {
 } from '../services/jobDescriptionConfirmedCreationService.js'
 import { MAX_JD_PREVIEW_FILE_BYTES } from '../services/jobDescriptionPreviewService.js'
 import {
+  createResumeAnalysis,
+  MAX_RESUME_ANALYSIS_FILE_BYTES,
+  MAX_RESUME_ANALYSIS_FILES,
+} from '../services/resumeAnalysisCreationService.js'
+import {
   assertMcpPaidMutationAccess,
   buildMcpAuthChallenge,
   McpOAuthError,
@@ -17,7 +22,9 @@ import {
 } from '../services/mcpOAuthService.js'
 
 const PDF_MIME = 'application/pdf'
+const DOC_MIME = 'application/msword'
 const DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+const TXT_MIME = 'text/plain'
 const DEFAULT_FILE_HOST_SUFFIXES = ['.oaiusercontent.com', '.blob.core.windows.net', '.amazonaws.com']
 const SAFE_JOB_ERROR_NAMES = new Set([
   'JobDescriptionConfirmedCreationError',
@@ -26,6 +33,7 @@ const SAFE_JOB_ERROR_NAMES = new Set([
   'JobDescriptionPreviewReceiptError',
   'JobDescriptionValidationError',
   'McpFileInputError',
+  'ResumeAnalysisCreationError',
 ])
 
 class McpFileInputError extends Error {
@@ -63,6 +71,12 @@ const CreateInputSchema = z.object({
   confirmed: z.literal(true),
   fields: JobFieldsSchema,
 }).strict()
+const CreateAnalysisInputSchema = z.object({
+  name: z.string().trim().min(1).max(200),
+  jobDescriptionId: z.uuid().optional().nullable(),
+  files: z.array(OpenAIFileSchema).min(1).max(MAX_RESUME_ANALYSIS_FILES),
+  confirmed: z.literal(true),
+}).strict()
 
 const ProfileOutputSchema = z.object({
   id: z.string().min(1).regex(/\S/),
@@ -86,8 +100,24 @@ const CreateOutputSchema = z.object({
   created: z.boolean(),
   sourceFile: z.object({ name: z.string(), sha256: z.string() }).strict(),
 }).strict()
+const CreateAnalysisOutputSchema = z.object({
+  analysisId: z.string(),
+  name: z.string(),
+  status: z.enum(['processing', 'failed']),
+  jobDescriptionId: z.string().nullable(),
+  queued: z.number().int().nonnegative(),
+  failed: z.number().int().nonnegative(),
+  files: z.array(z.object({
+    name: z.string(),
+    status: z.enum(['queued', 'failed']),
+    reason: z.string().optional(),
+    resumeId: z.string().optional(),
+    parseJobId: z.string().optional(),
+  }).strict()),
+}).strict()
 
 const JOB_TOOL_SCOPES = [MCP_SCOPES.PROFILE, MCP_SCOPES.JOBS_WRITE]
+const ANALYSIS_TOOL_SCOPES = [MCP_SCOPES.PROFILE, MCP_SCOPES.ANALYSES_WRITE]
 
 function jsonSchema(schema) {
   return z.toJSONSchema(schema)
@@ -132,6 +162,16 @@ export const HIRE_FLOW_MCP_TOOLS = [
     securitySchemes: oauthSchemes(JOB_TOOL_SCOPES),
     _meta: toolMeta(JOB_TOOL_SCOPES),
   },
+  {
+    name: 'create_resume_analysis',
+    title: 'Create a resume analysis',
+    description: 'Upload 1-20 PDF, DOC, DOCX, or TXT resumes and start a HireFlow analysis. Call only after the user explicitly confirms the analysis name, the selected job (or no job), and the attached resume files. Pass confirmed=true. This immediately consumes resume-analysis quota and starts processing.',
+    inputSchema: jsonSchema(CreateAnalysisInputSchema),
+    outputSchema: jsonSchema(CreateAnalysisOutputSchema),
+    annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    securitySchemes: oauthSchemes(ANALYSIS_TOOL_SCOPES),
+    _meta: toolMeta(ANALYSIS_TOOL_SCOPES, { 'openai/fileParams': ['files'] }),
+  },
 ]
 
 function allowedFileHost(hostname, env = process.env) {
@@ -142,23 +182,28 @@ function allowedFileHost(hostname, env = process.env) {
   return suffixes.some((suffix) => host === suffix.replace(/^\./, '') || host.endsWith(suffix.startsWith('.') ? suffix : `.${suffix}`))
 }
 
-async function readLimitedResponseBody(response) {
+async function readLimitedResponseBody(response, {
+  maxBytes = MAX_JD_PREVIEW_FILE_BYTES,
+  tooLargeCode = 'JD_FILE_TOO_LARGE',
+  tooLargeMessage = 'JD file must be 20MB or smaller.',
+  downloadFailedCode = 'JD_FILE_DOWNLOAD_FAILED',
+} = {}) {
   const declaredLength = Number(response.headers.get('content-length') || 0)
-  if (declaredLength > MAX_JD_PREVIEW_FILE_BYTES) {
-    throw new McpFileInputError('JD_FILE_TOO_LARGE', 'JD file must be 20MB or smaller.')
+  if (declaredLength > maxBytes) {
+    throw new McpFileInputError(tooLargeCode, tooLargeMessage)
   }
 
   const reader = response.body?.getReader()
-  if (!reader) throw new McpFileInputError('JD_FILE_DOWNLOAD_FAILED', 'The uploaded file could not be downloaded.')
+  if (!reader) throw new McpFileInputError(downloadFailedCode, 'The uploaded file could not be downloaded.')
   const chunks = []
   let total = 0
   while (true) {
     const { done, value } = await reader.read()
     if (done) break
     total += value.byteLength
-    if (total > MAX_JD_PREVIEW_FILE_BYTES) {
+    if (total > maxBytes) {
       await reader.cancel()
-      throw new McpFileInputError('JD_FILE_TOO_LARGE', 'JD file must be 20MB or smaller.')
+      throw new McpFileInputError(tooLargeCode, tooLargeMessage)
     }
     chunks.push(Buffer.from(value))
   }
@@ -185,6 +230,42 @@ export async function downloadOpenAIFile(file, { env = process.env, fetchImpl = 
   const responseType = String(response.headers.get('content-type') || '').split(';')[0].trim().toLowerCase()
   const mimeType = String(file.mime_type || responseType).trim().toLowerCase()
   const fallbackExtension = mimeType === DOCX_MIME ? '.docx' : '.pdf'
+  const urlName = path.basename(decodeURIComponent(url.pathname || ''))
+  const originalname = String(file.file_name || urlName || `${file.file_id}${fallbackExtension}`)
+
+  return { originalname, mimetype: mimeType, buffer }
+}
+
+export async function downloadOpenAIResumeFile(file, { env = process.env, fetchImpl = fetch } = {}) {
+  const url = new URL(file.download_url)
+  if (url.protocol !== 'https:' || url.username || url.password || url.port || !allowedFileHost(url.hostname, env)) {
+    throw new McpFileInputError('RESUME_FILE_HOST_NOT_ALLOWED', 'The resume download URL is not from an approved ChatGPT file host.')
+  }
+
+  const response = await fetchImpl(url, {
+    method: 'GET',
+    redirect: 'error',
+    signal: AbortSignal.timeout(15_000),
+    headers: { Accept: `${PDF_MIME}, ${DOC_MIME}, ${DOCX_MIME}, ${TXT_MIME}` },
+  })
+  if (!response.ok) {
+    throw new McpFileInputError('RESUME_FILE_DOWNLOAD_FAILED', 'A resume could not be downloaded. Please attach it again.')
+  }
+
+  const buffer = await readLimitedResponseBody(response, {
+    maxBytes: MAX_RESUME_ANALYSIS_FILE_BYTES,
+    tooLargeCode: 'RESUME_FILE_TOO_LARGE',
+    tooLargeMessage: 'Each resume must be 25MB or smaller.',
+    downloadFailedCode: 'RESUME_FILE_DOWNLOAD_FAILED',
+  })
+  const responseType = String(response.headers.get('content-type') || '').split(';')[0].trim().toLowerCase()
+  const mimeType = String(file.mime_type || responseType).trim().toLowerCase()
+  const extensionByType = {
+    [DOC_MIME]: '.doc',
+    [DOCX_MIME]: '.docx',
+    [TXT_MIME]: '.txt',
+  }
+  const fallbackExtension = extensionByType[mimeType] || '.pdf'
   const urlName = path.basename(decodeURIComponent(url.pathname || ''))
   const originalname = String(file.file_name || urlName || `${file.file_id}${fallbackExtension}`)
 
@@ -255,7 +336,7 @@ export function createHireFlowMcpServer({
     { name: 'hireflow', version: '1.0.0' },
     {
       capabilities: { tools: {} },
-      instructions: 'To create a job, call preview_job_description first. Show every extracted field and warning to the user. Call create_job_from_preview only after the user explicitly confirms those fields; include confirmed=true. Never invent missing job details. Each call is scoped to the connected HireFlow profile.',
+      instructions: 'To create a job, call preview_job_description first. Show every extracted field and warning to the user. Call create_job_from_preview only after the user explicitly confirms those fields; include confirmed=true. To create an analysis, confirm the analysis name, selected job (or no job), and attached resumes before calling create_resume_analysis with confirmed=true. Never invent missing job details. Each call is scoped to the connected HireFlow profile.',
     },
   )
 
@@ -330,6 +411,37 @@ export function createHireFlowMcpServer({
           return jsonResult(output, confirmed.created
             ? `Created HireFlow job “${confirmed.job.title}”.`
             : `This preview had already created HireFlow job “${confirmed.job.title}”; no duplicate was created.`)
+        },
+      })
+    }
+
+    if (name === 'create_resume_analysis') {
+      const parsed = CreateAnalysisInputSchema.safeParse(args)
+      if (!parsed.success) return validationError(parsed)
+      return authorizeAndRun({
+        authorizationHeader,
+        requiredScopes: ANALYSIS_TOOL_SCOPES,
+        db,
+        env,
+        action: async (auth) => {
+          assertMcpPaidMutationAccess(auth)
+          const files = await Promise.all(parsed.data.files.map((file) => (
+            downloadOpenAIResumeFile(file, { env, fetchImpl })
+          )))
+          const output = await createResumeAnalysis({
+            db,
+            userId: auth.userId,
+            files,
+            analysisName: parsed.data.name,
+            jobDescriptionId: parsed.data.jobDescriptionId || null,
+            env,
+          })
+          return jsonResult(
+            output,
+            output.queued > 0
+              ? `Created HireFlow analysis “${output.name}” and queued ${output.queued} resume${output.queued === 1 ? '' : 's'} for processing.`
+              : `Created HireFlow analysis “${output.name}”, but none of the attached resumes passed validation or scanning.`,
+          )
         },
       })
     }

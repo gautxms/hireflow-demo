@@ -85,6 +85,7 @@ function renderConsentPage({ user, request, consentToken }) {
   const scopeLabels = request.scopes.map((scope) => ({
     'mcp:profile': 'Identify the connected HireFlow profile',
     'jobs:write': 'Upload job descriptions and create jobs after confirmation',
+    'analyses:write': 'Upload resumes and create analyses after confirmation',
   })[scope] || scope)
 
   return `<!doctype html>
@@ -108,7 +109,7 @@ function renderConsentPage({ user, request, consentToken }) {
   <p class="account">Signed in as <strong>${escapeHtml(user.email)}</strong>${user.company ? ` · ${escapeHtml(user.company)}` : ''}</p>
   <p>ChatGPT is requesting permission to:</p>
   <ul>${scopeLabels.map((label) => `<li>${escapeHtml(label)}</li>`).join('')}</ul>
-  <p>Job creation always requires a preview and a separate confirmation.</p>
+  <p>Job and analysis creation require an explicit confirmation. Resume analysis also uses your plan allowance.</p>
   <form method="post" action="/oauth/authorize">
     <input type="hidden" name="consent_token" value="${escapeHtml(consentToken)}">
     <button class="deny" type="submit" name="decision" value="deny">Cancel</button>
