@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken'
 import { pool } from '../db/client.js'
 import {
   buildAuthorizationServerMetadata,
+  buildOAuthConsentContentSecurityPolicy,
   buildProtectedResourceMetadata,
   exchangeAuthorizationCode,
   getMcpOAuthConfig,
@@ -155,7 +156,7 @@ router.get('/oauth/authorize', async (req, res) => {
 
   try {
     const consentToken = signConsentToken(user.id, request)
-    res.set('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'")
+    res.set('Content-Security-Policy', buildOAuthConsentContentSecurityPolicy(request))
     return res.status(200).type('html').send(renderConsentPage({ user, request, consentToken }))
   } catch (error) {
     console.error('[MCP OAuth] Failed to prepare consent:', { name: error?.name })
