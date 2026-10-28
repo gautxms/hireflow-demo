@@ -261,12 +261,43 @@ export async function createResumeAnalysis({
       const scanResult = await scanFile(file.buffer, metadata.originalFilename)
 
       if (!isScanResultSafe(scanResult)) {
+        const failureReason = scanResult?.malicious
+          ? 'Malware detected in file scan.'
+          : scanResult?.details?.reason || scanResult?.details?.message || 'File security scan failed.'
+        const failedResumeResult = await db.query(
+          `INSERT INTO resumes
+            (user_id, filename, file_size, file_type, parse_status, parse_error,
+             scan_status, scan_result, file_sha256, job_description_id,
+             original_filename, file_extension, original_mime_type, created_at, updated_at)
+           VALUES ($1, $2, $3, $4, 'failed', $5, $6, $7, $8, $9, $10, $11, $12, NOW(), NOW())
+           RETURNING id`,
+          [
+            userId,
+            metadata.storageFilename,
+            file.size,
+            effectiveMimeType,
+            failureReason,
+            scanResult?.status || 'error',
+            scanResult ? JSON.stringify(scanResult) : null,
+            crypto.createHash('sha256').update(file.buffer).digest('hex'),
+            normalizedJobId,
+            metadata.originalFilename,
+            metadata.fileExtension || null,
+            metadata.originalMimeType,
+          ],
+        )
+        const failedResumeId = failedResumeResult.rows[0]?.id
+        if (!failedResumeId) throw new Error('Failed resume creation did not return an id')
+        await db.query(
+          `INSERT INTO analysis_items (analysis_id, resume_id, parse_job_id)
+           VALUES ($1, $2, NULL)
+           ON CONFLICT (analysis_id, resume_id) DO NOTHING`,
+          [analysisId, failedResumeId],
+        )
         results.push({
           name: metadata.originalFilename,
           status: 'failed',
-          reason: scanResult?.malicious
-            ? 'Malware detected in file scan.'
-            : scanResult?.details?.reason || scanResult?.details?.message || 'File security scan failed.',
+          reason: failureReason,
         })
         continue
       }
@@ -274,9 +305,9 @@ export async function createResumeAnalysis({
       const resumeResult = await db.query(
         `INSERT INTO resumes
           (user_id, filename, file_size, file_type, parse_status, scan_status,
-           scan_result, file_sha256, original_filename, file_extension,
-           original_mime_type, created_at, updated_at)
-         VALUES ($1, $2, $3, $4, 'pending', $5, $6, $7, $8, $9, $10, NOW(), NOW())
+           scan_result, file_sha256, job_description_id, original_filename,
+           file_extension, original_mime_type, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, 'pending', $5, $6, $7, $8, $9, $10, $11, NOW(), NOW())
          RETURNING id`,
         [
           userId,
@@ -286,6 +317,7 @@ export async function createResumeAnalysis({
           scanResult.status || 'clean',
           scanResult.details ? JSON.stringify(scanResult.details) : null,
           crypto.createHash('sha256').update(file.buffer).digest('hex'),
+          normalizedJobId,
           metadata.originalFilename,
           metadata.fileExtension || null,
           metadata.originalMimeType,

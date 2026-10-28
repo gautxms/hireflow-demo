@@ -74,6 +74,10 @@ test('confirmed analysis creation enforces job ownership and queues scanned resu
     queries.find(({ sql }) => sql.includes('INSERT INTO analyses')).params,
     [42, '00000000-0000-4000-8000-000000000201', 'Backend shortlist'],
   )
+  assert.equal(
+    queries.find(({ sql }) => sql.includes('INSERT INTO resumes')).params[7],
+    '00000000-0000-4000-8000-000000000201',
+  )
   assert.equal(released.length, 1)
 })
 
@@ -97,10 +101,15 @@ test('analysis creation rejects another tenant or archived job before reserving 
 
 test('analysis creation records scan failures without enqueueing unsafe files', async () => {
   let enqueued = false
+  const queries = []
   const db = {
-    async query(sql) {
+    async query(sql, params = []) {
+      queries.push({ sql: String(sql), params })
       if (String(sql).includes('INSERT INTO analyses')) {
         return { rows: [{ id: '00000000-0000-4000-8000-000000000221' }] }
+      }
+      if (String(sql).includes('INSERT INTO resumes')) {
+        return { rows: [{ id: '00000000-0000-4000-8000-000000000222' }] }
       }
       return { rows: [] }
     },
@@ -126,4 +135,14 @@ test('analysis creation records scan failures without enqueueing unsafe files', 
   assert.equal(result.failed, 1)
   assert.equal(result.files[0].reason, 'Malware detected in file scan.')
   assert.equal(enqueued, false)
+  assert.deepEqual(
+    queries.find(({ sql }) => sql.includes('INSERT INTO analysis_items')).params,
+    [
+      '00000000-0000-4000-8000-000000000221',
+      '00000000-0000-4000-8000-000000000222',
+    ],
+  )
+  const failedResumeInsert = queries.find(({ sql }) => sql.includes('INSERT INTO resumes'))
+  assert.match(failedResumeInsert.sql, /'failed'/)
+  assert.equal(failedResumeInsert.params[4], 'Malware detected in file scan.')
 })
