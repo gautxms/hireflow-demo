@@ -84,8 +84,8 @@ function verifyConsentToken(token, userId) {
 function renderConsentPage({ user, request, consentToken }) {
   const scopeLabels = request.scopes.map((scope) => ({
     'mcp:profile': 'Identify the connected HireFlow profile',
-    'jobs:write': 'Upload job descriptions and create jobs after confirmation',
-    'analyses:write': 'Upload resumes and create analyses after confirmation',
+    'jobs:write': 'Read job descriptions and create jobs after ChatGPT approval',
+    'analyses:write': 'Read analysis status, upload resumes, and create analyses after ChatGPT approval',
   })[scope] || scope)
 
   return `<!doctype html>
@@ -109,7 +109,7 @@ function renderConsentPage({ user, request, consentToken }) {
   <p class="account">Signed in as <strong>${escapeHtml(user.email)}</strong>${user.company ? ` · ${escapeHtml(user.company)}` : ''}</p>
   <p>ChatGPT is requesting permission to:</p>
   <ul>${scopeLabels.map((label) => `<li>${escapeHtml(label)}</li>`).join('')}</ul>
-  <p>Job and analysis creation require an explicit confirmation. Resume analysis also uses your plan allowance.</p>
+  <p>You will review creation actions in ChatGPT before they run. Resume analysis uses your plan allowance.</p>
   <form method="post" action="/oauth/authorize">
     <input type="hidden" name="consent_token" value="${escapeHtml(consentToken)}">
     <button class="deny" type="submit" name="decision" value="deny">Cancel</button>
