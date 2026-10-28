@@ -14,6 +14,18 @@ function monthEnd(start) {
   return new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + 1, 1))
 }
 
+function deriveAnalysisStatus(row) {
+  const total = Number(row.total_count || 0)
+  const complete = Number(row.complete_count || 0)
+  const failed = Number(row.failed_count || 0)
+  const processing = Number(row.processing_count || 0)
+
+  if (total === 0) return row.status === 'failed' ? 'failed' : 'queued'
+  if (complete + failed === total) return failed > 0 ? 'failed' : 'complete'
+  if (processing > 0) return 'processing'
+  return 'queued'
+}
+
 export async function listMcpJobs({ db, userId, query = '', limit = 20 }) {
   const search = String(query || '').trim()
   const normalizedLimit = Math.min(Math.max(Number(limit) || 20, 1), 50)
@@ -78,7 +90,7 @@ export async function getMcpAnalysisStatus({ db, userId, analysisId }) {
   return {
     id: String(row.id),
     name: row.name || 'Untitled analysis',
-    status: row.status,
+    status: deriveAnalysisStatus(row),
     job: row.job_description_id
       ? { id: String(row.job_description_id), title: row.job_description_title || 'Untitled job' }
       : null,

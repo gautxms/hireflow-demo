@@ -66,6 +66,35 @@ test('getMcpAnalysisStatus returns compact progress without candidate data', asy
   assert.equal(result.completedAt, null)
 })
 
+test('getMcpAnalysisStatus derives completion without requiring a web detail request', async () => {
+  const db = {
+    async query() {
+      return {
+        rows: [{
+          id: 'analysis-complete',
+          name: 'Finished batch',
+          status: 'processing',
+          job_description_id: null,
+          total_count: 2,
+          complete_count: 2,
+          failed_count: 0,
+          processing_count: 0,
+          queued_count: 0,
+          created_at: '2026-10-28T00:00:00.000Z',
+          completed_at: null,
+        }],
+      }
+    },
+  }
+
+  const result = await getMcpAnalysisStatus({
+    db,
+    userId: 7,
+    analysisId: 'analysis-complete',
+  })
+  assert.equal(result.status, 'complete')
+})
+
 test('getMcpResumeQuota reports available units without reserving them', async () => {
   const queries = []
   const db = {
