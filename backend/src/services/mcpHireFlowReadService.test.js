@@ -39,6 +39,7 @@ test('listMcpJobs returns owner-scoped searchable job choices', async () => {
 test('getMcpAnalysisStatus returns compact progress without candidate data', async () => {
   const db = {
     async query(sql, params) {
+      if (String(sql).includes('FROM upload_chunks')) return { rows: [] }
       assert.match(String(sql), /a\.id = \$1 AND a\.user_id = \$2/)
       assert.deepEqual(params, ['analysis-1', 7])
       return {
@@ -68,7 +69,8 @@ test('getMcpAnalysisStatus returns compact progress without candidate data', asy
 
 test('getMcpAnalysisStatus derives completion without requiring a web detail request', async () => {
   const db = {
-    async query() {
+    async query(sql) {
+      if (String(sql).includes('FROM upload_chunks')) return { rows: [] }
       return {
         rows: [{
           id: 'analysis-complete',
@@ -93,6 +95,48 @@ test('getMcpAnalysisStatus derives completion without requiring a web detail req
     analysisId: 'analysis-complete',
   })
   assert.equal(result.status, 'complete')
+})
+
+test('getMcpAnalysisStatus includes unmatched failed web uploads', async () => {
+  const db = {
+    async query(sql) {
+      if (String(sql).includes('FROM upload_chunks')) {
+        assert.match(String(sql), /NOT EXISTS/)
+        assert.match(String(sql), /uc\.resume_id IS NOT NULL/)
+        assert.match(String(sql), /uc\.parse_job_id IS NOT NULL/)
+        return { rows: [{ status: 'rejected', updated_at: '2026-10-28T00:00:00.000Z' }] }
+      }
+      return {
+        rows: [{
+          id: 'analysis-partial',
+          name: 'Mixed web batch',
+          status: 'processing',
+          job_description_id: null,
+          total_count: 1,
+          complete_count: 1,
+          failed_count: 0,
+          processing_count: 0,
+          queued_count: 0,
+          created_at: '2026-10-28T00:00:00.000Z',
+          completed_at: null,
+        }],
+      }
+    },
+  }
+
+  const result = await getMcpAnalysisStatus({
+    db,
+    userId: 7,
+    analysisId: 'analysis-partial',
+  })
+  assert.equal(result.status, 'failed')
+  assert.deepEqual(result.counts, {
+    total: 2,
+    complete: 1,
+    failed: 1,
+    processing: 0,
+    queued: 0,
+  })
 })
 
 test('getMcpResumeQuota reports available units without reserving them', async () => {

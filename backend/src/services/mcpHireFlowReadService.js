@@ -87,20 +87,60 @@ export async function getMcpAnalysisStatus({ db, userId, analysisId }) {
   const row = result.rows[0]
   if (!row) return null
 
+  const counts = {
+    total: Number(row.total_count || 0),
+    complete: Number(row.complete_count || 0),
+    failed: Number(row.failed_count || 0),
+    processing: Number(row.processing_count || 0),
+    queued: Number(row.queued_count || 0),
+  }
+  const uploadResult = await db.query(
+    `SELECT uc.status, uc.updated_at
+     FROM upload_chunks uc
+     WHERE uc.analysis_id = $1
+       AND NOT EXISTS (
+         SELECT 1
+         FROM analysis_items ai
+         LEFT JOIN resumes r ON r.id = ai.resume_id
+         WHERE ai.analysis_id = uc.analysis_id
+           AND (
+             (uc.resume_id IS NOT NULL AND ai.resume_id = uc.resume_id)
+             OR (uc.parse_job_id IS NOT NULL AND ai.parse_job_id = uc.parse_job_id)
+             OR (LOWER(TRIM(COALESCE(uc.filename, ''))) <> ''
+                 AND LOWER(TRIM(COALESCE(r.original_filename, r.filename, '')))
+                   = LOWER(TRIM(uc.filename)))
+           )
+       )`,
+    [analysisId],
+  )
+  for (const upload of uploadResult.rows) {
+    const uploadStatus = String(upload.status || '').toLowerCase()
+    const updatedAt = upload.updated_at ? new Date(upload.updated_at) : null
+    const stale = uploadStatus === 'uploading'
+      && updatedAt
+      && !Number.isNaN(updatedAt.getTime())
+      && Date.now() - updatedAt.getTime() > 30 * 60 * 1000
+    const status = ['failed', 'rejected', 'expired'].includes(uploadStatus) || stale
+      ? 'failed'
+      : 'processing'
+    counts.total += 1
+    counts[status] += 1
+  }
+
   return {
     id: String(row.id),
     name: row.name || 'Untitled analysis',
-    status: deriveAnalysisStatus(row),
+    status: deriveAnalysisStatus({
+      ...row,
+      total_count: counts.total,
+      complete_count: counts.complete,
+      failed_count: counts.failed,
+      processing_count: counts.processing,
+    }),
     job: row.job_description_id
       ? { id: String(row.job_description_id), title: row.job_description_title || 'Untitled job' }
       : null,
-    counts: {
-      total: Number(row.total_count || 0),
-      complete: Number(row.complete_count || 0),
-      failed: Number(row.failed_count || 0),
-      processing: Number(row.processing_count || 0),
-      queued: Number(row.queued_count || 0),
-    },
+    counts,
     createdAt: new Date(row.created_at).toISOString(),
     completedAt: row.completed_at ? new Date(row.completed_at).toISOString() : null,
   }
