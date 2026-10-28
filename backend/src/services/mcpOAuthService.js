@@ -4,6 +4,7 @@ import { canUsePaidMutation } from '../utils/subscriptionAccess.js'
 export const MCP_SCOPES = Object.freeze({
   PROFILE: 'mcp:profile',
   JOBS_WRITE: 'jobs:write',
+  ANALYSES_WRITE: 'analyses:write',
 })
 
 const SUPPORTED_SCOPES = new Set(Object.values(MCP_SCOPES))
@@ -390,7 +391,7 @@ export function assertMcpPaidMutationAccess(auth) {
   if (!canUsePaidMutation(user)) {
     throw new McpOAuthError(
       'subscription_required',
-      'An active HireFlow subscription is required to preview or create jobs.',
+      'An active HireFlow subscription is required to preview or create jobs and analyses.',
       403,
     )
   }
