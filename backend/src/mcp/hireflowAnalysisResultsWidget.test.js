@@ -9,7 +9,7 @@ import {
 } from './hireflowAnalysisResultsWidget.js'
 
 test('analysis results widget exposes a versioned MCP Apps resource', () => {
-  assert.equal(HIREFLOW_ANALYSIS_RESULTS_WIDGET_URI, 'ui://hireflow/analysis-results-v1.html')
+  assert.equal(HIREFLOW_ANALYSIS_RESULTS_WIDGET_URI, 'ui://hireflow/analysis-results-v2.html')
   assert.equal(HIREFLOW_ANALYSIS_RESULTS_WIDGET_MIME_TYPE, 'text/html;profile=mcp-app')
   assert.deepEqual(getHireFlowAnalysisResultsWidgetResource(), {
     uri: HIREFLOW_ANALYSIS_RESULTS_WIDGET_URI,
@@ -36,8 +36,12 @@ test('analysis results widget uses the MCP Apps bridge and safe DOM rendering', 
   assert.match(HIREFLOW_ANALYSIS_RESULTS_WIDGET_HTML, /render_analysis_results/)
   assert.match(HIREFLOW_ANALYSIS_RESULTS_WIDGET_HTML, /get_analysis_status/)
   assert.match(HIREFLOW_ANALYSIS_RESULTS_WIDGET_HTML, /setWidgetState/)
-  assert.match(HIREFLOW_ANALYSIS_RESULTS_WIDGET_HTML, /create\('details', 'candidate'\)/)
-  assert.match(HIREFLOW_ANALYSIS_RESULTS_WIDGET_HTML, /score-denom', '\/10'/)
+  assert.match(HIREFLOW_ANALYSIS_RESULTS_WIDGET_HTML, /result-card/)
+  assert.match(HIREFLOW_ANALYSIS_RESULTS_WIDGET_HTML, /detail-drawer/)
+  assert.match(HIREFLOW_ANALYSIS_RESULTS_WIDGET_HTML, /rc-score-denom', '\/10'/)
+  assert.match(HIREFLOW_ANALYSIS_RESULTS_WIDGET_HTML, /dd-score/)
+  assert.match(HIREFLOW_ANALYSIS_RESULTS_WIDGET_HTML, /Matched requirements/)
+  assert.match(HIREFLOW_ANALYSIS_RESULTS_WIDGET_HTML, /Recommended action/)
   assert.doesNotMatch(HIREFLOW_ANALYSIS_RESULTS_WIDGET_HTML, /\.innerHTML\s*=/)
   assert.doesNotMatch(HIREFLOW_ANALYSIS_RESULTS_WIDGET_HTML, /<script[^>]+src=/)
 

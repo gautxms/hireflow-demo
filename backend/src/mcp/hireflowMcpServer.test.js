@@ -38,9 +38,9 @@ test('MCP tool catalog separates read-only discovery from native-approved creati
   assert.equal(results.inputSchema.required.includes('analysisId'), true)
   assert.ok(results.outputSchema.properties.candidates)
   assert.equal(renderResults.annotations.readOnlyHint, true)
-  assert.equal(renderResults._meta.ui.resourceUri, 'ui://hireflow/analysis-results-v1.html')
+  assert.equal(renderResults._meta.ui.resourceUri, 'ui://hireflow/analysis-results-v2.html')
   assert.deepEqual(renderResults._meta.ui.visibility, ['model', 'app'])
-  assert.equal(renderResults._meta['openai/outputTemplate'], 'ui://hireflow/analysis-results-v1.html')
+  assert.equal(renderResults._meta['openai/outputTemplate'], 'ui://hireflow/analysis-results-v2.html')
   assert.equal(renderResults._meta['openai/toolInvocation/invoking'], 'Loading HireFlow results…')
 
   const preview = HIRE_FLOW_MCP_TOOLS.find((tool) => tool.name === 'preview_job_description')
