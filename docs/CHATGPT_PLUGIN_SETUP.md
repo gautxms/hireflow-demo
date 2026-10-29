@@ -9,11 +9,12 @@ HireFlow exposes a Streamable HTTP MCP server at `https://hireflow.dev/mcp`. The
 - `get_resume_quota` returns the current resume-analysis allowance without changing it.
 - `get_analysis_status` returns owner-scoped processing progress without candidate data.
 - `get_analysis_results` returns owner-scoped HireFlow scores and detailed candidate analysis without rescoring resumes.
+- `render_analysis_results` displays those authoritative results in an inline component with ranked score cards and expandable candidate details.
 - `preview_job_description` accepts one ChatGPT file parameter containing a PDF or DOCX. It extracts fields and returns a signed preview token, but does not create a job.
 - `create_job_from_preview` creates at most one job for a preview. ChatGPT's native action approval is the confirmation.
 - `create_resume_analysis` accepts 1-20 PDF, DOC, DOCX, or TXT resumes and starts one analysis. ChatGPT's native action approval is the confirmation.
 
-For job creation, preview the file, show the fields and warnings, and then offer the native-approved create action. For resume analysis, resolve an ambiguous job with `list_jobs`, create the analysis once, poll `get_analysis_status`, and retrieve the completed HireFlow output with `get_analysis_results`. ChatGPT must not independently analyse, score, or rank the resumes when HireFlow creation or result retrieval is unavailable.
+For job creation, preview the file, show the fields and warnings, and then offer the native-approved create action. For resume analysis, resolve an ambiguous job with `list_jobs`, create the analysis once, poll `get_analysis_status`, and display the completed HireFlow output with `render_analysis_results`. Use `get_analysis_results` as the headless fallback for clients without component support. ChatGPT must not independently analyse, score, or rank the resumes when HireFlow creation or result retrieval is unavailable.
 
 ## Production configuration
 
@@ -42,8 +43,9 @@ The Vercel rewrites keep the MCP resource, discovery documents, and OAuth endpoi
    - `https://hireflow.dev/.well-known/oauth-authorization-server`
 3. Confirm an unauthenticated `get_current_profile` tool call returns an MCP `mcp/www_authenticate` challenge.
 4. In ChatGPT, add a custom MCP server using `https://hireflow.dev/mcp` and choose the advertised OAuth configuration.
-5. Connect a paid, email-verified HireFlow test account. Verify the eight tools above are visible.
+5. Connect a paid, email-verified HireFlow test account. Verify the nine tools above are visible.
 6. Upload a representative PDF and DOCX job description, review the extracted fields, approve creation, and verify exactly one account-owned job is created for each preview.
-7. Attach representative resume files, start an analysis, poll it to completion, and verify `get_analysis_results` returns the same scores and detailed findings shown by the HireFlow web analysis page.
+7. Attach representative resume files, start an analysis, poll it to completion, and verify `render_analysis_results` displays the same scores and detailed findings shown by the HireFlow web analysis page.
+8. Expand multiple candidate cards, enter fullscreen, open the analysis in HireFlow, and verify read-only refreshes do not request additional approval.
 
 Access tokens last one hour. Refresh tokens rotate on every use and last 30 days. Only token hashes are stored. Job creation remains protected by the same active-subscription and account-isolation rules as the HireFlow web UI.

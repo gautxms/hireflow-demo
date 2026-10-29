@@ -13,6 +13,7 @@ test('MCP tool catalog separates read-only discovery from native-approved creati
     'get_resume_quota',
     'get_analysis_status',
     'get_analysis_results',
+    'render_analysis_results',
     'preview_job_description',
     'create_job_from_preview',
     'create_resume_analysis',
@@ -28,6 +29,7 @@ test('MCP tool catalog separates read-only discovery from native-approved creati
   const quota = HIRE_FLOW_MCP_TOOLS.find((tool) => tool.name === 'get_resume_quota')
   const status = HIRE_FLOW_MCP_TOOLS.find((tool) => tool.name === 'get_analysis_status')
   const results = HIRE_FLOW_MCP_TOOLS.find((tool) => tool.name === 'get_analysis_results')
+  const renderResults = HIRE_FLOW_MCP_TOOLS.find((tool) => tool.name === 'render_analysis_results')
   assert.equal(listJobs.annotations.readOnlyHint, true)
   assert.equal(quota.annotations.readOnlyHint, true)
   assert.equal(status.annotations.readOnlyHint, true)
@@ -35,6 +37,11 @@ test('MCP tool catalog separates read-only discovery from native-approved creati
   assert.equal(results.annotations.idempotentHint, true)
   assert.equal(results.inputSchema.required.includes('analysisId'), true)
   assert.ok(results.outputSchema.properties.candidates)
+  assert.equal(renderResults.annotations.readOnlyHint, true)
+  assert.equal(renderResults._meta.ui.resourceUri, 'ui://hireflow/analysis-results-v1.html')
+  assert.deepEqual(renderResults._meta.ui.visibility, ['model', 'app'])
+  assert.equal(renderResults._meta['openai/outputTemplate'], 'ui://hireflow/analysis-results-v1.html')
+  assert.equal(renderResults._meta['openai/toolInvocation/invoking'], 'Loading HireFlow results…')
 
   const preview = HIRE_FLOW_MCP_TOOLS.find((tool) => tool.name === 'preview_job_description')
   assert.deepEqual(preview._meta['openai/fileParams'], ['file'])

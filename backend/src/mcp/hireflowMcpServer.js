@@ -3,6 +3,11 @@ import { Server } from '@modelcontextprotocol/server'
 import { z } from 'zod'
 import { pool } from '../db/client.js'
 import {
+  getHireFlowAnalysisResultsWidgetResource,
+  HIREFLOW_ANALYSIS_RESULTS_WIDGET_URI,
+  readHireFlowAnalysisResultsWidgetResource,
+} from './hireflowAnalysisResultsWidget.js'
+import {
   confirmStatelessJobDescriptionCreation,
   prepareStatelessJobDescriptionCreation,
 } from '../services/jobDescriptionConfirmedCreationService.js'
@@ -275,6 +280,21 @@ export const HIRE_FLOW_MCP_TOOLS = [
     _meta: toolMeta(ANALYSIS_TOOL_SCOPES),
   },
   {
+    name: 'render_analysis_results',
+    title: 'Show HireFlow analysis results',
+    description: 'Render an interactive HireFlow results card for one analysis owned by the connected account. Use this after get_analysis_status reports completion when the user wants to view candidate scores and expand the detailed HireFlow analysis in ChatGPT. This does not modify HireFlow and must not be supplemented with independent resume analysis.',
+    inputSchema: jsonSchema(AnalysisStatusInputSchema),
+    outputSchema: jsonSchema(AnalysisResultsOutputSchema),
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    securitySchemes: oauthSchemes(ANALYSIS_TOOL_SCOPES),
+    _meta: toolMeta(ANALYSIS_TOOL_SCOPES, {
+      ui: { resourceUri: HIREFLOW_ANALYSIS_RESULTS_WIDGET_URI, visibility: ['model', 'app'] },
+      'openai/outputTemplate': HIREFLOW_ANALYSIS_RESULTS_WIDGET_URI,
+      'openai/toolInvocation/invoking': 'Loading HireFlow results…',
+      'openai/toolInvocation/invoked': 'HireFlow results ready',
+    }),
+  },
+  {
     name: 'preview_job_description',
     title: 'Preview a job description',
     description: 'Read one PDF or DOCX job description, extract editable job fields, and return warnings plus a short-lived preview token. This does not store the file or create a job. Show the extracted fields and warnings before offering to create the job.',
@@ -465,13 +485,22 @@ export function createHireFlowMcpServer({
   fetchImpl = fetch,
 } = {}) {
   const server = new Server(
-    { name: 'hireflow', version: '1.0.0' },
+    { name: 'hireflow', version: '1.1.0' },
     {
-      capabilities: { tools: {} },
-      instructions: 'Use read-only tools without requesting extra confirmation. To create a job, call preview_job_description first and show every extracted field and warning, then offer create_job_from_preview; ChatGPT’s action approval is the confirmation. For analyses, use list_jobs when the job is ambiguous and get_resume_quota when allowance matters, then call create_resume_analysis directly from the user’s creation request; do not add a duplicate conversational confirmation. After processing completes, call get_analysis_results and present HireFlow’s scores and analysis. All resume scores, rankings, recommendations, strengths, concerns, and evidence must come exclusively from HireFlow tool results. Never inspect attached resumes to produce a preliminary, fallback, or independent analysis. If HireFlow analysis creation or result retrieval is unavailable or fails, report that failure and stop. Never invent missing job details. Each call is scoped to the connected HireFlow profile.',
+      capabilities: { tools: {}, resources: {} },
+      instructions: 'Use read-only tools without requesting extra confirmation. To create a job, call preview_job_description first and show every extracted field and warning, then offer create_job_from_preview; ChatGPT’s action approval is the confirmation. For analyses, use list_jobs when the job is ambiguous and get_resume_quota when allowance matters, then call create_resume_analysis directly from the user’s creation request; do not add a duplicate conversational confirmation. After processing completes, call render_analysis_results so the user can view HireFlow’s scores and expand detailed analysis in ChatGPT. Use get_analysis_results only when a client cannot render components or when structured results are needed without UI. Do not repeat the full component content in the assistant response. All resume scores, rankings, recommendations, strengths, concerns, and evidence must come exclusively from HireFlow tool results. Never inspect attached resumes to produce a preliminary, fallback, or independent analysis. If HireFlow analysis creation or result retrieval is unavailable or fails, report that failure and stop. Never invent missing job details. Each call is scoped to the connected HireFlow profile.',
     },
   )
 
+  server.setRequestHandler('resources/list', async () => ({
+    resources: [getHireFlowAnalysisResultsWidgetResource()],
+  }))
+  server.setRequestHandler('resources/read', async (request) => {
+    if (request.params?.uri !== HIREFLOW_ANALYSIS_RESULTS_WIDGET_URI) {
+      throw new Error(`Unknown resource: ${String(request.params?.uri || '')}`)
+    }
+    return readHireFlowAnalysisResultsWidgetResource()
+  })
   server.setRequestHandler('tools/list', async () => ({ tools: HIRE_FLOW_MCP_TOOLS }))
   server.setRequestHandler('tools/call', async (request) => {
     const { name, arguments: args } = request.params || {}
@@ -575,6 +604,33 @@ export function createHireFlowMcpServer({
           return jsonResult(
             output,
             `HireFlow analysis “${output.name}” is ${output.status} with ${output.candidates.length} candidate result${output.candidates.length === 1 ? '' : 's'}. Present only these HireFlow-generated results; do not add independent resume analysis.`,
+          )
+        },
+      })
+    }
+
+    if (name === 'render_analysis_results') {
+      const parsed = AnalysisStatusInputSchema.safeParse(args)
+      if (!parsed.success) return validationError(parsed)
+      return authorizeAndRun({
+        authorizationHeader,
+        requiredScopes: ANALYSIS_TOOL_SCOPES,
+        db,
+        env,
+        action: async (auth) => {
+          const results = await getMcpAnalysisResults({
+            db,
+            userId: auth.userId,
+            analysisId: parsed.data.analysisId,
+          })
+          if (!results) return { isError: true, content: [{ type: 'text', text: 'ANALYSIS_NOT_FOUND: This analysis was not found for the connected HireFlow account.' }] }
+          const output = {
+            ...results,
+            url: `${getMcpOAuthConfig(env).issuer}/analyses/${encodeURIComponent(results.analysisId)}`,
+          }
+          return jsonResult(
+            output,
+            `Displayed HireFlow analysis “${output.name}” with ${output.candidates.length} candidate result${output.candidates.length === 1 ? '' : 's'}. The interactive card contains the authoritative HireFlow scores and details; do not repeat or supplement them with independent analysis.`,
           )
         },
       })
