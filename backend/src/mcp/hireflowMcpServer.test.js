@@ -12,6 +12,7 @@ test('MCP tool catalog separates read-only discovery from native-approved creati
     'list_jobs',
     'get_resume_quota',
     'get_analysis_status',
+    'get_analysis_results',
     'preview_job_description',
     'create_job_from_preview',
     'create_resume_analysis',
@@ -19,15 +20,21 @@ test('MCP tool catalog separates read-only discovery from native-approved creati
 
   const profile = HIRE_FLOW_MCP_TOOLS[0]
   assert.equal(profile.annotations.readOnlyHint, true)
+  assert.equal(profile.annotations.idempotentHint, true)
   assert.equal(profile._meta['openai/profile'], true)
   assert.deepEqual(profile.securitySchemes, [{ type: 'oauth2', scopes: ['mcp:profile'] }])
 
   const listJobs = HIRE_FLOW_MCP_TOOLS.find((tool) => tool.name === 'list_jobs')
   const quota = HIRE_FLOW_MCP_TOOLS.find((tool) => tool.name === 'get_resume_quota')
   const status = HIRE_FLOW_MCP_TOOLS.find((tool) => tool.name === 'get_analysis_status')
+  const results = HIRE_FLOW_MCP_TOOLS.find((tool) => tool.name === 'get_analysis_results')
   assert.equal(listJobs.annotations.readOnlyHint, true)
   assert.equal(quota.annotations.readOnlyHint, true)
   assert.equal(status.annotations.readOnlyHint, true)
+  assert.equal(results.annotations.readOnlyHint, true)
+  assert.equal(results.annotations.idempotentHint, true)
+  assert.equal(results.inputSchema.required.includes('analysisId'), true)
+  assert.ok(results.outputSchema.properties.candidates)
 
   const preview = HIRE_FLOW_MCP_TOOLS.find((tool) => tool.name === 'preview_job_description')
   assert.deepEqual(preview._meta['openai/fileParams'], ['file'])
@@ -54,6 +61,7 @@ test('MCP tool catalog separates read-only discovery from native-approved creati
   assert.ok(!createAnalysis.inputSchema.required.includes('confirmed'))
   assert.equal(createAnalysis.inputSchema.properties.files.minItems, 1)
   assert.equal(createAnalysis.inputSchema.properties.files.maxItems, 20)
+  assert.equal(createAnalysis.annotations.idempotentHint, false)
 })
 
 test('ChatGPT file downloads enforce host, redirects, and byte limits', async () => {

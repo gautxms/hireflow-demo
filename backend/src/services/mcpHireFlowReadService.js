@@ -26,6 +26,143 @@ function deriveAnalysisStatus(row) {
   return 'queued'
 }
 
+function parseResultObject(value, depth = 0) {
+  if (depth > 4 || value == null) return null
+  if (typeof value === 'string') {
+    try {
+      return parseResultObject(JSON.parse(value), depth + 1)
+    } catch {
+      return null
+    }
+  }
+  return typeof value === 'object' && !Array.isArray(value) ? value : null
+}
+
+function extractResultCandidates(value) {
+  const result = parseResultObject(value)
+  if (!result) return []
+
+  for (const candidateValue of [result.candidates, result.results, result.output]) {
+    if (Array.isArray(candidateValue)) return candidateValue
+    const nested = parseResultObject(candidateValue)
+    if (Array.isArray(nested?.candidates)) return nested.candidates
+  }
+  return []
+}
+
+function optionalText(value) {
+  if (value === null || value === undefined) return null
+  const normalized = String(value).trim()
+  return normalized || null
+}
+
+function textArray(value) {
+  if (!Array.isArray(value)) return []
+  return value.map(optionalText).filter(Boolean)
+}
+
+function boundedNumber(value, min, max) {
+  if (value === null || value === undefined || String(value).trim() === '') return null
+  const numeric = Number(value)
+  if (!Number.isFinite(numeric)) return null
+  return Math.max(min, Math.min(max, numeric))
+}
+
+function displayValue(value) {
+  if (value === null || value === undefined) return null
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+    return optionalText(value)
+  }
+  if (Array.isArray(value)) return optionalText(value.map(displayValue).filter(Boolean).join(', '))
+  if (typeof value === 'object') {
+    return optionalText(Object.entries(value)
+      .map(([key, entry]) => {
+        const normalized = displayValue(entry)
+        return normalized ? `${key}: ${normalized}` : null
+      })
+      .filter(Boolean)
+      .join('; '))
+  }
+  return null
+}
+
+function humanizeKey(value) {
+  const normalized = String(value || '').replace(/[_-]+/g, ' ').trim()
+  return normalized ? normalized.replace(/\b\w/g, (letter) => letter.toUpperCase()) : 'Detail'
+}
+
+function normalizeBreakdown(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return []
+  return Object.entries(value).flatMap(([key, rawValue]) => {
+    const normalized = displayValue(rawValue)
+    return normalized ? [{ key, label: humanizeKey(key), value: normalized }] : []
+  })
+}
+
+function normalizeSkills(candidate) {
+  const values = [candidate?.skills, candidate?.top_skills, candidate?.matchedSkills]
+  const skills = []
+  for (const value of values) {
+    if (Array.isArray(value)) skills.push(...textArray(value))
+    else if (typeof value === 'string') skills.push(...value.split(',').map(optionalText).filter(Boolean))
+    else if (value && typeof value === 'object') {
+      for (const nestedValue of Object.values(value)) skills.push(...textArray(nestedValue))
+    }
+  }
+  return [...new Set(skills)]
+}
+
+export function normalizeMcpCandidateResult(candidate, { resumeId = '', filename = '', index = 0 } = {}) {
+  if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) return null
+  const fitAssessment = candidate.fit_assessment && typeof candidate.fit_assessment === 'object'
+    ? candidate.fit_assessment
+    : {}
+  const matchScore = candidate.matchScore && typeof candidate.matchScore === 'object'
+    ? candidate.matchScore
+    : {}
+  const score = boundedNumber(
+    matchScore.score
+      ?? candidate.score
+      ?? candidate.profile_score
+      ?? fitAssessment.overall_fit_score
+      ?? candidate.scoreBreakdown?.overall,
+    0,
+    100,
+  )
+  const scoreOutOfTen = boundedNumber(matchScore.score_out_of_ten, 0, 10)
+    ?? (score === null ? null : Math.round(score) / 10)
+  const reason = optionalText(matchScore.reason || fitAssessment.rationale)
+  const summary = optionalText(candidate.summaryFull || candidate.summary || candidate.profile_summary)
+
+  return {
+    id: optionalText(candidate.id || candidate.resumeId || candidate.resume_id) || `${resumeId || 'candidate'}-${index}`,
+    resumeId: optionalText(candidate.resumeId || candidate.resume_id || resumeId) || '',
+    filename: optionalText(candidate.filename || filename) || '',
+    name: optionalText(candidate.name || candidate.full_name || candidate.candidate_name) || 'Candidate',
+    email: optionalText(candidate.email),
+    phone: optionalText(candidate.phone || candidate.phone_number),
+    title: optionalText(candidate.title || candidate.current_title),
+    location: optionalText(candidate.location),
+    yearsExperience: boundedNumber(candidate.years_experience, 0, 80),
+    seniorityLevel: optionalText(candidate.seniority_level),
+    score,
+    scoreOutOfTen,
+    verdict: optionalText(candidate.verdict || matchScore.fit),
+    summary,
+    reason,
+    recommendation: optionalText(candidate.recommendationFull || candidate.recommendation || reason),
+    strengths: textArray(candidate.strengthsFull || candidate.strengths),
+    considerations: textArray(candidate.considerations || candidate.concerns),
+    matchedRequirements: textArray(candidate.matchedRequirementsFull || fitAssessment.matched_requirements),
+    missingRequirements: textArray(candidate.missingRequirementsFull || fitAssessment.missing_requirements),
+    risksOrGaps: textArray(candidate.risksOrGapsFull || fitAssessment.risks_or_gaps),
+    skills: normalizeSkills(candidate),
+    experienceHighlights: textArray(candidate.experienceHighlights || candidate.experience_highlights),
+    breakdown: normalizeBreakdown(matchScore.breakdown || candidate.scoreBreakdown?.categories),
+    analysisMode: optionalText(candidate.analysis_mode),
+  }
+}
+
 export async function listMcpJobs({ db, userId, query = '', limit = 20 }) {
   const search = String(query || '').trim()
   const normalizedLimit = Math.min(Math.max(Number(limit) || 20, 1), 50)
@@ -143,6 +280,69 @@ export async function getMcpAnalysisStatus({ db, userId, analysisId }) {
     counts,
     createdAt: new Date(row.created_at).toISOString(),
     completedAt: row.completed_at ? new Date(row.completed_at).toISOString() : null,
+  }
+}
+
+export async function getMcpAnalysisResults({ db, userId, analysisId }) {
+  const status = await getMcpAnalysisStatus({ db, userId, analysisId })
+  if (!status) return null
+
+  const result = await db.query(
+    `SELECT ai.id,
+            ai.resume_id,
+            r.filename,
+            r.original_filename,
+            COALESCE(pj.status, r.parse_status, 'queued') AS item_status,
+            pj.result AS parse_result
+     FROM analysis_items ai
+     INNER JOIN analyses a ON a.id = ai.analysis_id AND a.user_id = $2
+     LEFT JOIN resumes r ON r.id = ai.resume_id
+     LEFT JOIN parse_jobs pj ON pj.job_id = ai.parse_job_id
+     WHERE ai.analysis_id = $1
+     ORDER BY ai.created_at ASC`,
+    [analysisId, userId],
+  )
+
+  const candidates = []
+  const failures = []
+  for (const row of result.rows) {
+    const filename = row.original_filename || row.filename || 'Unknown file'
+    const itemStatus = String(row.item_status || '').toLowerCase()
+    if (['failed', 'stalled'].includes(itemStatus)) {
+      failures.push({
+        filename,
+        reason: 'HireFlow could not analyse this resume.',
+      })
+    }
+
+    const extractedCandidates = extractResultCandidates(row.parse_result)
+    extractedCandidates.forEach((candidate, index) => {
+      const normalized = normalizeMcpCandidateResult(candidate, {
+        resumeId: String(row.resume_id || ''),
+        filename,
+        index,
+      })
+      if (normalized) candidates.push(normalized)
+    })
+  }
+
+  candidates.sort((left, right) => {
+    if (left.score === null && right.score === null) return left.name.localeCompare(right.name)
+    if (left.score === null) return 1
+    if (right.score === null) return -1
+    return right.score - left.score || left.name.localeCompare(right.name)
+  })
+
+  return {
+    analysisId: status.id,
+    name: status.name,
+    status: status.status,
+    job: status.job,
+    counts: status.counts,
+    candidates,
+    failures,
+    createdAt: status.createdAt,
+    completedAt: status.completedAt,
   }
 }
 
