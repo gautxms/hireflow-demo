@@ -6,7 +6,32 @@ import {
   HIREFLOW_ANALYSIS_RESULTS_WIDGET_MIME_TYPE,
   HIREFLOW_ANALYSIS_RESULTS_WIDGET_URI,
   readHireFlowAnalysisResultsWidgetResource,
+  resolveHireFlowAnalysisProgressCounts,
 } from './hireflowAnalysisResultsWidget.js'
+
+test('analysis results widget normalizes creation and polling progress into one view model', () => {
+  assert.deepEqual(resolveHireFlowAnalysisProgressCounts({
+    queued: 2,
+    failed: 1,
+    files: [{ status: 'queued' }, { status: 'queued' }, { status: 'failed' }],
+  }), {
+    total: 3,
+    complete: 0,
+    failed: 1,
+    processing: 0,
+    queued: 2,
+  })
+
+  assert.deepEqual(resolveHireFlowAnalysisProgressCounts({
+    counts: { total: 3, complete: 1, failed: 0, processing: 1, queued: 1 },
+  }), {
+    total: 3,
+    complete: 1,
+    failed: 0,
+    processing: 1,
+    queued: 1,
+  })
+})
 
 test('analysis results widget exposes a versioned MCP Apps resource', () => {
   assert.equal(HIREFLOW_ANALYSIS_RESULTS_WIDGET_URI, 'ui://hireflow/analysis-results-v2.html')
@@ -42,6 +67,9 @@ test('analysis results widget uses the MCP Apps bridge and safe DOM rendering', 
   assert.match(HIREFLOW_ANALYSIS_RESULTS_WIDGET_HTML, /dd-score/)
   assert.match(HIREFLOW_ANALYSIS_RESULTS_WIDGET_HTML, /Matched requirements/)
   assert.match(HIREFLOW_ANALYSIS_RESULTS_WIDGET_HTML, /Recommended action/)
+  assert.match(HIREFLOW_ANALYSIS_RESULTS_WIDGET_HTML, /resolveProgressCounts/)
+  assert.match(HIREFLOW_ANALYSIS_RESULTS_WIDGET_HTML, /fileQueued/)
+  assert.match(HIREFLOW_ANALYSIS_RESULTS_WIDGET_HTML, /fileFailed/)
   assert.doesNotMatch(HIREFLOW_ANALYSIS_RESULTS_WIDGET_HTML, /\.innerHTML\s*=/)
   assert.doesNotMatch(HIREFLOW_ANALYSIS_RESULTS_WIDGET_HTML, /<script[^>]+src=/)
 

@@ -1,6 +1,28 @@
 export const HIREFLOW_ANALYSIS_RESULTS_WIDGET_URI = 'ui://hireflow/analysis-results-v2.html'
 export const HIREFLOW_ANALYSIS_RESULTS_WIDGET_MIME_TYPE = 'text/html;profile=mcp-app'
 
+export function resolveHireFlowAnalysisProgressCounts(data = {}) {
+  const files = Array.isArray(data?.files) ? data.files : []
+  const fileQueued = files.filter((file) => file?.status === 'queued').length
+  const fileFailed = files.filter((file) => file?.status === 'failed').length
+  const source = data?.counts && typeof data.counts === 'object' ? data.counts : data
+  const count = (value, fallback = 0) => {
+    const numeric = Number(value ?? fallback)
+    return Number.isFinite(numeric) && numeric >= 0 ? numeric : fallback
+  }
+  const queued = count(source?.queued, fileQueued)
+  const failed = count(source?.failed, fileFailed)
+  const complete = count(source?.complete)
+  const processing = count(source?.processing)
+  return {
+    total: count(source?.total, files.length || complete + processing + queued + failed),
+    complete,
+    failed,
+    processing,
+    queued,
+  }
+}
+
 export const HIREFLOW_ANALYSIS_RESULTS_WIDGET_HTML = String.raw`<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -153,6 +175,7 @@ export const HIREFLOW_ANALYSIS_RESULTS_WIDGET_HTML = String.raw`<!DOCTYPE html>
       return score >= 8 ? 'Strong match' : score >= 6 ? 'Possible match' : 'Low match';
     };
     const saveUiState = () => window.openai?.setWidgetState?.({ modelContent: 'Viewing HireFlow analysis results.', privateContent: { expandedCandidateId } });
+    const resolveProgressCounts = ${resolveHireFlowAnalysisProgressCounts.toString()};
     const openHireFlow = async (url) => {
       if (!url) return;
       if (window.openai?.openExternal) return window.openai.openExternal({ href: url, redirectUrl: false });
@@ -328,7 +351,7 @@ export const HIREFLOW_ANALYSIS_RESULTS_WIDGET_HTML = String.raw`<!DOCTYPE html>
     };
 
     const renderStatus = (data) => {
-      const counts = data?.counts || {};
+      const counts = resolveProgressCounts(data);
       const total = Number(counts.total || 0);
       const done = Number(counts.complete || 0) + Number(counts.failed || 0);
       const percent = total > 0 ? Math.min(100, Math.round((done / total) * 100)) : 0;
@@ -376,7 +399,7 @@ export const HIREFLOW_ANALYSIS_RESULTS_WIDGET_HTML = String.raw`<!DOCTYPE html>
       }
       header.append(actions);
       app.append(header);
-      const counts = data.counts || {};
+      const counts = resolveProgressCounts(data);
       const metrics = [[counts.total || 0,'Resumes'],[counts.complete || 0,'Analysed'],[Array.isArray(data.candidates) ? data.candidates.length : 0,'Candidates'],[counts.failed || 0,'Failed']];
       const metricsNode = create('section', 'analysis-metrics');
       metrics.forEach(([value,label]) => { const metric = create('div','analysis-metric'); metric.append(create('span','analysis-metric-value',value)); metric.append(create('span','analysis-metric-label',label)); metricsNode.append(metric); });
