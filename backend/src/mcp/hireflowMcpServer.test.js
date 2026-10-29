@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import {
   downloadOpenAIFile,
   downloadOpenAIResumeFile,
+  HIRE_FLOW_MCP_SERVER_INSTRUCTIONS,
   HIRE_FLOW_MCP_TOOLS,
 } from './hireflowMcpServer.js'
 
@@ -69,6 +70,14 @@ test('MCP tool catalog separates read-only discovery from native-approved creati
   assert.equal(createAnalysis.inputSchema.properties.files.minItems, 1)
   assert.equal(createAnalysis.inputSchema.properties.files.maxItems, 20)
   assert.equal(createAnalysis.annotations.idempotentHint, false)
+  assert.equal(createAnalysis._meta.ui.resourceUri, 'ui://hireflow/analysis-results-v2.html')
+  assert.deepEqual(createAnalysis._meta.ui.visibility, ['model', 'app'])
+  assert.equal(createAnalysis._meta['openai/outputTemplate'], 'ui://hireflow/analysis-results-v2.html')
+  assert.equal(createAnalysis._meta['openai/toolInvocation/invoking'], 'Starting HireFlow analysis…')
+  assert.equal(createAnalysis._meta['openai/toolInvocation/invoked'], 'HireFlow analysis started')
+  assert.match(createAnalysis.description, /tracks progress and displays the final authoritative results automatically/)
+  assert.match(HIRE_FLOW_MCP_SERVER_INSTRUCTIONS, /Do not call get_analysis_status, get_analysis_results, or render_analysis_results after successful creation/)
+  assert.match(HIRE_FLOW_MCP_SERVER_INSTRUCTIONS, /do not add candidate summaries, tables, scores, rankings, or recommendations outside the component/)
 })
 
 test('ChatGPT file downloads enforce host, redirects, and byte limits', async () => {

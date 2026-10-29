@@ -216,6 +216,8 @@ const AnalysisResultsOutputSchema = z.object({
 const JOB_TOOL_SCOPES = [MCP_SCOPES.PROFILE, MCP_SCOPES.JOBS_WRITE]
 const ANALYSIS_TOOL_SCOPES = [MCP_SCOPES.PROFILE, MCP_SCOPES.ANALYSES_WRITE]
 
+export const HIRE_FLOW_MCP_SERVER_INSTRUCTIONS = 'Use read-only tools without requesting extra confirmation. To create a job, call preview_job_description first and show every extracted field and warning, then offer create_job_from_preview; ChatGPT’s action approval is the confirmation. For analyses, use list_jobs when the job is ambiguous and get_resume_quota when allowance matters, then call create_resume_analysis directly from the user’s creation request; do not add a duplicate conversational confirmation. A successful create_resume_analysis response renders an attached HireFlow component that tracks processing and replaces its progress state with the final results automatically. Do not call get_analysis_status, get_analysis_results, or render_analysis_results after successful creation unless the user explicitly requests a manual refresh or the component is unavailable. After creating an analysis, keep the assistant response to one short sentence and do not add candidate summaries, tables, scores, rankings, or recommendations outside the component. Use get_analysis_results only when a client cannot render components or when structured results are explicitly needed without UI. All resume scores, rankings, recommendations, strengths, concerns, and evidence must come exclusively from HireFlow tool results. Never inspect attached resumes to produce a preliminary, fallback, or independent analysis. If HireFlow analysis creation or result retrieval is unavailable or fails, report that failure and stop. Never invent missing job details. Each call is scoped to the connected HireFlow profile.'
+
 function jsonSchema(schema) {
   return z.toJSONSchema(schema)
 }
@@ -317,12 +319,18 @@ export const HIRE_FLOW_MCP_TOOLS = [
   {
     name: 'create_resume_analysis',
     title: 'Create a resume analysis',
-    description: 'Upload 1-20 PDF, DOC, DOCX, or TXT resumes and start a HireFlow analysis. This consumes one resume-analysis unit per accepted file and starts processing. ChatGPT’s action approval is the confirmation; do not ask for an additional confirmation. Use list_jobs first when the requested job is ambiguous.',
+    description: 'Upload 1-20 PDF, DOC, DOCX, or TXT resumes and start a HireFlow analysis. This consumes one resume-analysis unit per accepted file and starts processing. The attached HireFlow component tracks progress and displays the final authoritative results automatically, so do not launch separate status or results turns after creation. ChatGPT’s action approval is the confirmation; do not ask for an additional confirmation. Use list_jobs first when the requested job is ambiguous.',
     inputSchema: jsonSchema(CreateAnalysisInputSchema),
     outputSchema: jsonSchema(CreateAnalysisOutputSchema),
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
     securitySchemes: oauthSchemes(ANALYSIS_TOOL_SCOPES),
-    _meta: toolMeta(ANALYSIS_TOOL_SCOPES, { 'openai/fileParams': ['files'] }),
+    _meta: toolMeta(ANALYSIS_TOOL_SCOPES, {
+      'openai/fileParams': ['files'],
+      ui: { resourceUri: HIREFLOW_ANALYSIS_RESULTS_WIDGET_URI, visibility: ['model', 'app'] },
+      'openai/outputTemplate': HIREFLOW_ANALYSIS_RESULTS_WIDGET_URI,
+      'openai/toolInvocation/invoking': 'Starting HireFlow analysis…',
+      'openai/toolInvocation/invoked': 'HireFlow analysis started',
+    }),
   },
 ]
 
@@ -488,7 +496,7 @@ export function createHireFlowMcpServer({
     { name: 'hireflow', version: '1.1.0' },
     {
       capabilities: { tools: {}, resources: {} },
-      instructions: 'Use read-only tools without requesting extra confirmation. To create a job, call preview_job_description first and show every extracted field and warning, then offer create_job_from_preview; ChatGPT’s action approval is the confirmation. For analyses, use list_jobs when the job is ambiguous and get_resume_quota when allowance matters, then call create_resume_analysis directly from the user’s creation request; do not add a duplicate conversational confirmation. After processing completes, call render_analysis_results so the user can view HireFlow’s scores and expand detailed analysis in ChatGPT. Use get_analysis_results only when a client cannot render components or when structured results are needed without UI. Do not repeat the full component content in the assistant response. All resume scores, rankings, recommendations, strengths, concerns, and evidence must come exclusively from HireFlow tool results. Never inspect attached resumes to produce a preliminary, fallback, or independent analysis. If HireFlow analysis creation or result retrieval is unavailable or fails, report that failure and stop. Never invent missing job details. Each call is scoped to the connected HireFlow profile.',
+      instructions: HIRE_FLOW_MCP_SERVER_INSTRUCTIONS,
     },
   )
 
@@ -718,7 +726,7 @@ export function createHireFlowMcpServer({
           return jsonResult(
             output,
             output.queued > 0
-              ? `Created HireFlow analysis “${output.name}” and queued ${output.queued} resume${output.queued === 1 ? '' : 's'} for processing.`
+              ? `Created HireFlow analysis “${output.name}” and queued ${output.queued} resume${output.queued === 1 ? '' : 's'} for processing. The attached HireFlow component is tracking progress and will display the authoritative results automatically; do not call another status or results tool and do not summarize candidates outside the component.`
               : `Created HireFlow analysis “${output.name}”, but none of the attached resumes passed validation or scanning.`,
           )
         },
