@@ -1,10 +1,123 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
+  getMcpAnalysisResults,
   getMcpAnalysisStatus,
   getMcpResumeQuota,
   listMcpJobs,
 } from './mcpHireFlowReadService.js'
+
+test('getMcpAnalysisResults returns owner-scoped authoritative HireFlow candidate results', async () => {
+  const db = {
+    async query(sql, params) {
+      const text = String(sql)
+      if (text.includes('FROM upload_chunks')) return { rows: [] }
+      if (text.includes('FROM analysis_items ai') && text.includes('pj.result AS parse_result')) {
+        assert.match(text, /a\.user_id = \$2/)
+        assert.deepEqual(params, ['analysis-1', 7])
+        return {
+          rows: [
+            {
+              id: 'item-1',
+              resume_id: 'resume-1',
+              filename: 'stored.pdf',
+              original_filename: 'Alice Resume.pdf',
+              item_status: 'complete',
+              parse_result: {
+                candidates: [{
+                  id: 'candidate-1',
+                  name: 'Alice Candidate',
+                  email: 'alice@example.com',
+                  location: 'Mumbai',
+                  years_experience: 6,
+                  score: 82,
+                  verdict: 'strong_match',
+                  summaryFull: 'Strong customer-success experience with quantified retention outcomes.',
+                  strengths: ['SaaS renewals', 'Executive stakeholder management'],
+                  considerations: ['Confirm enterprise portfolio size'],
+                  skills: ['Gainsight', 'Salesforce'],
+                  matchScore: {
+                    score: 82,
+                    score_out_of_ten: 8.2,
+                    reason: 'Strong evidence against the core requirements.',
+                    breakdown: { skills_match: 'Strong', experience_match: 'Meets requirement' },
+                  },
+                  fit_assessment: {
+                    matched_requirements: ['SaaS customer success'],
+                    missing_requirements: ['No explicit APAC portfolio evidence'],
+                    risks_or_gaps: ['Enterprise book size is unclear'],
+                  },
+                }],
+              },
+            },
+            {
+              id: 'item-2',
+              resume_id: 'resume-2',
+              filename: 'broken.doc',
+              original_filename: null,
+              item_status: 'failed',
+              parse_result: null,
+            },
+          ],
+        }
+      }
+      assert.match(text, /a\.id = \$1 AND a\.user_id = \$2/)
+      return {
+        rows: [{
+          id: 'analysis-1',
+          name: 'October batch',
+          status: 'processing',
+          job_description_id: 'job-1',
+          job_description_title: 'Customer Success Manager',
+          total_count: 2,
+          complete_count: 1,
+          failed_count: 1,
+          processing_count: 0,
+          queued_count: 0,
+          created_at: '2026-10-28T00:00:00.000Z',
+          completed_at: '2026-10-28T00:01:00.000Z',
+        }],
+      }
+    },
+  }
+
+  const result = await getMcpAnalysisResults({ db, userId: 7, analysisId: 'analysis-1' })
+  assert.equal(result.analysisId, 'analysis-1')
+  assert.equal(result.status, 'failed')
+  assert.deepEqual(result.job, { id: 'job-1', title: 'Customer Success Manager' })
+  assert.equal(result.candidates.length, 1)
+  assert.deepEqual(result.candidates[0], {
+    id: 'candidate-1',
+    resumeId: 'resume-1',
+    filename: 'Alice Resume.pdf',
+    name: 'Alice Candidate',
+    email: 'alice@example.com',
+    phone: null,
+    title: null,
+    location: 'Mumbai',
+    yearsExperience: 6,
+    seniorityLevel: null,
+    score: 82,
+    scoreOutOfTen: 8.2,
+    verdict: 'strong_match',
+    summary: 'Strong customer-success experience with quantified retention outcomes.',
+    reason: 'Strong evidence against the core requirements.',
+    recommendation: 'Strong evidence against the core requirements.',
+    strengths: ['SaaS renewals', 'Executive stakeholder management'],
+    considerations: ['Confirm enterprise portfolio size'],
+    matchedRequirements: ['SaaS customer success'],
+    missingRequirements: ['No explicit APAC portfolio evidence'],
+    risksOrGaps: ['Enterprise book size is unclear'],
+    skills: ['Gainsight', 'Salesforce'],
+    experienceHighlights: [],
+    breakdown: [
+      { key: 'skills_match', label: 'Skills Match', value: 'Strong' },
+      { key: 'experience_match', label: 'Experience Match', value: 'Meets requirement' },
+    ],
+    analysisMode: null,
+  })
+  assert.deepEqual(result.failures, [{ filename: 'broken.doc', reason: 'HireFlow could not analyse this resume.' }])
+})
 
 test('listMcpJobs returns owner-scoped searchable job choices', async () => {
   const db = {

@@ -22,6 +22,7 @@ import {
   verifyMcpAccessToken,
 } from '../services/mcpOAuthService.js'
 import {
+  getMcpAnalysisResults,
   getMcpAnalysisStatus,
   getMcpResumeQuota,
   listMcpJobs,
@@ -162,6 +163,50 @@ const AnalysisStatusOutputSchema = z.object({
   completedAt: z.string().nullable(),
   url: z.url(),
 }).strict()
+const CandidateBreakdownOutputSchema = z.object({
+  key: z.string(),
+  label: z.string(),
+  value: z.string(),
+}).strict()
+const AnalysisCandidateOutputSchema = z.object({
+  id: z.string(),
+  resumeId: z.string(),
+  filename: z.string(),
+  name: z.string(),
+  email: z.string().nullable(),
+  phone: z.string().nullable(),
+  title: z.string().nullable(),
+  location: z.string().nullable(),
+  yearsExperience: z.number().nullable(),
+  seniorityLevel: z.string().nullable(),
+  score: z.number().min(0).max(100).nullable(),
+  scoreOutOfTen: z.number().min(0).max(10).nullable(),
+  verdict: z.string().nullable(),
+  summary: z.string().nullable(),
+  reason: z.string().nullable(),
+  recommendation: z.string().nullable(),
+  strengths: z.array(z.string()),
+  considerations: z.array(z.string()),
+  matchedRequirements: z.array(z.string()),
+  missingRequirements: z.array(z.string()),
+  risksOrGaps: z.array(z.string()),
+  skills: z.array(z.string()),
+  experienceHighlights: z.array(z.string()),
+  breakdown: z.array(CandidateBreakdownOutputSchema),
+  analysisMode: z.string().nullable(),
+}).strict()
+const AnalysisResultsOutputSchema = z.object({
+  analysisId: z.string(),
+  name: z.string(),
+  status: z.string(),
+  job: z.object({ id: z.string(), title: z.string() }).strict().nullable(),
+  counts: AnalysisStatusOutputSchema.shape.counts,
+  candidates: z.array(AnalysisCandidateOutputSchema),
+  failures: z.array(z.object({ filename: z.string(), reason: z.string() }).strict()),
+  createdAt: z.string(),
+  completedAt: z.string().nullable(),
+  url: z.url(),
+}).strict()
 
 const JOB_TOOL_SCOPES = [MCP_SCOPES.PROFILE, MCP_SCOPES.JOBS_WRITE]
 const ANALYSIS_TOOL_SCOPES = [MCP_SCOPES.PROFILE, MCP_SCOPES.ANALYSES_WRITE]
@@ -185,7 +230,7 @@ export const HIRE_FLOW_MCP_TOOLS = [
     description: 'Return the HireFlow profile represented by the connected account.',
     inputSchema: jsonSchema(z.object({}).strict()),
     outputSchema: jsonSchema(ProfileOutputSchema),
-    annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     securitySchemes: oauthSchemes([MCP_SCOPES.PROFILE]),
     _meta: toolMeta([MCP_SCOPES.PROFILE], { 'openai/profile': true }),
   },
@@ -195,7 +240,7 @@ export const HIRE_FLOW_MCP_TOOLS = [
     description: 'List or search the connected HireFlow account’s active and draft jobs. Use this to resolve a job before creating an analysis. This does not modify HireFlow.',
     inputSchema: jsonSchema(ListJobsInputSchema),
     outputSchema: jsonSchema(JobsOutputSchema),
-    annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     securitySchemes: oauthSchemes(JOB_TOOL_SCOPES),
     _meta: toolMeta(JOB_TOOL_SCOPES),
   },
@@ -205,7 +250,7 @@ export const HIRE_FLOW_MCP_TOOLS = [
     description: 'Return the connected HireFlow account’s current resume-analysis allowance, usage, reservations, and available units. This does not modify HireFlow.',
     inputSchema: jsonSchema(z.object({}).strict()),
     outputSchema: jsonSchema(ResumeQuotaOutputSchema),
-    annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     securitySchemes: oauthSchemes(ANALYSIS_TOOL_SCOPES),
     _meta: toolMeta(ANALYSIS_TOOL_SCOPES),
   },
@@ -215,7 +260,17 @@ export const HIRE_FLOW_MCP_TOOLS = [
     description: 'Return progress counts and status for one analysis owned by the connected HireFlow account. This does not modify HireFlow.',
     inputSchema: jsonSchema(AnalysisStatusInputSchema),
     outputSchema: jsonSchema(AnalysisStatusOutputSchema),
-    annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    securitySchemes: oauthSchemes(ANALYSIS_TOOL_SCOPES),
+    _meta: toolMeta(ANALYSIS_TOOL_SCOPES),
+  },
+  {
+    name: 'get_analysis_results',
+    title: 'Get HireFlow analysis results',
+    description: 'Return HireFlow-generated candidate scores and detailed analysis for one analysis owned by the connected account. Use this after get_analysis_status reports completion. Treat these as the authoritative results: present them without independently analysing, rescoring, or ranking the resumes. This does not modify HireFlow.',
+    inputSchema: jsonSchema(AnalysisStatusInputSchema),
+    outputSchema: jsonSchema(AnalysisResultsOutputSchema),
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     securitySchemes: oauthSchemes(ANALYSIS_TOOL_SCOPES),
     _meta: toolMeta(ANALYSIS_TOOL_SCOPES),
   },
@@ -225,7 +280,7 @@ export const HIRE_FLOW_MCP_TOOLS = [
     description: 'Read one PDF or DOCX job description, extract editable job fields, and return warnings plus a short-lived preview token. This does not store the file or create a job. Show the extracted fields and warnings before offering to create the job.',
     inputSchema: jsonSchema(PreviewInputSchema),
     outputSchema: jsonSchema(PreviewOutputSchema),
-    annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     securitySchemes: oauthSchemes(JOB_TOOL_SCOPES),
     _meta: toolMeta(JOB_TOOL_SCOPES, { 'openai/fileParams': ['file'] }),
   },
@@ -235,7 +290,7 @@ export const HIRE_FLOW_MCP_TOOLS = [
     description: 'Create a HireFlow job from a prior preview using the same attached source file and the final displayed fields. This stores the file and creates a job. ChatGPT’s action approval is the confirmation; do not ask for an additional confirmation. Reusing a completed preview is idempotent.',
     inputSchema: jsonSchema(CreateInputSchema),
     outputSchema: jsonSchema(CreateOutputSchema),
-    annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     securitySchemes: oauthSchemes(JOB_TOOL_SCOPES),
     _meta: toolMeta(JOB_TOOL_SCOPES, { 'openai/fileParams': ['file'] }),
   },
@@ -245,7 +300,7 @@ export const HIRE_FLOW_MCP_TOOLS = [
     description: 'Upload 1-20 PDF, DOC, DOCX, or TXT resumes and start a HireFlow analysis. This consumes one resume-analysis unit per accepted file and starts processing. ChatGPT’s action approval is the confirmation; do not ask for an additional confirmation. Use list_jobs first when the requested job is ambiguous.',
     inputSchema: jsonSchema(CreateAnalysisInputSchema),
     outputSchema: jsonSchema(CreateAnalysisOutputSchema),
-    annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
     securitySchemes: oauthSchemes(ANALYSIS_TOOL_SCOPES),
     _meta: toolMeta(ANALYSIS_TOOL_SCOPES, { 'openai/fileParams': ['files'] }),
   },
@@ -413,7 +468,7 @@ export function createHireFlowMcpServer({
     { name: 'hireflow', version: '1.0.0' },
     {
       capabilities: { tools: {} },
-      instructions: 'Use read-only tools without requesting extra confirmation. To create a job, call preview_job_description first and show every extracted field and warning, then offer create_job_from_preview; ChatGPT’s action approval is the confirmation. For analyses, use list_jobs when the job is ambiguous and get_resume_quota when allowance matters, then call create_resume_analysis directly from the user’s creation request; do not add a duplicate conversational confirmation. Never invent missing job details. Each call is scoped to the connected HireFlow profile.',
+      instructions: 'Use read-only tools without requesting extra confirmation. To create a job, call preview_job_description first and show every extracted field and warning, then offer create_job_from_preview; ChatGPT’s action approval is the confirmation. For analyses, use list_jobs when the job is ambiguous and get_resume_quota when allowance matters, then call create_resume_analysis directly from the user’s creation request; do not add a duplicate conversational confirmation. After processing completes, call get_analysis_results and present HireFlow’s scores and analysis. All resume scores, rankings, recommendations, strengths, concerns, and evidence must come exclusively from HireFlow tool results. Never inspect attached resumes to produce a preliminary, fallback, or independent analysis. If HireFlow analysis creation or result retrieval is unavailable or fails, report that failure and stop. Never invent missing job details. Each call is scoped to the connected HireFlow profile.',
     },
   )
 
@@ -494,6 +549,33 @@ export function createHireFlowMcpServer({
             url: `${getMcpOAuthConfig(env).issuer}/analyses/${encodeURIComponent(status.id)}`,
           }
           return jsonResult(output)
+        },
+      })
+    }
+
+    if (name === 'get_analysis_results') {
+      const parsed = AnalysisStatusInputSchema.safeParse(args)
+      if (!parsed.success) return validationError(parsed)
+      return authorizeAndRun({
+        authorizationHeader,
+        requiredScopes: ANALYSIS_TOOL_SCOPES,
+        db,
+        env,
+        action: async (auth) => {
+          const results = await getMcpAnalysisResults({
+            db,
+            userId: auth.userId,
+            analysisId: parsed.data.analysisId,
+          })
+          if (!results) return { isError: true, content: [{ type: 'text', text: 'ANALYSIS_NOT_FOUND: This analysis was not found for the connected HireFlow account.' }] }
+          const output = {
+            ...results,
+            url: `${getMcpOAuthConfig(env).issuer}/analyses/${encodeURIComponent(results.analysisId)}`,
+          }
+          return jsonResult(
+            output,
+            `HireFlow analysis “${output.name}” is ${output.status} with ${output.candidates.length} candidate result${output.candidates.length === 1 ? '' : 's'}. Present only these HireFlow-generated results; do not add independent resume analysis.`,
+          )
         },
       })
     }
