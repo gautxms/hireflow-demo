@@ -72,6 +72,7 @@ jobs:
           node --test
           backend/src/db/migrations/057-add-mcp-oauth.test.js
           backend/src/services/mcpOAuthService.test.js
+          backend/src/services/mcpHireFlowReadService.test.js
           backend/src/services/resumeAnalysisCreationService.test.js
           backend/src/mcp/hireflowMcpServer.test.js
           src/utils/oauthReturnTo.test.js

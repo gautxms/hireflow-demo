@@ -6,9 +6,12 @@ import {
   HIRE_FLOW_MCP_TOOLS,
 } from './hireflowMcpServer.js'
 
-test('MCP tool catalog exposes profile, native file input, and confirmed creation contracts', () => {
+test('MCP tool catalog separates read-only discovery from native-approved creation', () => {
   assert.deepEqual(HIRE_FLOW_MCP_TOOLS.map((tool) => tool.name), [
     'get_current_profile',
+    'list_jobs',
+    'get_resume_quota',
+    'get_analysis_status',
     'preview_job_description',
     'create_job_from_preview',
     'create_resume_analysis',
@@ -19,26 +22,36 @@ test('MCP tool catalog exposes profile, native file input, and confirmed creatio
   assert.equal(profile._meta['openai/profile'], true)
   assert.deepEqual(profile.securitySchemes, [{ type: 'oauth2', scopes: ['mcp:profile'] }])
 
-  const preview = HIRE_FLOW_MCP_TOOLS[1]
+  const listJobs = HIRE_FLOW_MCP_TOOLS.find((tool) => tool.name === 'list_jobs')
+  const quota = HIRE_FLOW_MCP_TOOLS.find((tool) => tool.name === 'get_resume_quota')
+  const status = HIRE_FLOW_MCP_TOOLS.find((tool) => tool.name === 'get_analysis_status')
+  assert.equal(listJobs.annotations.readOnlyHint, true)
+  assert.equal(quota.annotations.readOnlyHint, true)
+  assert.equal(status.annotations.readOnlyHint, true)
+
+  const preview = HIRE_FLOW_MCP_TOOLS.find((tool) => tool.name === 'preview_job_description')
   assert.deepEqual(preview._meta['openai/fileParams'], ['file'])
   const fileDefinition = preview.inputSchema.properties.file
   assert.deepEqual(fileDefinition.required, ['download_url', 'file_id'])
   assert.ok(fileDefinition.properties.mime_type)
   assert.ok(fileDefinition.properties.file_name)
-  assert.equal(preview.annotations.readOnlyHint, false)
+  assert.equal(preview.annotations.readOnlyHint, true)
   assert.deepEqual(preview.securitySchemes, [{ type: 'oauth2', scopes: ['mcp:profile', 'jobs:write'] }])
 
-  const create = HIRE_FLOW_MCP_TOOLS[2]
-  assert.deepEqual(create.inputSchema.properties.confirmed.const, true)
-  assert.ok(create.inputSchema.required.includes('confirmed'))
+  const create = HIRE_FLOW_MCP_TOOLS.find((tool) => tool.name === 'create_job_from_preview')
+  assert.equal(create.inputSchema.properties.confirmed, undefined)
+  assert.ok(!create.inputSchema.required.includes('confirmed'))
+  assert.deepEqual(create._meta['openai/fileParams'], ['file'])
+  assert.equal(create.annotations.readOnlyHint, false)
 
-  const createAnalysis = HIRE_FLOW_MCP_TOOLS[3]
+  const createAnalysis = HIRE_FLOW_MCP_TOOLS.find((tool) => tool.name === 'create_resume_analysis')
   assert.deepEqual(createAnalysis._meta['openai/fileParams'], ['files'])
   assert.deepEqual(createAnalysis.securitySchemes, [{
     type: 'oauth2',
     scopes: ['mcp:profile', 'analyses:write'],
   }])
-  assert.equal(createAnalysis.inputSchema.properties.confirmed.const, true)
+  assert.equal(createAnalysis.inputSchema.properties.confirmed, undefined)
+  assert.ok(!createAnalysis.inputSchema.required.includes('confirmed'))
   assert.equal(createAnalysis.inputSchema.properties.files.minItems, 1)
   assert.equal(createAnalysis.inputSchema.properties.files.maxItems, 20)
 })

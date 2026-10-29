@@ -3,8 +3,8 @@ import { Server } from '@modelcontextprotocol/server'
 import { z } from 'zod'
 import { pool } from '../db/client.js'
 import {
-  confirmJobDescriptionCreation,
-  prepareJobDescriptionCreation,
+  confirmStatelessJobDescriptionCreation,
+  prepareStatelessJobDescriptionCreation,
 } from '../services/jobDescriptionConfirmedCreationService.js'
 import { MAX_JD_PREVIEW_FILE_BYTES } from '../services/jobDescriptionPreviewService.js'
 import {
@@ -15,11 +15,17 @@ import {
 import {
   assertMcpPaidMutationAccess,
   buildMcpAuthChallenge,
+  getMcpOAuthConfig,
   McpOAuthError,
   MCP_SCOPES,
   readBearerToken,
   verifyMcpAccessToken,
 } from '../services/mcpOAuthService.js'
+import {
+  getMcpAnalysisStatus,
+  getMcpResumeQuota,
+  listMcpJobs,
+} from '../services/mcpHireFlowReadService.js'
 
 const PDF_MIME = 'application/pdf'
 const DOC_MIME = 'application/msword'
@@ -68,15 +74,19 @@ const JobFieldsSchema = z.object({
 }).strict()
 const CreateInputSchema = z.object({
   previewToken: z.string().min(1).max(20_000),
-  confirmed: z.literal(true),
+  file: OpenAIFileSchema,
   fields: JobFieldsSchema,
 }).strict()
 const CreateAnalysisInputSchema = z.object({
   name: z.string().trim().min(1).max(200),
   jobDescriptionId: z.uuid().optional().nullable(),
   files: z.array(OpenAIFileSchema).min(1).max(MAX_RESUME_ANALYSIS_FILES),
-  confirmed: z.literal(true),
 }).strict()
+const ListJobsInputSchema = z.object({
+  query: z.string().trim().max(200).optional(),
+  limit: z.number().int().min(1).max(50).optional(),
+}).strict()
+const AnalysisStatusInputSchema = z.object({ analysisId: z.uuid() }).strict()
 
 const ProfileOutputSchema = z.object({
   id: z.string().min(1).regex(/\S/),
@@ -99,6 +109,7 @@ const CreateOutputSchema = z.object({
   status: z.string(),
   created: z.boolean(),
   sourceFile: z.object({ name: z.string(), sha256: z.string() }).strict(),
+  url: z.url(),
 }).strict()
 const CreateAnalysisOutputSchema = z.object({
   analysisId: z.string(),
@@ -114,6 +125,42 @@ const CreateAnalysisOutputSchema = z.object({
     resumeId: z.string().optional(),
     parseJobId: z.string().optional(),
   }).strict()),
+  url: z.url(),
+}).strict()
+const JobsOutputSchema = z.object({
+  jobs: z.array(z.object({
+    id: z.string(),
+    title: z.string(),
+    status: z.string(),
+    department: z.string().nullable(),
+    location: z.string().nullable(),
+    updatedAt: z.string(),
+  }).strict()),
+}).strict()
+const ResumeQuotaOutputSchema = z.object({
+  limit: z.number().int().nonnegative(),
+  used: z.number().int().nonnegative(),
+  reserved: z.number().int().nonnegative(),
+  available: z.number().int().nonnegative(),
+  canCreateAnalysis: z.boolean(),
+  periodStart: z.string(),
+  periodEnd: z.string(),
+}).strict()
+const AnalysisStatusOutputSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  status: z.string(),
+  job: z.object({ id: z.string(), title: z.string() }).strict().nullable(),
+  counts: z.object({
+    total: z.number().int().nonnegative(),
+    complete: z.number().int().nonnegative(),
+    failed: z.number().int().nonnegative(),
+    processing: z.number().int().nonnegative(),
+    queued: z.number().int().nonnegative(),
+  }).strict(),
+  createdAt: z.string(),
+  completedAt: z.string().nullable(),
+  url: z.url(),
 }).strict()
 
 const JOB_TOOL_SCOPES = [MCP_SCOPES.PROFILE, MCP_SCOPES.JOBS_WRITE]
@@ -143,29 +190,59 @@ export const HIRE_FLOW_MCP_TOOLS = [
     _meta: toolMeta([MCP_SCOPES.PROFILE], { 'openai/profile': true }),
   },
   {
+    name: 'list_jobs',
+    title: 'Find HireFlow jobs',
+    description: 'List or search the connected HireFlow account’s active and draft jobs. Use this to resolve a job before creating an analysis. This does not modify HireFlow.',
+    inputSchema: jsonSchema(ListJobsInputSchema),
+    outputSchema: jsonSchema(JobsOutputSchema),
+    annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    securitySchemes: oauthSchemes(JOB_TOOL_SCOPES),
+    _meta: toolMeta(JOB_TOOL_SCOPES),
+  },
+  {
+    name: 'get_resume_quota',
+    title: 'Check resume analysis allowance',
+    description: 'Return the connected HireFlow account’s current resume-analysis allowance, usage, reservations, and available units. This does not modify HireFlow.',
+    inputSchema: jsonSchema(z.object({}).strict()),
+    outputSchema: jsonSchema(ResumeQuotaOutputSchema),
+    annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    securitySchemes: oauthSchemes(ANALYSIS_TOOL_SCOPES),
+    _meta: toolMeta(ANALYSIS_TOOL_SCOPES),
+  },
+  {
+    name: 'get_analysis_status',
+    title: 'Get resume analysis status',
+    description: 'Return progress counts and status for one analysis owned by the connected HireFlow account. This does not modify HireFlow.',
+    inputSchema: jsonSchema(AnalysisStatusInputSchema),
+    outputSchema: jsonSchema(AnalysisStatusOutputSchema),
+    annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    securitySchemes: oauthSchemes(ANALYSIS_TOOL_SCOPES),
+    _meta: toolMeta(ANALYSIS_TOOL_SCOPES),
+  },
+  {
     name: 'preview_job_description',
     title: 'Preview a job description',
-    description: 'Upload one PDF or DOCX job description, extract editable job fields, and return warnings plus a short-lived preview token. This stores a pending source file but does not create a job. Always show the extracted fields and warnings to the user before asking for confirmation.',
+    description: 'Read one PDF or DOCX job description, extract editable job fields, and return warnings plus a short-lived preview token. This does not store the file or create a job. Show the extracted fields and warnings before offering to create the job.',
     inputSchema: jsonSchema(PreviewInputSchema),
     outputSchema: jsonSchema(PreviewOutputSchema),
-    annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     securitySchemes: oauthSchemes(JOB_TOOL_SCOPES),
     _meta: toolMeta(JOB_TOOL_SCOPES, { 'openai/fileParams': ['file'] }),
   },
   {
     name: 'create_job_from_preview',
-    title: 'Create a job from a confirmed preview',
-    description: 'Create a HireFlow job from a prior preview. Call only after preview_job_description and only after the user explicitly confirms the displayed fields. Pass confirmed=true and include the final user-approved fields. Reusing a completed preview is idempotent.',
+    title: 'Create a job from a preview',
+    description: 'Create a HireFlow job from a prior preview using the same attached source file and the final displayed fields. This stores the file and creates a job. ChatGPT’s action approval is the confirmation; do not ask for an additional confirmation. Reusing a completed preview is idempotent.',
     inputSchema: jsonSchema(CreateInputSchema),
     outputSchema: jsonSchema(CreateOutputSchema),
     annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     securitySchemes: oauthSchemes(JOB_TOOL_SCOPES),
-    _meta: toolMeta(JOB_TOOL_SCOPES),
+    _meta: toolMeta(JOB_TOOL_SCOPES, { 'openai/fileParams': ['file'] }),
   },
   {
     name: 'create_resume_analysis',
     title: 'Create a resume analysis',
-    description: 'Upload 1-20 PDF, DOC, DOCX, or TXT resumes and start a HireFlow analysis. Call only after the user explicitly confirms the analysis name, the selected job (or no job), and the attached resume files. Pass confirmed=true. This immediately consumes resume-analysis quota and starts processing.',
+    description: 'Upload 1-20 PDF, DOC, DOCX, or TXT resumes and start a HireFlow analysis. This consumes one resume-analysis unit per accepted file and starts processing. ChatGPT’s action approval is the confirmation; do not ask for an additional confirmation. Use list_jobs first when the requested job is ambiguous.',
     inputSchema: jsonSchema(CreateAnalysisInputSchema),
     outputSchema: jsonSchema(CreateAnalysisOutputSchema),
     annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
@@ -336,7 +413,7 @@ export function createHireFlowMcpServer({
     { name: 'hireflow', version: '1.0.0' },
     {
       capabilities: { tools: {} },
-      instructions: 'To create a job, call preview_job_description first. Show every extracted field and warning to the user. Call create_job_from_preview only after the user explicitly confirms those fields; include confirmed=true. To create an analysis, confirm the analysis name, selected job (or no job), and attached resumes before calling create_resume_analysis with confirmed=true. Never invent missing job details. Each call is scoped to the connected HireFlow profile.',
+      instructions: 'Use read-only tools without requesting extra confirmation. To create a job, call preview_job_description first and show every extracted field and warning, then offer create_job_from_preview; ChatGPT’s action approval is the confirmation. For analyses, use list_jobs when the job is ambiguous and get_resume_quota when allowance matters, then call create_resume_analysis directly from the user’s creation request; do not add a duplicate conversational confirmation. Never invent missing job details. Each call is scoped to the connected HireFlow profile.',
     },
   )
 
@@ -364,6 +441,63 @@ export function createHireFlowMcpServer({
       })
     }
 
+    if (name === 'list_jobs') {
+      const parsed = ListJobsInputSchema.safeParse(args || {})
+      if (!parsed.success) return validationError(parsed)
+      return authorizeAndRun({
+        authorizationHeader,
+        requiredScopes: JOB_TOOL_SCOPES,
+        db,
+        env,
+        action: async (auth) => jsonResult(await listMcpJobs({
+          db,
+          userId: auth.userId,
+          query: parsed.data.query,
+          limit: parsed.data.limit,
+        })),
+      })
+    }
+
+    if (name === 'get_resume_quota') {
+      const parsed = z.object({}).strict().safeParse(args || {})
+      if (!parsed.success) return validationError(parsed)
+      return authorizeAndRun({
+        authorizationHeader,
+        requiredScopes: ANALYSIS_TOOL_SCOPES,
+        db,
+        env,
+        action: async (auth) => {
+          const quota = await getMcpResumeQuota({ db, userId: auth.userId, env })
+          if (!quota) return { isError: true, content: [{ type: 'text', text: 'HIREFLOW_PROFILE_NOT_FOUND: The connected HireFlow profile was not found.' }] }
+          return jsonResult(quota)
+        },
+      })
+    }
+
+    if (name === 'get_analysis_status') {
+      const parsed = AnalysisStatusInputSchema.safeParse(args)
+      if (!parsed.success) return validationError(parsed)
+      return authorizeAndRun({
+        authorizationHeader,
+        requiredScopes: ANALYSIS_TOOL_SCOPES,
+        db,
+        env,
+        action: async (auth) => {
+          const status = await getMcpAnalysisStatus({
+            db,
+            userId: auth.userId,
+            analysisId: parsed.data.analysisId,
+          })
+          if (!status) return { isError: true, content: [{ type: 'text', text: 'ANALYSIS_NOT_FOUND: This analysis was not found for the connected HireFlow account.' }] }
+          const output = {
+            ...status,
+            url: `${getMcpOAuthConfig(env).issuer}/analyses/${encodeURIComponent(status.id)}`,
+          }
+          return jsonResult(output)
+        },
+      })
+    }
+
     if (name === 'preview_job_description') {
       const parsed = PreviewInputSchema.safeParse(args)
       if (!parsed.success) return validationError(parsed)
@@ -375,12 +509,12 @@ export function createHireFlowMcpServer({
         action: async (auth) => {
           assertMcpPaidMutationAccess(auth)
           const downloadedFile = await downloadOpenAIFile(parsed.data.file, { env, fetchImpl })
-          const preview = await prepareJobDescriptionCreation({ db, userId: auth.userId, file: downloadedFile })
+          const preview = await prepareStatelessJobDescriptionCreation({ userId: auth.userId, file: downloadedFile })
           const output = {
             ...preview,
             previewExpiresAt: new Date(preview.previewExpiresAt).toISOString(),
           }
-          return jsonResult(output, `Extracted job description fields from ${preview.sourceFile.name}. Review the fields and warnings with the user before asking for confirmation.`)
+          return jsonResult(output, `Extracted job description fields from ${preview.sourceFile.name}. Show the fields and warnings; the native action approval will confirm creation.`)
         },
       })
     }
@@ -395,9 +529,11 @@ export function createHireFlowMcpServer({
         env,
         action: async (auth) => {
           assertMcpPaidMutationAccess(auth)
-          const confirmed = await confirmJobDescriptionCreation({
+          const downloadedFile = await downloadOpenAIFile(parsed.data.file, { env, fetchImpl })
+          const confirmed = await confirmStatelessJobDescriptionCreation({
             db,
             userId: auth.userId,
+            file: downloadedFile,
             input: parsed.data.fields,
             previewToken: parsed.data.previewToken,
           })
@@ -407,6 +543,7 @@ export function createHireFlowMcpServer({
             status: confirmed.job.status,
             created: confirmed.created,
             sourceFile: confirmed.sourceFile,
+            url: `${getMcpOAuthConfig(env).issuer}/job-descriptions`,
           }
           return jsonResult(output, confirmed.created
             ? `Created HireFlow job “${confirmed.job.title}”.`
@@ -428,7 +565,7 @@ export function createHireFlowMcpServer({
           const files = await Promise.all(parsed.data.files.map((file) => (
             downloadOpenAIResumeFile(file, { env, fetchImpl })
           )))
-          const output = await createResumeAnalysis({
+          const analysis = await createResumeAnalysis({
             db,
             userId: auth.userId,
             files,
@@ -436,6 +573,10 @@ export function createHireFlowMcpServer({
             jobDescriptionId: parsed.data.jobDescriptionId || null,
             env,
           })
+          const output = {
+            ...analysis,
+            url: `${getMcpOAuthConfig(env).issuer}/analyses/${encodeURIComponent(analysis.analysisId)}`,
+          }
           return jsonResult(
             output,
             output.queued > 0

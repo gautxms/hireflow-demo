@@ -4,7 +4,9 @@ import {
   cleanupDeletedJobDescriptionFile,
   cleanupExpiredJobDescriptionPreviews,
   confirmJobDescriptionCreation,
+  confirmStatelessJobDescriptionCreation,
   prepareJobDescriptionCreation,
+  prepareStatelessJobDescriptionCreation,
 } from './jobDescriptionConfirmedCreationService.js'
 import { verifyJobDescriptionPreviewReceipt } from './jobDescriptionPreviewReceiptService.js'
 
@@ -86,6 +88,161 @@ test('previews first, persists the source file, and returns a signed confirmatio
   })
   assert.equal(receipt.file.fileUrl, storedFile.fileUrl)
   assert.equal(receipt.expiresAt, prepared.previewExpiresAt)
+})
+
+test('stateless MCP preview signs planned file metadata without database or storage writes', async () => {
+  let stored = false
+  const prepared = await prepareStatelessJobDescriptionCreation({
+    userId: 42,
+    file,
+    signingSecret: secret,
+  }, {
+    now,
+    previewId: 'd0dd847d-4c2f-4ae1-8423-08b24a84dc23',
+    previewFile: async () => preview,
+    planFile: async () => storedFile,
+    storeFile: async () => { stored = true },
+  })
+
+  assert.equal(stored, false)
+  assert.deepEqual(prepared.fields, preview.fields)
+  assert.deepEqual(prepared.sourceFile, { name: 'role.pdf', sha256: 'b'.repeat(64) })
+  const receipt = verifyJobDescriptionPreviewReceipt({
+    token: prepared.previewToken,
+    userId: 42,
+    secret,
+    now,
+  })
+  assert.equal(receipt.file.fileUrl, storedFile.fileUrl)
+})
+
+test('stateless confirmation verifies the file, stages storage, and creates once', async () => {
+  const prepared = await prepareStatelessJobDescriptionCreation({
+    userId: 42,
+    file,
+    signingSecret: secret,
+  }, {
+    now,
+    previewId: 'd0dd847d-4c2f-4ae1-8423-08b24a84dc23',
+    previewFile: async () => preview,
+    planFile: async () => storedFile,
+  })
+  const calls = []
+  const job = { id: 'job-stateless', title: 'Backend Engineer', status: 'active' }
+  const client = {
+    async query(sql) {
+      const text = String(sql)
+      calls.push(text)
+      if (text.includes("SET status = 'processing'")) return { rows: [{ id: 'request-stateless' }] }
+      if (text.includes('INSERT INTO job_descriptions')) return { rows: [job] }
+      return { rows: [] }
+    },
+    release() {},
+  }
+  const db = {
+    async query(sql) { calls.push(String(sql)); return { rows: [{ status: 'pending' }] } },
+    async connect() { return client },
+  }
+  let stored = false
+
+  const result = await confirmStatelessJobDescriptionCreation({
+    db,
+    userId: 42,
+    file,
+    input: preview.fields,
+    previewToken: prepared.previewToken,
+    signingSecret: secret,
+  }, {
+    now,
+    planFile: async () => storedFile,
+    storeFile: async () => { stored = true },
+  })
+
+  assert.equal(stored, true)
+  assert.equal(result.created, true)
+  assert.equal(result.job, job)
+  assert.match(calls[0], /INSERT INTO job_description_creation_requests/)
+  assert.match(calls[0], /ON CONFLICT \(user_id, preview_id\) DO UPDATE/)
+})
+
+test('stateless confirmation retry does not rewrite an already completed source file', async () => {
+  const prepared = await prepareStatelessJobDescriptionCreation({
+    userId: 42,
+    file,
+    signingSecret: secret,
+  }, {
+    now,
+    previewId: 'd0dd847d-4c2f-4ae1-8423-08b24a84dc23',
+    previewFile: async () => preview,
+    planFile: async () => storedFile,
+  })
+  const existingJob = { id: 'existing-job', title: 'Backend Engineer', status: 'active' }
+  const client = {
+    async query(sql) {
+      const text = String(sql)
+      if (text.includes("SET status = 'processing'")) return { rows: [] }
+      if (text.includes('SELECT job_description.*')) return { rows: [existingJob] }
+      return { rows: [] }
+    },
+    release() {},
+  }
+  let stored = false
+
+  const result = await confirmStatelessJobDescriptionCreation({
+    db: {
+      async query() { return { rows: [{ status: 'completed' }] } },
+      async connect() { return client },
+    },
+    userId: 42,
+    file,
+    input: preview.fields,
+    previewToken: prepared.previewToken,
+    signingSecret: secret,
+  }, {
+    now,
+    planFile: async () => storedFile,
+    storeFile: async () => { stored = true },
+  })
+
+  assert.equal(stored, false)
+  assert.equal(result.created, false)
+  assert.equal(result.job, existingJob)
+})
+
+test('stateless confirmation rejects a different attachment before staging or storing', async () => {
+  const prepared = await prepareStatelessJobDescriptionCreation({
+    userId: 42,
+    file,
+    signingSecret: secret,
+  }, {
+    now,
+    previewId: 'd0dd847d-4c2f-4ae1-8423-08b24a84dc23',
+    previewFile: async () => preview,
+    planFile: async () => storedFile,
+  })
+  let queried = false
+  let stored = false
+
+  await assert.rejects(
+    confirmStatelessJobDescriptionCreation({
+      db: {
+        async query() { queried = true },
+        async connect() { throw new Error('must not connect') },
+      },
+      userId: 42,
+      file,
+      input: preview.fields,
+      previewToken: prepared.previewToken,
+      signingSecret: secret,
+    }, {
+      now,
+      planFile: async () => ({ ...storedFile, fileSha256: 'c'.repeat(64) }),
+      storeFile: async () => { stored = true },
+    }),
+    { code: 'JD_PREVIEW_FILE_MISMATCH' },
+  )
+  assert.equal(queried, false)
+  assert.equal(stored, false)
 })
 
 test('does not upload the source file if durable intent tracking fails', async () => {

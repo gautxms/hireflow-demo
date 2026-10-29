@@ -124,6 +124,107 @@ export async function prepareJobDescriptionCreation({
   }
 }
 
+export async function prepareStatelessJobDescriptionCreation({
+  userId,
+  file,
+  signingSecret,
+}, dependencies = {}) {
+  const secret = resolveSigningSecret(signingSecret)
+  const previewFile = dependencies.previewFile || previewWithDefaultService
+  const planFile = dependencies.planFile || planWithDefaultService
+  const previewId = dependencies.previewId || crypto.randomUUID()
+  const preview = await previewFile(file)
+  const plannedFile = await planFile({ userId, file, previewId })
+  const receipt = issueJobDescriptionPreviewReceipt({
+    userId,
+    preview,
+    storedFile: plannedFile,
+    secret,
+    now: dependencies.now === undefined ? Date.now() : dependencies.now,
+    previewId,
+  })
+
+  return {
+    ...preview,
+    previewToken: receipt.token,
+    previewExpiresAt: receipt.expiresAt,
+    sourceFile: {
+      name: plannedFile.fileName,
+      sha256: plannedFile.fileSha256,
+    },
+  }
+}
+
+function plannedFileMatchesReceipt(plannedFile, receiptFile) {
+  return plannedFile.fileUrl === receiptFile.fileUrl
+    && plannedFile.fileSha256 === receiptFile.fileSha256
+    && plannedFile.fileName === receiptFile.fileName
+    && plannedFile.contentType === receiptFile.contentType
+}
+
+export async function confirmStatelessJobDescriptionCreation({
+  db,
+  userId,
+  file,
+  input,
+  previewToken,
+  signingSecret,
+}, dependencies = {}) {
+  if (!db?.query || !db?.connect) throw new TypeError('A database pool is required')
+
+  const receipt = verifyJobDescriptionPreviewReceipt({
+    token: previewToken,
+    userId,
+    secret: resolveSigningSecret(signingSecret),
+    now: dependencies.now === undefined ? Date.now() : dependencies.now,
+  })
+  const planFile = dependencies.planFile || planWithDefaultService
+  const storeFile = dependencies.storeFile || storeWithDefaultService
+  const plannedFile = await planFile({ userId, file, previewId: receipt.previewId })
+
+  if (!plannedFileMatchesReceipt(plannedFile, receipt.file)) {
+    throw new JobDescriptionConfirmedCreationError(
+      'JD_PREVIEW_FILE_MISMATCH',
+      'The attached job description does not match the preview. Preview this file again.',
+      400,
+    )
+  }
+
+  const staged = await db.query(
+    `INSERT INTO job_description_creation_requests (
+       user_id,
+       preview_id,
+       file_sha256,
+       preview_sha256,
+       file_url,
+       expires_at,
+       status
+     ) VALUES ($1, $2, $3, $4, $5, $6, 'pending')
+     ON CONFLICT (user_id, preview_id) DO UPDATE
+       SET preview_id = EXCLUDED.preview_id
+     RETURNING status`,
+    [
+      userId,
+      receipt.previewId,
+      receipt.file.fileSha256,
+      receipt.previewSha256,
+      receipt.file.fileUrl,
+      receipt.expiresAt,
+    ],
+  )
+  if (staged.rows[0]?.status === 'pending') {
+    await storeFile({ userId, file, previewId: receipt.previewId })
+  }
+
+  return confirmJobDescriptionCreation({
+    db,
+    userId,
+    input,
+    previewToken,
+    signingSecret,
+  }, dependencies)
+}
+
 export async function confirmJobDescriptionCreation({
   db,
   userId,
