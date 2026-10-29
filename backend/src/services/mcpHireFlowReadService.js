@@ -1,4 +1,5 @@
 import { resolveMonthlyResumeAnalysisLimit } from '../config/resumeAnalysisQuota.js'
+import { buildAnalysisDetailPayload, loadAnalysisReadModel } from './analysisReadModelService.js'
 import {
   getResumeQuotaUsageAvailabilitySnapshot,
   isResumeQuotaReservationsEnabled,
@@ -12,42 +13,6 @@ function monthStart(referenceDate = new Date()) {
 
 function monthEnd(start) {
   return new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + 1, 1))
-}
-
-function deriveAnalysisStatus(row) {
-  const total = Number(row.total_count || 0)
-  const complete = Number(row.complete_count || 0)
-  const failed = Number(row.failed_count || 0)
-  const processing = Number(row.processing_count || 0)
-
-  if (total === 0) return row.status === 'failed' ? 'failed' : 'queued'
-  if (complete + failed === total) return failed > 0 ? 'failed' : 'complete'
-  if (processing > 0) return 'processing'
-  return 'queued'
-}
-
-function parseResultObject(value, depth = 0) {
-  if (depth > 4 || value == null) return null
-  if (typeof value === 'string') {
-    try {
-      return parseResultObject(JSON.parse(value), depth + 1)
-    } catch {
-      return null
-    }
-  }
-  return typeof value === 'object' && !Array.isArray(value) ? value : null
-}
-
-function extractResultCandidates(value) {
-  const result = parseResultObject(value)
-  if (!result) return []
-
-  for (const candidateValue of [result.candidates, result.results, result.output]) {
-    if (Array.isArray(candidateValue)) return candidateValue
-    const nested = parseResultObject(candidateValue)
-    if (Array.isArray(nested?.candidates)) return nested.candidates
-  }
-  return []
 }
 
 function optionalText(value) {
@@ -189,136 +154,53 @@ export async function listMcpJobs({ db, userId, query = '', limit = 20 }) {
   }
 }
 
-export async function getMcpAnalysisStatus({ db, userId, analysisId }) {
-  const result = await db.query(
-    `SELECT a.id,
-            a.name,
-            a.status,
-            a.created_at,
-            a.completed_at,
-            a.job_description_id,
-            jd.title AS job_description_title,
-            COUNT(ai.id)::INT AS total_count,
-            COUNT(ai.id) FILTER (
-              WHERE COALESCE(pj.status, r.parse_status, 'queued') = 'complete'
-            )::INT AS complete_count,
-            COUNT(ai.id) FILTER (
-              WHERE COALESCE(pj.status, r.parse_status, 'queued') IN ('failed', 'stalled')
-            )::INT AS failed_count,
-            COUNT(ai.id) FILTER (
-              WHERE COALESCE(pj.status, r.parse_status, 'queued') IN ('processing', 'retrying')
-            )::INT AS processing_count,
-            COUNT(ai.id) FILTER (
-              WHERE COALESCE(pj.status, r.parse_status, 'queued') IN ('queued', 'pending', 'waiting')
-            )::INT AS queued_count
-     FROM analyses a
-     LEFT JOIN job_descriptions jd ON jd.id = a.job_description_id
-     LEFT JOIN analysis_items ai ON ai.analysis_id = a.id
-     LEFT JOIN resumes r ON r.id = ai.resume_id
-     LEFT JOIN parse_jobs pj ON pj.job_id = ai.parse_job_id
-     WHERE a.id = $1 AND a.user_id = $2
-     GROUP BY a.id, jd.title
-     LIMIT 1`,
-    [analysisId, userId],
-  )
-  const row = result.rows[0]
-  if (!row) return null
-
-  const counts = {
-    total: Number(row.total_count || 0),
-    complete: Number(row.complete_count || 0),
-    failed: Number(row.failed_count || 0),
-    processing: Number(row.processing_count || 0),
-    queued: Number(row.queued_count || 0),
-  }
-  const uploadResult = await db.query(
-    `SELECT uc.status, uc.updated_at
-     FROM upload_chunks uc
-     WHERE uc.analysis_id = $1
-       AND NOT EXISTS (
-         SELECT 1
-         FROM analysis_items ai
-         LEFT JOIN resumes r ON r.id = ai.resume_id
-         WHERE ai.analysis_id = uc.analysis_id
-           AND (
-             (uc.resume_id IS NOT NULL AND ai.resume_id = uc.resume_id)
-             OR (uc.parse_job_id IS NOT NULL AND ai.parse_job_id = uc.parse_job_id)
-             OR (LOWER(TRIM(COALESCE(uc.filename, ''))) <> ''
-                 AND LOWER(TRIM(COALESCE(r.original_filename, r.filename, '')))
-                   = LOWER(TRIM(uc.filename)))
-           )
-       )`,
-    [analysisId],
-  )
-  for (const upload of uploadResult.rows) {
-    const uploadStatus = String(upload.status || '').toLowerCase()
-    const updatedAt = upload.updated_at ? new Date(upload.updated_at) : null
-    const stale = uploadStatus === 'uploading'
-      && updatedAt
-      && !Number.isNaN(updatedAt.getTime())
-      && Date.now() - updatedAt.getTime() > 30 * 60 * 1000
-    const status = ['failed', 'rejected', 'expired'].includes(uploadStatus) || stale
-      ? 'failed'
-      : 'processing'
-    counts.total += 1
-    counts[status] += 1
-  }
-
+function toMcpAnalysisStatus(detail) {
+  if (!detail) return null
   return {
-    id: String(row.id),
-    name: row.name || 'Untitled analysis',
-    status: deriveAnalysisStatus({
-      ...row,
-      total_count: counts.total,
-      complete_count: counts.complete,
-      failed_count: counts.failed,
-      processing_count: counts.processing,
-    }),
-    job: row.job_description_id
-      ? { id: String(row.job_description_id), title: row.job_description_title || 'Untitled job' }
+    id: detail.analysisId,
+    name: detail.name || 'Untitled analysis',
+    status: detail.status,
+    job: detail.jobDescriptionId
+      ? { id: detail.jobDescriptionId, title: detail.jobDescriptionTitle || 'Untitled job' }
       : null,
-    counts,
-    createdAt: new Date(row.created_at).toISOString(),
-    completedAt: row.completed_at ? new Date(row.completed_at).toISOString() : null,
+    counts: {
+      total: Number(detail.summary.total || 0),
+      complete: Number(detail.summary.complete || 0),
+      failed: Number(detail.summary.failed || 0),
+      processing: Number(detail.summary.processing || 0),
+      queued: Number(detail.summary.pending || 0),
+    },
+    createdAt: new Date(detail.createdAt).toISOString(),
+    completedAt: detail.completedAt ? new Date(detail.completedAt).toISOString() : null,
   }
 }
 
-export async function getMcpAnalysisResults({ db, userId, analysisId }) {
-  const status = await getMcpAnalysisStatus({ db, userId, analysisId })
+async function loadMcpAnalysisReadModel({ db, userId, analysisId, queue }) {
+  return loadAnalysisReadModel({
+    db,
+    userId,
+    analysisId,
+    ...(queue !== undefined ? { queue } : {}),
+  })
+}
+
+export async function getMcpAnalysisStatus({ db, userId, analysisId, queue }) {
+  const readModel = await loadMcpAnalysisReadModel({ db, userId, analysisId, queue })
+  return toMcpAnalysisStatus(buildAnalysisDetailPayload(readModel))
+}
+
+export async function getMcpAnalysisResults({ db, userId, analysisId, queue }) {
+  const readModel = await loadMcpAnalysisReadModel({ db, userId, analysisId, queue })
+  const detail = buildAnalysisDetailPayload(readModel)
+  const status = toMcpAnalysisStatus(detail)
   if (!status) return null
 
-  const result = await db.query(
-    `SELECT ai.id,
-            ai.resume_id,
-            r.filename,
-            r.original_filename,
-            COALESCE(pj.status, r.parse_status, 'queued') AS item_status,
-            pj.result AS parse_result
-     FROM analysis_items ai
-     INNER JOIN analyses a ON a.id = ai.analysis_id AND a.user_id = $2
-     LEFT JOIN resumes r ON r.id = ai.resume_id
-     LEFT JOIN parse_jobs pj ON pj.job_id = ai.parse_job_id
-     WHERE ai.analysis_id = $1
-     ORDER BY ai.created_at ASC`,
-    [analysisId, userId],
-  )
-
   const candidates = []
-  const failures = []
-  for (const row of result.rows) {
-    const filename = row.original_filename || row.filename || 'Unknown file'
-    const itemStatus = String(row.item_status || '').toLowerCase()
-    if (['failed', 'stalled'].includes(itemStatus)) {
-      failures.push({
-        filename,
-        reason: 'HireFlow could not analyse this resume.',
-      })
-    }
-
-    const extractedCandidates = extractResultCandidates(row.parse_result)
-    extractedCandidates.forEach((candidate, index) => {
+  for (const item of detail.items) {
+    const filename = item.originalFilename || item.filename || 'Unknown file'
+    item.normalizedCandidates.forEach((candidate, index) => {
       const normalized = normalizeMcpCandidateResult(candidate, {
-        resumeId: String(row.resume_id || ''),
+        resumeId: String(item.resumeId || ''),
         filename,
         index,
       })
@@ -340,7 +222,10 @@ export async function getMcpAnalysisResults({ db, userId, analysisId }) {
     job: status.job,
     counts: status.counts,
     candidates,
-    failures,
+    failures: readModel.failures.map((failure) => ({
+      filename: failure.filename || 'Unknown file',
+      reason: 'HireFlow could not analyse this resume.',
+    })),
     createdAt: status.createdAt,
     completedAt: status.completedAt,
   }

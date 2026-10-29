@@ -7,23 +7,43 @@ import {
   listMcpJobs,
 } from './mcpHireFlowReadService.js'
 
-test('getMcpAnalysisResults returns owner-scoped authoritative HireFlow candidate results', async () => {
-  const db = {
+function createAnalysisReadDb({ analysis, items = [], uploads = [] }) {
+  return {
     async query(sql, params) {
       const text = String(sql)
-      if (text.includes('FROM upload_chunks')) return { rows: [] }
-      if (text.includes('FROM analysis_items ai') && text.includes('pj.result AS parse_result')) {
-        assert.match(text, /a\.user_id = \$2/)
-        assert.deepEqual(params, ['analysis-1', 7])
-        return {
-          rows: [
-            {
-              id: 'item-1',
-              resume_id: 'resume-1',
-              filename: 'stored.pdf',
-              original_filename: 'Alice Resume.pdf',
-              item_status: 'complete',
-              parse_result: {
+      if (text.includes('FROM analyses a')) {
+        assert.match(text, /a\.id = \$1 AND a\.user_id = \$2/)
+        return { rows: analysis ? [analysis] : [] }
+      }
+      if (text.includes('FROM upload_chunks uc')) return { rows: uploads }
+      if (text.includes('FROM analysis_items ai')) return { rows: items }
+      if (text.includes('UPDATE analyses')) return { rows: [] }
+      throw new Error(`Unexpected query: ${text} | ${JSON.stringify(params)}`)
+    },
+  }
+}
+
+test('getMcpAnalysisResults returns owner-scoped authoritative HireFlow candidate results', async () => {
+  const db = createAnalysisReadDb({
+    analysis: {
+      id: 'analysis-1',
+      user_id: 7,
+      name: 'October batch',
+      status: 'failed',
+      job_description_id: 'job-1',
+      job_description_title: 'Customer Success Manager',
+      created_at: '2026-10-28T00:00:00.000Z',
+      completed_at: '2026-10-28T00:01:00.000Z',
+    },
+    items: [
+      {
+        id: 'item-1',
+        resume_id: 'resume-1',
+        filename: 'stored.pdf',
+        original_filename: 'Alice Resume.pdf',
+        parse_job_status: 'complete',
+        progress: 100,
+        parse_result: {
                 candidates: [{
                   id: 'candidate-1',
                   name: 'Alice Candidate',
@@ -48,40 +68,22 @@ test('getMcpAnalysisResults returns owner-scoped authoritative HireFlow candidat
                     risks_or_gaps: ['Enterprise book size is unclear'],
                   },
                 }],
-              },
-            },
-            {
-              id: 'item-2',
-              resume_id: 'resume-2',
-              filename: 'broken.doc',
-              original_filename: null,
-              item_status: 'failed',
-              parse_result: null,
-            },
-          ],
-        }
-      }
-      assert.match(text, /a\.id = \$1 AND a\.user_id = \$2/)
-      return {
-        rows: [{
-          id: 'analysis-1',
-          name: 'October batch',
-          status: 'processing',
-          job_description_id: 'job-1',
-          job_description_title: 'Customer Success Manager',
-          total_count: 2,
-          complete_count: 1,
-          failed_count: 1,
-          processing_count: 0,
-          queued_count: 0,
-          created_at: '2026-10-28T00:00:00.000Z',
-          completed_at: '2026-10-28T00:01:00.000Z',
-        }],
-      }
-    },
-  }
+        },
+      },
+      {
+        id: 'item-2',
+        resume_id: 'resume-2',
+        filename: 'broken.doc',
+        original_filename: null,
+        parse_job_status: 'failed',
+        progress: 100,
+        error_message: 'provider failure',
+        parse_result: null,
+      },
+    ],
+  })
 
-  const result = await getMcpAnalysisResults({ db, userId: 7, analysisId: 'analysis-1' })
+  const result = await getMcpAnalysisResults({ db, userId: 7, analysisId: 'analysis-1', queue: null })
   assert.equal(result.analysisId, 'analysis-1')
   assert.equal(result.status, 'failed')
   assert.deepEqual(result.job, { id: 'job-1', title: 'Customer Success Manager' })
@@ -150,97 +152,97 @@ test('listMcpJobs returns owner-scoped searchable job choices', async () => {
 })
 
 test('getMcpAnalysisStatus returns compact progress without candidate data', async () => {
-  const db = {
-    async query(sql, params) {
-      if (String(sql).includes('FROM upload_chunks')) return { rows: [] }
-      assert.match(String(sql), /a\.id = \$1 AND a\.user_id = \$2/)
-      assert.deepEqual(params, ['analysis-1', 7])
-      return {
-        rows: [{
-          id: 'analysis-1',
-          name: 'October batch',
-          status: 'processing',
-          job_description_id: 'job-1',
-          job_description_title: 'Platform Engineer',
-          total_count: 5,
-          complete_count: 2,
-          failed_count: 1,
-          processing_count: 1,
-          queued_count: 1,
-          created_at: '2026-10-28T00:00:00.000Z',
-          completed_at: null,
-        }],
-      }
+  const statuses = ['complete', 'complete', 'failed', 'processing', 'queued']
+  const db = createAnalysisReadDb({
+    analysis: {
+      id: 'analysis-1',
+      user_id: 7,
+      name: 'October batch',
+      status: 'processing',
+      job_description_id: 'job-1',
+      job_description_title: 'Platform Engineer',
+      created_at: '2026-10-28T00:00:00.000Z',
+      completed_at: null,
     },
-  }
+    items: statuses.map((status, index) => ({
+      id: `item-${index}`,
+      resume_id: `resume-${index}`,
+      filename: `${index}.pdf`,
+      parse_job_status: status,
+      progress: status === 'complete' || status === 'failed' ? 100 : 25,
+      parse_result: status === 'complete' ? { candidates: [] } : null,
+    })),
+  })
 
-  const result = await getMcpAnalysisStatus({ db, userId: 7, analysisId: 'analysis-1' })
+  const result = await getMcpAnalysisStatus({ db, userId: 7, analysisId: 'analysis-1', queue: null })
   assert.deepEqual(result.counts, { total: 5, complete: 2, failed: 1, processing: 1, queued: 1 })
   assert.deepEqual(result.job, { id: 'job-1', title: 'Platform Engineer' })
   assert.equal(result.completedAt, null)
 })
 
 test('getMcpAnalysisStatus derives completion without requiring a web detail request', async () => {
-  const db = {
-    async query(sql) {
-      if (String(sql).includes('FROM upload_chunks')) return { rows: [] }
-      return {
-        rows: [{
-          id: 'analysis-complete',
-          name: 'Finished batch',
-          status: 'processing',
-          job_description_id: null,
-          total_count: 2,
-          complete_count: 2,
-          failed_count: 0,
-          processing_count: 0,
-          queued_count: 0,
-          created_at: '2026-10-28T00:00:00.000Z',
-          completed_at: null,
-        }],
-      }
+  const db = createAnalysisReadDb({
+    analysis: {
+      id: 'analysis-complete',
+      user_id: 7,
+      name: 'Finished batch',
+      status: 'complete',
+      job_description_id: null,
+      created_at: '2026-10-28T00:00:00.000Z',
+      completed_at: '2026-10-28T00:01:00.000Z',
     },
-  }
+    items: [1, 2].map((index) => ({
+      id: `item-${index}`,
+      resume_id: `resume-${index}`,
+      filename: `${index}.pdf`,
+      parse_job_status: 'complete',
+      progress: 100,
+      parse_result: { candidates: [] },
+    })),
+  })
 
   const result = await getMcpAnalysisStatus({
     db,
     userId: 7,
     analysisId: 'analysis-complete',
+    queue: null,
   })
   assert.equal(result.status, 'complete')
 })
 
 test('getMcpAnalysisStatus includes unmatched failed web uploads', async () => {
-  const db = {
-    async query(sql) {
-      if (String(sql).includes('FROM upload_chunks')) {
-        assert.match(String(sql), /NOT EXISTS/)
-        assert.match(String(sql), /uc\.resume_id IS NOT NULL/)
-        assert.match(String(sql), /uc\.parse_job_id IS NOT NULL/)
-        return { rows: [{ status: 'rejected', updated_at: '2026-10-28T00:00:00.000Z' }] }
-      }
-      return {
-        rows: [{
-          id: 'analysis-partial',
-          name: 'Mixed web batch',
-          status: 'processing',
-          job_description_id: null,
-          total_count: 1,
-          complete_count: 1,
-          failed_count: 0,
-          processing_count: 0,
-          queued_count: 0,
-          created_at: '2026-10-28T00:00:00.000Z',
-          completed_at: null,
-        }],
-      }
+  const db = createAnalysisReadDb({
+    analysis: {
+      id: 'analysis-partial',
+      user_id: 7,
+      name: 'Mixed web batch',
+      status: 'failed',
+      job_description_id: null,
+      created_at: '2026-10-28T00:00:00.000Z',
+      completed_at: '2026-10-28T00:01:00.000Z',
     },
-  }
+    items: [{
+      id: 'item-complete',
+      resume_id: 'resume-complete',
+      filename: 'complete.pdf',
+      parse_job_status: 'complete',
+      progress: 100,
+      parse_result: { candidates: [] },
+    }],
+    uploads: [{
+      upload_id: 'upload-failed',
+      filename: 'failed.pdf',
+      mime_type: 'application/pdf',
+      status: 'rejected',
+      updated_at: '2026-10-28T00:00:00.000Z',
+    }],
+  })
 
   const result = await getMcpAnalysisStatus({
     db,
     userId: 7,
     analysisId: 'analysis-partial',
+    queue: null,
   })
   assert.equal(result.status, 'failed')
   assert.deepEqual(result.counts, {
