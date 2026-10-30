@@ -171,7 +171,7 @@ const AnalysisStatusOutputSchema = z.object({
 const CandidateBreakdownOutputSchema = z.object({
   key: z.string(),
   label: z.string(),
-  value: z.string(),
+  value: z.number().min(0).max(100),
 }).strict()
 const AnalysisCandidateOutputSchema = z.object({
   id: z.string(),
@@ -184,9 +184,11 @@ const AnalysisCandidateOutputSchema = z.object({
   location: z.string().nullable(),
   yearsExperience: z.number().nullable(),
   seniorityLevel: z.string().nullable(),
+  education: z.string().nullable(),
   score: z.number().min(0).max(100).nullable(),
   scoreOutOfTen: z.number().min(0).max(10).nullable(),
   verdict: z.string().nullable(),
+  confidenceLabel: z.string().nullable(),
   summary: z.string().nullable(),
   reason: z.string().nullable(),
   recommendation: z.string().nullable(),

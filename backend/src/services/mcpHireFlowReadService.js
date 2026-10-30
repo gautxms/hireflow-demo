@@ -33,35 +33,148 @@ function boundedNumber(value, min, max) {
   return Math.max(min, Math.min(max, numeric))
 }
 
-function displayValue(value) {
-  if (value === null || value === undefined) return null
-  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
-    return optionalText(value)
+function parseScorePercentage(value) {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    if (value >= 0 && value <= 1) return Math.round(value * 100)
+    return Math.round(Math.max(0, Math.min(100, value)))
   }
-  if (Array.isArray(value)) return optionalText(value.map(displayValue).filter(Boolean).join(', '))
-  if (typeof value === 'object') {
-    return optionalText(Object.entries(value)
-      .map(([key, entry]) => {
-        const normalized = displayValue(entry)
-        return normalized ? `${key}: ${normalized}` : null
-      })
-      .filter(Boolean)
-      .join('; '))
-  }
-  return null
+  if (typeof value !== 'string') return null
+  const normalized = value.trim()
+  if (!normalized) return null
+  const percentMatch = normalized.match(/^\(?\s*(\d+(?:\.\d+)?)\s*%\s*\)?$/)
+  if (percentMatch) return Math.round(Math.max(0, Math.min(100, Number(percentMatch[1]))))
+  const scoreMatch = normalized.match(/^(\d+(?:\.\d+)?)\s*\/\s*100(?:\s*(?:[-–—:]|\().*)?$/)
+  if (scoreMatch) return Math.round(Math.max(0, Math.min(100, Number(scoreMatch[1]))))
+  const numeric = Number(normalized)
+  if (!Number.isFinite(numeric)) return null
+  if (numeric >= 0 && numeric <= 1) return Math.round(numeric * 100)
+  return Math.round(Math.max(0, Math.min(100, numeric)))
 }
 
-function humanizeKey(value) {
-  const normalized = String(value || '').replace(/[_-]+/g, ' ').trim()
-  return normalized ? normalized.replace(/\b\w/g, (letter) => letter.toUpperCase()) : 'Detail'
-}
+const SCORE_BREAKDOWN_ROWS = [
+  { key: 'skills_match', label: 'Skills match', keys: ['technical_skills', 'skills_match', 'skills', 'technicalSkills', 'skill_match_score', 'skills_match_score'] },
+  { key: 'relevant_experience', label: 'Relevant experience', keys: ['experience_years', 'experience', 'years_experience', 'experienceYears', 'experience_match_score', 'relevant_experience_score'] },
+  { key: 'education_relevance', label: 'Education relevance', keys: ['education', 'education_match', 'academic_background', 'educationMatch', 'education_match_score', 'education_relevance_score'] },
+]
 
-function normalizeBreakdown(value) {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return []
-  return Object.entries(value).flatMap(([key, rawValue]) => {
-    const normalized = displayValue(rawValue)
-    return normalized ? [{ key, label: humanizeKey(key), value: normalized }] : []
+const AI_SCORE_BREAKDOWN_ROWS = [
+  { key: 'skills_match', label: 'Skills match', keys: ['skills_match_score'] },
+  { key: 'relevant_experience', label: 'Relevant experience', keys: ['relevant_experience_score'] },
+  { key: 'education_relevance', label: 'Education relevance', keys: ['education_relevance_score'] },
+  { key: 'seniority_progression', label: 'Seniority / progression', keys: ['seniority_progression_score'] },
+]
+
+function breakdownRows(source, definitions) {
+  if (!source || typeof source !== 'object' || Array.isArray(source)) return []
+  return definitions.flatMap(({ key, label, keys }) => {
+    for (const sourceKey of keys) {
+      if (!(sourceKey in source)) continue
+      const value = parseScorePercentage(source[sourceKey])
+      if (value !== null) return [{ key, label, value }]
+    }
+    return []
   })
+}
+
+function normalizeBreakdown(candidate, matchScore, fitAssessment) {
+  const sources = [
+    [candidate?.scoreBreakdown?.categories, SCORE_BREAKDOWN_ROWS],
+    [candidate?.scoreBreakdown, SCORE_BREAKDOWN_ROWS],
+    [candidate?.score_breakdown, SCORE_BREAKDOWN_ROWS],
+    [matchScore?.breakdown, SCORE_BREAKDOWN_ROWS],
+    [candidate?.match_score?.breakdown, SCORE_BREAKDOWN_ROWS],
+    [candidate?.ai_scoring_contract_v2, AI_SCORE_BREAKDOWN_ROWS],
+  ]
+  for (const [source, definitions] of sources) {
+    const rows = breakdownRows(source, definitions)
+    if (rows.length) return rows
+  }
+  const fitRows = breakdownRows(fitAssessment, [
+    { key: 'skills_match', label: 'Skills match', keys: ['skill_match_score'] },
+    { key: 'relevant_experience', label: 'Relevant experience', keys: ['experience_match_score'] },
+    { key: 'education_relevance', label: 'Education relevance', keys: ['education_match_score'] },
+    { key: 'role_alignment', label: 'Role Alignment', keys: ['role_alignment', 'roleAlignment', 'role_fit', 'roleFit', 'job_alignment'] },
+  ])
+  return fitRows
+}
+
+function normalizeEducation(value) {
+  const records = (Array.isArray(value) ? value : [value]).flatMap((record, index) => {
+    if (typeof record === 'string') {
+      const text = optionalText(record)
+      return text ? [{ degree: text, school: '', year: '', text, index }] : []
+    }
+    if (!record || typeof record !== 'object' || Array.isArray(record)) return []
+    const degree = optionalText(record.degree || record.qualification || record.program || record.course || record.field_of_study || record.fieldOfStudy) || ''
+    const school = optionalText(record.school || record.institution || record.university || record.college) || ''
+    const yearSource = optionalText(record.graduation_year || record.graduationYear || record.year || record.dates) || ''
+    const year = yearSource.match(/\b(19|20)\d{2}\b/)?.[0] || ''
+    const text = optionalText(record.text || record.label || record.name) || ''
+    return degree || school || text ? [{ degree, school, year, text, index }] : []
+  })
+  if (!records.length) return null
+  const rank = (record) => {
+    const text = `${record.degree} ${record.text}`.toLowerCase()
+    if (/\b(ph\.?d|doctorate|doctoral|md)\b/.test(text)) return 4
+    if (/\b(master|mba|mtech|m\.tech|ms\b|m\.s\b|msc|m\.sc|ma\b|m\.a\b)\b/.test(text)) return 3
+    if (/\b(bachelor|btech|b\.tech|be\b|b\.e\b|bs\b|b\.s\b|ba\b|b\.a\b|bsc|b\.sc)\b/.test(text)) return 2
+    if (/\b(diploma|certificate|certification)\b/.test(text)) return 1
+    return 0
+  }
+  const selected = records.sort((a, b) => rank(b) - rank(a) || Number(b.year || -1) - Number(a.year || -1) || a.index - b.index)[0]
+  const label = selected.degree && selected.school
+    ? `${selected.degree} — ${selected.school}`
+    : selected.degree || selected.school || selected.text
+  return optionalText(selected.year ? `${label} (${selected.year})` : label)
+}
+
+const ACTION_RECOMMENDATION_PATTERNS = [
+  /\b(?:do\s+not\s+)?shortlist(?:\s+for\b|\s+to\b|\b)/,
+  /\bschedule\s+(?:an?\s+)?(?:interview|recruiter\s+screen|phone\s+screen|screen)\b/,
+  /\b(?:proceed|advance)\s+to\s+(?:interview|recruiter\s+screen|phone\s+screen|screen|next\s+step|next\s+round)\b/,
+  /\bmove\s+forward\s+with\s+(?:interview|recruiter\s+screen|phone\s+screen|screen|candidate|application)\b/,
+  /\bput\s+(?:the\s+candidate\s+|her\s+|him\s+|them\s+)?on\s+hold\b/,
+  /\bhold\s+(?:for|until)\b/,
+  /\breject\s+(?:for|from)\b/,
+  /\bfollow\s+up\s+(?:with|on|about|to)\b/,
+  /\b(?:confirm|verify|validate|clarify|probe|assess|check)\s+\w+/,
+  /\bask\s+(?:about|for|whether|if)\s+\w+/,
+  /\bconsider\s+(?:her\s+|him\s+|them\s+|the\s+candidate\s+)?for\s+\w+/,
+]
+
+function normalizeRecommendation(candidate, fitAssessment, reason) {
+  const recommendation = optionalText(candidate.recommendationFull
+    || candidate.recommendation
+    || fitAssessment.recommendation
+    || fitAssessment.rationale)
+  if (!recommendation) return null
+  const normalized = recommendation.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, ' ').replace(/\s+/g, ' ').trim()
+  if (!ACTION_RECOMMENDATION_PATTERNS.some((pattern) => pattern.test(normalized))) return null
+  const normalizedReason = optionalText(reason)?.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, ' ').replace(/\s+/g, ' ').trim()
+  return normalizedReason && normalized === normalizedReason ? null : recommendation
+}
+
+function normalizeConfidenceLabel(candidate, fitAssessment, hasScore) {
+  const explicit = [fitAssessment?.confidence, candidate?.confidence, candidate?.match_confidence]
+    .map((value) => (typeof value === 'string' ? optionalText(value) : null))
+    .find(Boolean)
+  if (explicit) return explicit
+  const numericValues = [
+    candidate?.confidenceScores?.fit_assessment,
+    candidate?.confidence?.fit_assessment,
+    fitAssessment?.confidence_score,
+    fitAssessment?.confidenceScore,
+  ]
+  for (const value of numericValues) {
+    if (value === null || value === undefined || String(value).trim() === '') continue
+    const numeric = Number(value)
+    if (!Number.isFinite(numeric)) continue
+    const bounded = Math.max(0, Math.min(1, numeric))
+    if (bounded >= 0.85) return 'High confidence'
+    if (bounded >= 0.65) return 'Moderate confidence'
+    return 'Low confidence'
+  }
+  return hasScore ? null : 'Low confidence'
 }
 
 function normalizeSkills(candidate) {
@@ -96,8 +209,12 @@ export function normalizeMcpCandidateResult(candidate, { resumeId = '', filename
   )
   const scoreOutOfTen = boundedNumber(matchScore.score_out_of_ten, 0, 10)
     ?? (score === null ? null : Math.round(score) / 10)
-  const reason = optionalText(matchScore.reason || fitAssessment.rationale)
+  const reason = optionalText(candidate.reasoningFull || matchScore.reasonFull || fitAssessment.reasonFull || matchScore.reason || fitAssessment.reason || fitAssessment.rationale)
   const summary = optionalText(candidate.summaryFull || candidate.summary || candidate.profile_summary)
+  const risksOrGaps = textArray(candidate.risksOrGapsFull || fitAssessment.risks_or_gaps)
+  const considerations = risksOrGaps.length
+    ? risksOrGaps
+    : textArray(candidate.considerationsFull || candidate.considerations || candidate.concerns)
 
   return {
     id: optionalText(candidate.id || candidate.resumeId || candidate.resume_id) || `${resumeId || 'candidate'}-${index}`,
@@ -110,20 +227,22 @@ export function normalizeMcpCandidateResult(candidate, { resumeId = '', filename
     location: optionalText(candidate.location),
     yearsExperience: boundedNumber(candidate.years_experience, 0, 80),
     seniorityLevel: optionalText(candidate.seniority_level),
+    education: normalizeEducation(candidate.education),
     score,
     scoreOutOfTen,
     verdict: optionalText(candidate.verdict || matchScore.fit),
+    confidenceLabel: normalizeConfidenceLabel(candidate, fitAssessment, scoreOutOfTen !== null),
     summary,
     reason,
-    recommendation: optionalText(candidate.recommendationFull || candidate.recommendation || reason),
+    recommendation: normalizeRecommendation(candidate, fitAssessment, reason),
     strengths: textArray(candidate.strengthsFull || candidate.strengths),
-    considerations: textArray(candidate.considerations || candidate.concerns),
-    matchedRequirements: textArray(candidate.matchedRequirementsFull || fitAssessment.matched_requirements),
-    missingRequirements: textArray(candidate.missingRequirementsFull || fitAssessment.missing_requirements),
-    risksOrGaps: textArray(candidate.risksOrGapsFull || fitAssessment.risks_or_gaps),
+    considerations,
+    matchedRequirements: textArray(candidate.matchedRequirementsFull || candidate.matchedSkillsFull || fitAssessment.matched_requirements || fitAssessment.matched || candidate.matchedSkills),
+    missingRequirements: textArray(candidate.missingRequirementsFull || candidate.mustHaveSkillsFull || candidate.missingSkillsFull || fitAssessment.missing_requirements || fitAssessment.missing || candidate.mustHaveSkills || candidate.missingSkills),
+    risksOrGaps,
     skills: normalizeSkills(candidate),
     experienceHighlights: textArray(candidate.experienceHighlights || candidate.experience_highlights),
-    breakdown: normalizeBreakdown(matchScore.breakdown || candidate.scoreBreakdown?.categories),
+    breakdown: normalizeBreakdown(candidate, matchScore, fitAssessment),
     analysisMode: optionalText(candidate.analysis_mode),
   }
 }

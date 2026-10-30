@@ -5,6 +5,7 @@ import {
   getMcpAnalysisStatus,
   getMcpResumeQuota,
   listMcpJobs,
+  normalizeMcpCandidateResult,
 } from './mcpHireFlowReadService.js'
 
 function createAnalysisReadDb({ analysis, items = [], uploads = [] }) {
@@ -50,9 +51,12 @@ test('getMcpAnalysisResults returns owner-scoped authoritative HireFlow candidat
                   email: 'alice@example.com',
                   location: 'Mumbai',
                   years_experience: 6,
+                  seniority_level: 'Senior',
+                  education: [{ degree: 'BBA', school: 'Mumbai University' }],
                   score: 82,
                   verdict: 'strong_match',
                   summaryFull: 'Strong customer-success experience with quantified retention outcomes.',
+                  recommendationFull: 'Proceed to interview.',
                   strengths: ['SaaS renewals', 'Executive stakeholder management'],
                   considerations: ['Confirm enterprise portfolio size'],
                   skills: ['Gainsight', 'Salesforce'],
@@ -60,9 +64,10 @@ test('getMcpAnalysisResults returns owner-scoped authoritative HireFlow candidat
                     score: 82,
                     score_out_of_ten: 8.2,
                     reason: 'Strong evidence against the core requirements.',
-                    breakdown: { skills_match: 'Strong', experience_match: 'Meets requirement' },
+                    breakdown: { skills_match: '84%', experience_match_score: '77/100' },
                   },
                   fit_assessment: {
+                    confidence_score: 0.9,
                     matched_requirements: ['SaaS customer success'],
                     missing_requirements: ['No explicit APAC portfolio evidence'],
                     risks_or_gaps: ['Enterprise book size is unclear'],
@@ -98,27 +103,61 @@ test('getMcpAnalysisResults returns owner-scoped authoritative HireFlow candidat
     title: null,
     location: 'Mumbai',
     yearsExperience: 6,
-    seniorityLevel: null,
+    seniorityLevel: 'Senior',
+    education: 'BBA — Mumbai University',
     score: 82,
     scoreOutOfTen: 8.2,
     verdict: 'strong_match',
+    confidenceLabel: 'High confidence',
     summary: 'Strong customer-success experience with quantified retention outcomes.',
     reason: 'Strong evidence against the core requirements.',
-    recommendation: 'Strong evidence against the core requirements.',
+    recommendation: 'Proceed to interview.',
     strengths: ['SaaS renewals', 'Executive stakeholder management'],
-    considerations: ['Confirm enterprise portfolio size'],
+    considerations: ['Enterprise book size is unclear'],
     matchedRequirements: ['SaaS customer success'],
     missingRequirements: ['No explicit APAC portfolio evidence'],
     risksOrGaps: ['Enterprise book size is unclear'],
     skills: ['Gainsight', 'Salesforce'],
     experienceHighlights: [],
     breakdown: [
-      { key: 'skills_match', label: 'Skills Match', value: 'Strong' },
-      { key: 'experience_match', label: 'Experience Match', value: 'Meets requirement' },
+      { key: 'skills_match', label: 'Skills match', value: 84 },
+      { key: 'relevant_experience', label: 'Relevant experience', value: 77 },
     ],
     analysisMode: null,
   })
   assert.deepEqual(result.failures, [{ filename: 'broken.doc', reason: 'HireFlow could not analyse this resume.' }])
+})
+
+test('MCP candidate details use the same numeric breakdown and recommendation rules as HireFlow', () => {
+  const qualitative = normalizeMcpCandidateResult({
+    name: 'Qualitative Candidate',
+    score: 72,
+    matchScore: {
+      reason: 'Relevant background but limited ownership evidence.',
+      breakdown: { skills_match: 'Strong', experience_match_score: 'Meets requirement' },
+    },
+    fit_assessment: { confidence_score: null },
+  }, { resumeId: 'resume-qualitative' })
+  assert.deepEqual(qualitative.breakdown, [])
+  assert.equal(qualitative.recommendation, null)
+  assert.equal(qualitative.confidenceLabel, null)
+
+  const numeric = normalizeMcpCandidateResult({
+    name: 'Numeric Candidate',
+    score: 88,
+    ai_scoring_contract_v2: {
+      skills_match_score: 0.91,
+      relevant_experience_score: '86%',
+      education_relevance_score: '75/100',
+      seniority_progression_score: 68,
+    },
+  }, { resumeId: 'resume-numeric' })
+  assert.deepEqual(numeric.breakdown, [
+    { key: 'skills_match', label: 'Skills match', value: 91 },
+    { key: 'relevant_experience', label: 'Relevant experience', value: 86 },
+    { key: 'education_relevance', label: 'Education relevance', value: 75 },
+    { key: 'seniority_progression', label: 'Seniority / progression', value: 68 },
+  ])
 })
 
 test('listMcpJobs returns owner-scoped searchable job choices', async () => {
