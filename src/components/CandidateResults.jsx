@@ -38,6 +38,10 @@ import {
 import '../styles/candidate-results.css'
 import { normalizeCandidateResultsPayload } from './candidateResultsPayload'
 import { logResultsRenderError } from '../pages/resultsErrorBoundaryTelemetry'
+import {
+  resolveCandidateMatchLabel,
+  resolveCandidateMatchTier,
+} from '../../shared/candidateMatchClassification.js'
 
 const TOKEN_STORAGE_KEY = 'hireflow_auth_token'
 const SUPPRESSED_RESUME_INTEGRITY_LABELS = new Set([
@@ -199,28 +203,6 @@ function formatScore(score) {
   const normalized = numeric > 10 ? numeric / 10 : numeric
   return Math.max(0, Math.min(10, normalized)).toFixed(1)
 }
-
-function getScoreTone(score) {
-  const numeric = Number(score)
-  if (!Number.isFinite(numeric) || numeric < 0) return 'unscored'
-  const normalized = numeric > 10 ? numeric / 10 : numeric
-  if (normalized >= 8) return 'strong'
-  if (normalized >= 6) return 'possible'
-  return 'low'
-}
-
-function getMatchLabel(score, explicitLabel = '') {
-  const tone = getScoreTone(score)
-  const cleanLabel = safeText(explicitLabel, '')
-  if (cleanLabel) return cleanLabel
-  if (tone === 'strong') return 'Strong match'
-  if (tone === 'possible') return 'Possible match'
-  if (tone === 'low') return 'Low match'
-  return 'Unable to score'
-}
-
-
-
 
 function normalizeSkillKey(skill) {
   return String(skill || '')
@@ -398,17 +380,6 @@ function buildShortlistSourceContext(candidate = {}, jobContext = null) {
 }
 
 
-
-function resolveVerdictLabel(candidate, tier, hasScore) {
-  const explicitVerdict = [candidate?.fit_assessment?.verdict, candidate?.match_label, candidate?.matchLabel]
-    .map((value) => String(value || '').trim())
-    .find(Boolean)
-  if (explicitVerdict) return explicitVerdict
-  if (!hasScore) return 'Unable to score'
-  if (tier === 'strong') return 'Strong match'
-  if (tier === 'possible') return 'Possible match'
-  return 'Low match'
-}
 
 function resolveConfidenceLabel(candidate, hasScore) {
   const explicitConfidence = [candidate?.fit_assessment?.confidence, candidate?.confidence, candidate?.match_confidence]
@@ -1148,7 +1119,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
   const avgScore = filtered.length
     ? Math.round(filtered.reduce((sum, candidate) => sum + Number(activeScore(candidate) ?? 0), 0) / filtered.length)
     : 0
-  const strongCount = filtered.filter((candidate) => activeScore(candidate) >= 80).length
+  const strongCount = filtered.filter((candidate) => resolveCandidateMatchTier(activeScore(candidate)) === 'strong').length
   const sortedCandidates = visibleCandidates
 
   const toggleCandidateSelection = (candidate) => {
@@ -1633,7 +1604,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
       <div className="results-grid">
         {sortedCandidates.map((candidate, index) => {
           const score = activeScore(candidate)
-          const tier = getScoreTone(score)
+          const tier = resolveCandidateMatchTier(score)
           const displayScore = formatScore(score)
           const candidateKey = resolveCandidateKey(candidate, index)
           const isExpanded = expandedId === candidateKey
@@ -1676,7 +1647,7 @@ export default function CandidateResults({ candidates: candidatePayload, onBack,
                         <span className="rc-score-denom">/10</span>
                       </div>
                       <div className={`rc-fit-label rc-fit--${tier}`}>
-                        {getMatchLabel(score)}
+                        {resolveCandidateMatchLabel(score)}
                       </div>
                     </>
                   ) : (

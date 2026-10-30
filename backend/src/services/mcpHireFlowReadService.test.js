@@ -107,7 +107,7 @@ test('getMcpAnalysisResults returns owner-scoped authoritative HireFlow candidat
     education: 'BBA — Mumbai University',
     score: 82,
     scoreOutOfTen: 8.2,
-    verdict: 'strong_match',
+    verdict: 'Strong match',
     confidenceLabel: 'High confidence',
     summary: 'Strong customer-success experience with quantified retention outcomes.',
     reason: 'Strong evidence against the core requirements.',
@@ -157,6 +157,20 @@ test('MCP candidate details use the same numeric breakdown and recommendation ru
     { key: 'relevant_experience', label: 'Relevant experience', value: 86 },
     { key: 'education_relevance', label: 'Education relevance', value: 75 },
     { key: 'seniority_progression', label: 'Seniority / progression', value: 68 },
+  ])
+})
+
+test('MCP candidate match labels ignore qualitative AI verdicts and follow HireFlow score thresholds', () => {
+  const candidates = [
+    { score: 78, verdict: 'strong_match', matchScore: { score_out_of_ten: 7.8, fit: 'strong' } },
+    { score: 68, verdict: 'Good adjacent fit', matchScore: { score_out_of_ten: 6.8, fit: 'Good adjacent fit' } },
+    { score: 80, verdict: 'possible_match', matchScore: { score_out_of_ten: 8, fit: 'possible' } },
+  ].map((candidate, index) => normalizeMcpCandidateResult(candidate, { resumeId: `resume-${index}` }))
+
+  assert.deepEqual(candidates.map((candidate) => candidate.verdict), [
+    'Possible match',
+    'Possible match',
+    'Strong match',
   ])
 })
 

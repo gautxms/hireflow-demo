@@ -6,6 +6,7 @@ import {
 } from './resumeQuotaReservations.js'
 import { resolveResumeQuotaPeriod, RESUME_QUOTA_PERIOD_SOURCES } from '../utils/resumeQuotaPeriod.js'
 import { canUsePaidMutation, hasScheduledCancellationAccess } from '../utils/subscriptionAccess.js'
+import { resolveCandidateMatchLabel } from '../../../shared/candidateMatchClassification.js'
 
 function monthStart(referenceDate = new Date()) {
   return new Date(Date.UTC(referenceDate.getUTCFullYear(), referenceDate.getUTCMonth(), 1))
@@ -230,7 +231,7 @@ export function normalizeMcpCandidateResult(candidate, { resumeId = '', filename
     education: normalizeEducation(candidate.education),
     score,
     scoreOutOfTen,
-    verdict: optionalText(candidate.verdict || matchScore.fit),
+    verdict: resolveCandidateMatchLabel(scoreOutOfTen),
     confidenceLabel: normalizeConfidenceLabel(candidate, fitAssessment, scoreOutOfTen !== null),
     summary,
     reason,

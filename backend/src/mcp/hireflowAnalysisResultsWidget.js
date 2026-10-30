@@ -1,4 +1,10 @@
-export const HIREFLOW_ANALYSIS_RESULTS_WIDGET_URI = 'ui://hireflow/analysis-results-v4.html'
+import {
+  normalizeCandidateMatchScore,
+  resolveCandidateMatchLabel,
+  resolveCandidateMatchTier,
+} from '../../../shared/candidateMatchClassification.js'
+
+export const HIREFLOW_ANALYSIS_RESULTS_WIDGET_URI = 'ui://hireflow/analysis-results-v5.html'
 export const HIREFLOW_ANALYSIS_RESULTS_WIDGET_MIME_TYPE = 'text/html;profile=mcp-app'
 
 export function resolveHireFlowAnalysisProgressCounts(data = {}) {
@@ -43,7 +49,7 @@ export function resolveHireFlowAnalysisRankingStats(data = {}) {
     : 0
   return {
     analysed: candidates.length,
-    strongMatches: scores.filter((score) => score >= 80).length,
+    strongMatches: scores.filter((score) => resolveCandidateMatchTier(score) === 'strong').length,
     averageScore: (averagePercent / 10).toFixed(1),
   }
 }
@@ -179,8 +185,8 @@ export const HIREFLOW_ANALYSIS_RESULTS_WIDGET_HTML = String.raw`<!DOCTYPE html>
     .error { padding: 24px 18px; text-align: center; } .error p { color: var(--hf-text-3); }
     @media (max-width: 1140px) { .dd-header { grid-template-columns: 1fr; align-items: flex-start; } .dd-header-middle,.dd-score-panel { min-width: 0; justify-content: flex-start; text-align: left; } .dd-header-actions { justify-self: start; } }
     @media (max-width: 1024px) { .results-grid,.dd-body { grid-template-columns: 1fr; } }
-    @media (max-width: 840px) { .ranking-stats { grid-template-columns: 1fr; } }
-    @media (max-width: 620px) { .analysis-header { align-items: flex-start; flex-direction: column; } .analysis-actions { justify-content: flex-start; } .results-content { padding: 0 12px 12px; } .detail-drawer { padding: 16px; } .dd-name { font-size: 24px; } }
+    @media (max-width: 840px) { .ranking-stats { gap: 7px; } .ranking-stat { min-width: 0; padding: 12px 10px; } .ranking-stat-num { font-size: 22px; } .ranking-stat-label { font-size: 10px; } }
+    @media (max-width: 620px) { .analysis-header { align-items: flex-start; flex-direction: column; } .analysis-actions { justify-content: flex-start; } .results-content { padding: 0 12px 12px; } .ranking-stats { gap: 5px; } .ranking-stat { padding: 10px 8px; } .detail-drawer { padding: 16px; } .dd-name { font-size: 24px; } }
     @media (prefers-reduced-motion: reduce) { *,*::before,*::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; } }
   </style>
 </head>
@@ -214,13 +220,12 @@ export const HIREFLOW_ANALYSIS_RESULTS_WIDGET_HTML = String.raw`<!DOCTYPE html>
       const numeric = raw === null || raw === undefined || raw === '' ? Number.NaN : Number(raw);
       return Number.isFinite(numeric) ? Math.max(0, Math.min(10, numeric)) : Number.NaN;
     };
-    const scoreTone = (score) => !Number.isFinite(score) ? 'unscored' : score >= 8 ? 'strong' : score >= 6 ? 'possible' : 'low';
+    const normalizeCandidateMatchScore = ${normalizeCandidateMatchScore.toString()};
+    const resolveCandidateMatchTier = ${resolveCandidateMatchTier.toString()};
+    const resolveCandidateMatchLabel = ${resolveCandidateMatchLabel.toString()};
+    const scoreTone = (score) => resolveCandidateMatchTier(score);
     const verdictLabel = (candidate) => {
-      const explicit = safeText(candidate?.verdict).replace(/[_-]+/g, ' ');
-      if (explicit) return explicit.replace(/\b\w/g, (letter) => letter.toUpperCase());
-      const score = getScore(candidate);
-      if (!Number.isFinite(score)) return 'Unable to score';
-      return score >= 8 ? 'Strong match' : score >= 6 ? 'Possible match' : 'Low match';
+      return resolveCandidateMatchLabel(getScore(candidate));
     };
     const saveUiState = () => window.openai?.setWidgetState?.({ modelContent: 'Viewing HireFlow analysis results.', privateContent: { expandedCandidateId } });
     const resolveProgressCounts = ${resolveHireFlowAnalysisProgressCounts.toString()};
@@ -583,7 +588,7 @@ export const HIREFLOW_ANALYSIS_RESULTS_WIDGET_HTML = String.raw`<!DOCTYPE html>
       }
       if (message.method === 'ui/notifications/tool-result') render(message.params?.structuredContent);
     }, { passive: true });
-    const bridgeReady = rpcRequest('ui/initialize', { appInfo: { name: 'hireflow-analysis-results', version: '4.0.0' }, appCapabilities: { availableDisplayModes: ['inline','fullscreen'] }, protocolVersion: '2026-01-26' }).then((result) => { hostContext = result?.hostContext || {}; rpcNotify('ui/notifications/initialized',{}); return result; });
+    const bridgeReady = rpcRequest('ui/initialize', { appInfo: { name: 'hireflow-analysis-results', version: '5.0.0' }, appCapabilities: { availableDisplayModes: ['inline','fullscreen'] }, protocolVersion: '2026-01-26' }).then((result) => { hostContext = result?.hostContext || {}; rpcNotify('ui/notifications/initialized',{}); return result; });
     const requestFullscreen = async () => {
       try {
         await bridgeReady;
