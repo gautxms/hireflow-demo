@@ -7,6 +7,7 @@ import {
   HIREFLOW_ANALYSIS_RESULTS_WIDGET_URI,
   readHireFlowAnalysisResultsWidgetResource,
   resolveHireFlowAnalysisProgressCounts,
+  resolveHireFlowAnalysisRankingStats,
 } from './hireflowAnalysisResultsWidget.js'
 
 test('analysis results widget normalizes creation and polling progress into one view model', () => {
@@ -33,8 +34,36 @@ test('analysis results widget normalizes creation and polling progress into one 
   })
 })
 
+test('analysis results widget matches HireFlow ranking summary calculations', () => {
+  assert.deepEqual(resolveHireFlowAnalysisRankingStats({
+    candidates: [
+      { scoreOutOfTen: 8.2 },
+      { scoreOutOfTen: 7.1 },
+      { scoreOutOfTen: 5.5 },
+    ],
+  }), {
+    analysed: 3,
+    strongMatches: 1,
+    averageScore: '6.9',
+  })
+
+  assert.deepEqual(resolveHireFlowAnalysisRankingStats({
+    candidates: [{ score: 92 }, { scoreOutOfTen: '' }],
+  }), {
+    analysed: 2,
+    strongMatches: 1,
+    averageScore: '4.6',
+  })
+
+  assert.deepEqual(resolveHireFlowAnalysisRankingStats(), {
+    analysed: 0,
+    strongMatches: 0,
+    averageScore: '0.0',
+  })
+})
+
 test('analysis results widget exposes a versioned MCP Apps resource', () => {
-  assert.equal(HIREFLOW_ANALYSIS_RESULTS_WIDGET_URI, 'ui://hireflow/analysis-results-v2.html')
+  assert.equal(HIREFLOW_ANALYSIS_RESULTS_WIDGET_URI, 'ui://hireflow/analysis-results-v3.html')
   assert.equal(HIREFLOW_ANALYSIS_RESULTS_WIDGET_MIME_TYPE, 'text/html;profile=mcp-app')
   assert.deepEqual(getHireFlowAnalysisResultsWidgetResource(), {
     uri: HIREFLOW_ANALYSIS_RESULTS_WIDGET_URI,
@@ -50,6 +79,8 @@ test('analysis results widget exposes a versioned MCP Apps resource', () => {
   assert.deepEqual(resource._meta['openai/ui'].availableDisplayModes, ['inline', 'fullscreen'])
   assert.equal(resource._meta.ui.prefersBorder, true)
   assert.equal(resource._meta.ui.domain, 'https://hireflow.dev')
+  assert.deepEqual(resource._meta.ui.csp.resourceDomains, ['https://hireflow.dev'])
+  assert.deepEqual(resource._meta['openai/widgetCSP'].resource_domains, ['https://hireflow.dev'])
   assert.deepEqual(resource._meta['openai/widgetCSP'].redirect_domains, ['https://hireflow.dev'])
 })
 
@@ -62,6 +93,12 @@ test('analysis results widget uses the MCP Apps bridge and safe DOM rendering', 
   assert.match(HIREFLOW_ANALYSIS_RESULTS_WIDGET_HTML, /get_analysis_status/)
   assert.match(HIREFLOW_ANALYSIS_RESULTS_WIDGET_HTML, /setWidgetState/)
   assert.match(HIREFLOW_ANALYSIS_RESULTS_WIDGET_HTML, /result-card/)
+  assert.match(HIREFLOW_ANALYSIS_RESULTS_WIDGET_HTML, /ranking-stats/)
+  assert.match(HIREFLOW_ANALYSIS_RESULTS_WIDGET_HTML, /Strong matches/)
+  assert.match(HIREFLOW_ANALYSIS_RESULTS_WIDGET_HTML, /Avg score \/10/)
+  assert.match(HIREFLOW_ANALYSIS_RESULTS_WIDGET_HTML, /Syne Local/)
+  assert.match(HIREFLOW_ANALYSIS_RESULTS_WIDGET_HTML, /Relevant skills unavailable for this analysis/)
+  assert.match(HIREFLOW_ANALYSIS_RESULTS_WIDGET_HTML, /Collapse details/)
   assert.match(HIREFLOW_ANALYSIS_RESULTS_WIDGET_HTML, /detail-drawer/)
   assert.match(HIREFLOW_ANALYSIS_RESULTS_WIDGET_HTML, /rc-score-denom', '\/10'/)
   assert.match(HIREFLOW_ANALYSIS_RESULTS_WIDGET_HTML, /dd-score/)
@@ -70,6 +107,9 @@ test('analysis results widget uses the MCP Apps bridge and safe DOM rendering', 
   assert.match(HIREFLOW_ANALYSIS_RESULTS_WIDGET_HTML, /resolveProgressCounts/)
   assert.match(HIREFLOW_ANALYSIS_RESULTS_WIDGET_HTML, /fileQueued/)
   assert.match(HIREFLOW_ANALYSIS_RESULTS_WIDGET_HTML, /fileFailed/)
+  assert.match(HIREFLOW_ANALYSIS_RESULTS_WIDGET_HTML, /version: '3\.0\.0'/)
+  assert.doesNotMatch(HIREFLOW_ANALYSIS_RESULTS_WIDGET_HTML, /rc-bar/)
+  assert.doesNotMatch(HIREFLOW_ANALYSIS_RESULTS_WIDGET_HTML, /analysis-metrics/)
   assert.doesNotMatch(HIREFLOW_ANALYSIS_RESULTS_WIDGET_HTML, /\.innerHTML\s*=/)
   assert.doesNotMatch(HIREFLOW_ANALYSIS_RESULTS_WIDGET_HTML, /<script[^>]+src=/)
 
