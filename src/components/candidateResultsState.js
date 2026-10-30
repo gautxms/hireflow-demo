@@ -1,4 +1,9 @@
 import { buildResumeFileIdentity } from '../utils/resumeFileIdentity.js'
+import {
+  normalizeCandidateMatchScore,
+  resolveCandidateMatchLabel,
+  resolveCandidateMatchTier,
+} from '../../shared/candidateMatchClassification.js'
 
 export const RESULTS_SORT_OPTIONS = new Set(['match_score', 'name', 'experience', 'upload_date'])
 
@@ -434,7 +439,7 @@ export function resolveActiveCandidateScore(candidate = {}) {
 export function buildCandidateRenderContract(candidate = {}) {
   const score = resolveActiveCandidateScore(candidate)
   const scoreTenPoint = score == null ? null : (score / 10).toFixed(1)
-  const scoreTier = score == null ? 'unscored' : score >= 80 ? 'strong' : score >= 60 ? 'possible' : 'low'
+  const scoreTier = resolveCandidateMatchTier(score)
   const topSkills = Array.isArray(candidate?.top_skills) && candidate.top_skills.length > 0
     ? candidate.top_skills
     : parseSkillList(candidate?.skills)
@@ -1071,9 +1076,8 @@ export function buildExpandedCandidateDrawerViewModel(rawCandidate) {
   try {
     const candidate = sanitizeExpandedCandidate(rawCandidate)
     const score = resolveActiveCandidateScore(candidate)
-    const normalized = Number(score)
-    const tenPoint = Number.isFinite(normalized) && normalized >= 0 ? Math.max(0, Math.min(10, (normalized > 10 ? normalized / 10 : normalized))) : null
-    const tier = tenPoint == null ? 'unscored' : tenPoint >= 8 ? 'strong' : tenPoint >= 6 ? 'possible' : 'low'
+    const tenPoint = normalizeCandidateMatchScore(score)
+    const tier = resolveCandidateMatchTier(score)
     const displayScore = tenPoint == null ? null : tenPoint.toFixed(1)
     const hasDisplayScore = displayScore != null
 
@@ -1126,7 +1130,7 @@ export function buildExpandedCandidateDrawerViewModel(rawCandidate) {
       scoreTier: tier,
       displayScore,
       hasDisplayScore,
-      verdictLabel: hasDisplayScore ? (tier==='strong'?'Strong match':tier==='possible'?'Possible match':'Low match') : 'Unable to score',
+      verdictLabel: resolveCandidateMatchLabel(score),
       confidenceLabel: resolveDrawerConfidenceLabel(candidate, hasDisplayScore),
       summaryText,
       reasoningText,

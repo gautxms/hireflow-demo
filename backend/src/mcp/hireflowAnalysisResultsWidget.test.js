@@ -63,7 +63,7 @@ test('analysis results widget matches HireFlow ranking summary calculations', ()
 })
 
 test('analysis results widget exposes a versioned MCP Apps resource', () => {
-  assert.equal(HIREFLOW_ANALYSIS_RESULTS_WIDGET_URI, 'ui://hireflow/analysis-results-v4.html')
+  assert.equal(HIREFLOW_ANALYSIS_RESULTS_WIDGET_URI, 'ui://hireflow/analysis-results-v5.html')
   assert.equal(HIREFLOW_ANALYSIS_RESULTS_WIDGET_MIME_TYPE, 'text/html;profile=mcp-app')
   assert.deepEqual(getHireFlowAnalysisResultsWidgetResource(), {
     uri: HIREFLOW_ANALYSIS_RESULTS_WIDGET_URI,
@@ -112,7 +112,10 @@ test('analysis results widget uses the MCP Apps bridge and safe DOM rendering', 
   assert.match(HIREFLOW_ANALYSIS_RESULTS_WIDGET_HTML, /resolveProgressCounts/)
   assert.match(HIREFLOW_ANALYSIS_RESULTS_WIDGET_HTML, /fileQueued/)
   assert.match(HIREFLOW_ANALYSIS_RESULTS_WIDGET_HTML, /fileFailed/)
-  assert.match(HIREFLOW_ANALYSIS_RESULTS_WIDGET_HTML, /version: '4\.0\.0'/)
+  assert.match(HIREFLOW_ANALYSIS_RESULTS_WIDGET_HTML, /version: '5\.0\.0'/)
+  assert.match(HIREFLOW_ANALYSIS_RESULTS_WIDGET_HTML, /resolveCandidateMatchLabel\(getScore\(candidate\)\)/)
+  assert.doesNotMatch(HIREFLOW_ANALYSIS_RESULTS_WIDGET_HTML, /const explicit = safeText\(candidate\?\.verdict\)/)
+  assert.doesNotMatch(HIREFLOW_ANALYSIS_RESULTS_WIDGET_HTML, /\.ranking-stats \{ grid-template-columns: 1fr; \}/)
   assert.doesNotMatch(HIREFLOW_ANALYSIS_RESULTS_WIDGET_HTML, /rc-bar/)
   assert.doesNotMatch(HIREFLOW_ANALYSIS_RESULTS_WIDGET_HTML, /analysis-metrics/)
   assert.doesNotMatch(HIREFLOW_ANALYSIS_RESULTS_WIDGET_HTML, /section\('Risks or gaps'/)
