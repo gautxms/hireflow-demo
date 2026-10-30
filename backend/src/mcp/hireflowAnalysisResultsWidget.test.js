@@ -63,7 +63,7 @@ test('analysis results widget matches HireFlow ranking summary calculations', ()
 })
 
 test('analysis results widget exposes a versioned MCP Apps resource', () => {
-  assert.equal(HIREFLOW_ANALYSIS_RESULTS_WIDGET_URI, 'ui://hireflow/analysis-results-v3.html')
+  assert.equal(HIREFLOW_ANALYSIS_RESULTS_WIDGET_URI, 'ui://hireflow/analysis-results-v4.html')
   assert.equal(HIREFLOW_ANALYSIS_RESULTS_WIDGET_MIME_TYPE, 'text/html;profile=mcp-app')
   assert.deepEqual(getHireFlowAnalysisResultsWidgetResource(), {
     uri: HIREFLOW_ANALYSIS_RESULTS_WIDGET_URI,
@@ -102,14 +102,20 @@ test('analysis results widget uses the MCP Apps bridge and safe DOM rendering', 
   assert.match(HIREFLOW_ANALYSIS_RESULTS_WIDGET_HTML, /detail-drawer/)
   assert.match(HIREFLOW_ANALYSIS_RESULTS_WIDGET_HTML, /rc-score-denom', '\/10'/)
   assert.match(HIREFLOW_ANALYSIS_RESULTS_WIDGET_HTML, /dd-score/)
-  assert.match(HIREFLOW_ANALYSIS_RESULTS_WIDGET_HTML, /Matched requirements/)
   assert.match(HIREFLOW_ANALYSIS_RESULTS_WIDGET_HTML, /Recommended action/)
+  assert.match(HIREFLOW_ANALYSIS_RESULTS_WIDGET_HTML, /Key facts/)
+  assert.match(HIREFLOW_ANALYSIS_RESULTS_WIDGET_HTML, /Matched skills/)
+  assert.match(HIREFLOW_ANALYSIS_RESULTS_WIDGET_HTML, /Skill gaps/)
+  assert.match(HIREFLOW_ANALYSIS_RESULTS_WIDGET_HTML, /dd-breakdown-track/)
+  assert.match(HIREFLOW_ANALYSIS_RESULTS_WIDGET_HTML, /dd-resume-file/)
+  assert.match(HIREFLOW_ANALYSIS_RESULTS_WIDGET_HTML, /confidenceLabel/)
   assert.match(HIREFLOW_ANALYSIS_RESULTS_WIDGET_HTML, /resolveProgressCounts/)
   assert.match(HIREFLOW_ANALYSIS_RESULTS_WIDGET_HTML, /fileQueued/)
   assert.match(HIREFLOW_ANALYSIS_RESULTS_WIDGET_HTML, /fileFailed/)
-  assert.match(HIREFLOW_ANALYSIS_RESULTS_WIDGET_HTML, /version: '3\.0\.0'/)
+  assert.match(HIREFLOW_ANALYSIS_RESULTS_WIDGET_HTML, /version: '4\.0\.0'/)
   assert.doesNotMatch(HIREFLOW_ANALYSIS_RESULTS_WIDGET_HTML, /rc-bar/)
   assert.doesNotMatch(HIREFLOW_ANALYSIS_RESULTS_WIDGET_HTML, /analysis-metrics/)
+  assert.doesNotMatch(HIREFLOW_ANALYSIS_RESULTS_WIDGET_HTML, /section\('Risks or gaps'/)
   assert.doesNotMatch(HIREFLOW_ANALYSIS_RESULTS_WIDGET_HTML, /\.innerHTML\s*=/)
   assert.doesNotMatch(HIREFLOW_ANALYSIS_RESULTS_WIDGET_HTML, /<script[^>]+src=/)
 

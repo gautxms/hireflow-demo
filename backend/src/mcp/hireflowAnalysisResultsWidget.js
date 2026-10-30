@@ -1,4 +1,4 @@
-export const HIREFLOW_ANALYSIS_RESULTS_WIDGET_URI = 'ui://hireflow/analysis-results-v3.html'
+export const HIREFLOW_ANALYSIS_RESULTS_WIDGET_URI = 'ui://hireflow/analysis-results-v4.html'
 export const HIREFLOW_ANALYSIS_RESULTS_WIDGET_MIME_TYPE = 'text/html;profile=mcp-app'
 
 export function resolveHireFlowAnalysisProgressCounts(data = {}) {
@@ -64,7 +64,7 @@ export const HIREFLOW_ANALYSIS_RESULTS_WIDGET_HTML = String.raw`<!DOCTYPE html>
       --hf-bg: #0a0a0a; --hf-surface: #111111; --hf-surface-2: #0d0d0d;
       --hf-border: #1e1e1e; --hf-border-2: #555555;
       --hf-text-1: #ffffff; --hf-text-2: #aaaaaa; --hf-text-3: #888888; --hf-text-4: #666666;
-      --hf-lime: #c8ff00; --hf-lime-hover: #b8ec00; --hf-warning: #fcd34d; --hf-error: #ef4444;
+      --hf-lime: #c8ff00; --hf-lime-hover: #b8ec00; --hf-success: #10b981; --hf-warning: #fcd34d; --hf-error: #ef4444;
     }
     * { box-sizing: border-box; }
     html, body { margin: 0; min-height: 100%; background: transparent; color: var(--hf-text-1); }
@@ -113,28 +113,37 @@ export const HIREFLOW_ANALYSIS_RESULTS_WIDGET_HTML = String.raw`<!DOCTYPE html>
     .result-card:hover .rc-expand-hint, .result-card--open .rc-expand-hint { color: rgba(200,255,0,.95); border-color: rgba(200,255,0,.35); background: rgba(200,255,0,.08); }
     .detail-drawer { background: var(--hf-surface); border: 1px solid rgba(200,255,0,.2); border-radius: 16px; padding: 24px; margin-top: 14px; animation: drawerIn .2s ease; }
     @keyframes drawerIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
-    .dd-header { display: grid; grid-template-columns: minmax(280px,1fr) minmax(180px,auto) auto; align-items: center; gap: 18px; margin-bottom: 14px; padding: 4px 0 18px; border-bottom: 1px solid var(--hf-border); }
+    .dd-header { display: grid; grid-template-columns: minmax(320px,1fr) minmax(220px,auto) auto; align-items: center; gap: 18px; margin-bottom: 14px; padding: 4px 0 18px; border-bottom: 1px solid var(--hf-border); }
     .dd-header-left { display: flex; align-items: center; gap: 12px; min-width: 0; }
     .dd-avatar { width: 54px; height: 54px; border-radius: 50%; flex-shrink: 0; background: rgba(200,255,0,.12); border: 1px solid rgba(200,255,0,.26); color: var(--hf-lime); font-size: 18px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
     .dd-header-info { flex: 1; min-width: 140px; }
     .dd-name { font-family: "Syne Local", "DM Sans", sans-serif; font-size: 30px; font-weight: 700; color: var(--hf-text-1); line-height: 1.1; }
     .dd-subtitle { font-size: 14px; color: var(--hf-text-3); margin-top: 4px; }
     .dd-meta-facts { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-top: 10px; }
-    .dd-meta-item { display: inline-flex; align-items: center; gap: 5px; font-size: 13px; color: var(--hf-text-2); }
-    .dd-header-middle { display: flex; justify-content: center; min-width: 180px; }
-    .dd-score-panel { text-align: center; min-width: 130px; }
+    .dd-meta-item { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; color: var(--hf-text-2); }
+    .dd-header-middle { display: flex; justify-content: center; min-width: 220px; }
+    .dd-score-panel { text-align: center; min-width: 140px; }
     .dd-score { font-family: "Syne Local", "DM Sans", sans-serif; font-size: 56px; font-weight: 800; line-height: .95; }
     .dd-score span { font-size: 24px; font-weight: 500; color: var(--hf-text-3); }
-    .dd-score-panel--strong .dd-score, .dd-fit--strong { color: var(--hf-lime); } .dd-score-panel--possible .dd-score, .dd-fit--possible { color: var(--hf-warning); } .dd-score-panel--low .dd-score, .dd-fit--low { color: var(--hf-error); } .dd-score-panel--unscored .dd-score, .dd-fit--unscored { color: var(--hf-text-3); }
+    .dd-score-panel--strong .dd-score, .dd-fit--strong { color: var(--hf-success); } .dd-score-panel--possible .dd-score, .dd-fit--possible { color: var(--hf-warning); } .dd-score-panel--low .dd-score, .dd-fit--low { color: var(--hf-error); } .dd-score-panel--unscored .dd-score, .dd-fit--unscored { color: var(--hf-text-3); }
     .dd-fit-label { font-size: 16px; margin-top: 6px; font-weight: 600; }
+    .dd-confidence { margin-top: 2px; color: var(--hf-text-3); font-size: 12px; }
+    .dd-header-actions { display: flex; align-items: center; justify-content: flex-end; justify-self: end; gap: 8px; }
     .dd-close { width: 36px; height: 36px; padding: 0; border-radius: 8px; border: 1px solid var(--hf-border-2); background: rgba(255,255,255,.04); color: var(--hf-text-2); cursor: pointer; font-size: 20px; }
     .dd-close:hover { color: var(--hf-text-1); border-color: rgba(255,255,255,.24); background: rgba(255,255,255,.1); }
     .dd-body { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 18px; align-items: start; }
     .dd-col { display: flex; min-width: 0; flex-direction: column; gap: 12px; }
     .dd-section-card { background: linear-gradient(180deg,rgba(17,17,17,.96),var(--hf-surface-2)); border: 1px solid var(--hf-border-2); border-radius: 12px; box-shadow: inset 0 1px 0 rgba(255,255,255,.025),0 10px 24px rgba(0,0,0,.14); padding: 16px; }
+    .dd-section-card--compact { min-height: 104px; }
     .dd-col-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--hf-text-3); margin-bottom: 8px; }
     .dd-summary { margin: 0; font-size: 13px; color: var(--hf-text-2); line-height: 1.5; overflow-wrap: anywhere; white-space: pre-wrap; }
+    .dd-summary--clamp-5,.dd-summary--clamp-6 { display: -webkit-box; -webkit-box-orient: vertical; overflow: hidden; }
+    .dd-summary--clamp-5 { -webkit-line-clamp: 5; } .dd-summary--clamp-6 { -webkit-line-clamp: 6; }
     .dd-recommended-action { margin: 0; border-left: 2px solid var(--hf-lime); background: rgba(200,255,0,.05); padding: 10px 12px; color: var(--hf-text-2); font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; white-space: pre-wrap; }
+    .dd-facts-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px; }
+    .dd-fact-card { display: flex; min-width: 0; flex-direction: column; gap: 4px; padding: 10px; border: 1px solid var(--hf-border); border-radius: 8px; background: var(--hf-surface-2); }
+    .dd-fact-k { color: var(--hf-text-3); font-size: 11px; letter-spacing: .04em; text-transform: uppercase; }
+    .dd-fact-v { color: var(--hf-text-2); font-size: 11px; font-weight: 500; line-height: 1.4; overflow-wrap: anywhere; }
     .dd-analysis-box { background: color-mix(in srgb,var(--hf-bg) 38%,var(--hf-surface-2)); border-radius: 10px; padding: 12px; border: 1px solid var(--hf-border); }
     .dd-analysis-box--green { border-top-color: rgba(200,255,0,.2); } .dd-analysis-box--amber { border-top-color: rgba(255,165,0,.2); }
     .dd-list { display: flex; flex-direction: column; }
@@ -144,10 +153,20 @@ export const HIREFLOW_ANALYSIS_RESULTS_WIDGET_HTML = String.raw`<!DOCTYPE html>
     .dd-top-skills { display: flex; gap: 5px; flex-wrap: wrap; }
     .dd-top-skill { font-size: 12px; color: var(--hf-lime); background: rgba(200,255,0,.07); border: 1px solid rgba(200,255,0,.18); padding: 3px 9px; border-radius: 999px; overflow-wrap: anywhere; }
     .dd-top-skill--matched { background: rgba(200,255,0,.1); border-color: rgba(200,255,0,.25); } .dd-top-skill--warn { color: var(--hf-warning); background: rgba(255,165,0,.1); border-color: rgba(255,165,0,.3); } .dd-top-skill--all { color: var(--hf-text-2); background: rgba(255,255,255,.04); border-color: rgba(255,255,255,.12); }
-    .dd-count-badge { margin-left: 8px; font-size: 11px; font-weight: 500; } .dd-count-badge--lime { color: var(--hf-lime); } .dd-count-badge--amber { color: var(--hf-warning); }
+    .dd-count-badge { margin-left: 8px; font-size: 12px; font-weight: 500; } .dd-count-badge--lime { color: var(--hf-lime); } .dd-count-badge--amber { display: inline-flex; align-items: center; padding: 1px 8px; border: 1px solid rgba(252,211,77,.38); border-radius: 999px; background: rgba(252,211,77,.14); color: var(--hf-warning); }
     .dd-breakdown { display: flex; flex-direction: column; gap: 8px; }
-    .dd-breakdown-row { display: grid; grid-template-columns: minmax(92px,1fr) minmax(70px,1fr); gap: 8px; align-items: start; font-size: 12px; color: var(--hf-text-2); }
-    .dd-breakdown-value { text-align: right; color: var(--hf-text-3); overflow-wrap: anywhere; }
+    .dd-breakdown-row { display: grid; grid-template-columns: minmax(92px,1fr) 1fr auto; gap: 8px; align-items: center; font-size: 12px; color: var(--hf-text-2); }
+    .dd-breakdown-track { height: 8px; overflow: hidden; border-radius: 999px; background: #2a2a2a; }
+    .dd-breakdown-fill { display: block; height: 100%; border-radius: 999px; }
+    .dd-breakdown-fill--strong { background: var(--hf-lime); } .dd-breakdown-fill--possible { background: var(--hf-warning); } .dd-breakdown-fill--low { background: var(--hf-error); }
+    .dd-inline-disclosure { min-height: 24px; margin-top: 8px; padding: 2px 8px; border: 1px solid #2a2a2a; border-radius: 999px; background: transparent; color: var(--hf-lime); cursor: pointer; font-size: 12px; font-weight: 600; }
+    .dd-inline-disclosure:hover { border-color: rgba(200,255,0,.4); background: rgba(200,255,0,.08); }
+    .dd-section-card--resume { min-height: auto; }
+    .dd-resume-file { display: grid; grid-template-columns: auto minmax(0,1fr); align-items: center; gap: 10px; padding: 10px; border: 1px solid var(--hf-border-2); border-radius: 12px; background: linear-gradient(135deg,rgba(17,17,17,.82),var(--hf-surface-2)); }
+    .dd-resume-icon { display: inline-flex; width: 34px; height: 34px; align-items: center; justify-content: center; border: 1px solid var(--hf-border); border-radius: 10px; background: rgba(200,255,0,.08); color: var(--hf-lime); font-size: 17px; }
+    .dd-resume-copy { min-width: 0; }
+    .dd-resume-filename { overflow: hidden; color: var(--hf-text-1); font-size: 13px; font-weight: 600; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
+    .dd-resume-meta { margin-top: 2px; color: var(--hf-text-3); font-size: 12px; line-height: 1.35; }
     .empty, .failure { color: var(--hf-text-3); font-size: 13px; } .empty { padding: 26px 18px; text-align: center; } .failure { margin-top: 14px; padding: 12px; border: 1px solid rgba(239,68,68,.28); border-radius: 10px; }
     .status-wrap { padding: 24px 20px; }
     .status-row { display: flex; align-items: center; gap: 12px; }
@@ -158,7 +177,8 @@ export const HIREFLOW_ANALYSIS_RESULTS_WIDGET_HTML = String.raw`<!DOCTYPE html>
     .progress { height: 6px; margin-top: 16px; overflow: hidden; border-radius: 999px; background: #1e1e1e; }
     .progress > span { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg,var(--hf-lime),#39ff9f); transition: width .25s ease; }
     .error { padding: 24px 18px; text-align: center; } .error p { color: var(--hf-text-3); }
-    @media (max-width: 1024px) { .results-grid,.dd-body { grid-template-columns: 1fr; } .dd-header { grid-template-columns: 1fr auto; align-items: start; } .dd-header-middle { grid-column: 1; justify-content: flex-start; min-width: 0; } .dd-score-panel { text-align: left; min-width: 0; } .dd-close { grid-column: 2; grid-row: 1; } }
+    @media (max-width: 1140px) { .dd-header { grid-template-columns: 1fr; align-items: flex-start; } .dd-header-middle,.dd-score-panel { min-width: 0; justify-content: flex-start; text-align: left; } .dd-header-actions { justify-self: start; } }
+    @media (max-width: 1024px) { .results-grid,.dd-body { grid-template-columns: 1fr; } }
     @media (max-width: 840px) { .ranking-stats { grid-template-columns: 1fr; } }
     @media (max-width: 620px) { .analysis-header { align-items: flex-start; flex-direction: column; } .analysis-actions { justify-content: flex-start; } .results-content { padding: 0 12px 12px; } .detail-drawer { padding: 16px; } .dd-name { font-size: 24px; } }
     @media (prefers-reduced-motion: reduce) { *,*::before,*::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; } }
@@ -210,31 +230,64 @@ export const HIREFLOW_ANALYSIS_RESULTS_WIDGET_HTML = String.raw`<!DOCTYPE html>
       if (window.openai?.openExternal) return window.openai.openExternal({ href: url, redirectUrl: false });
       window.open(url, '_blank', 'noopener,noreferrer');
     };
-    const section = (title, badgeText = '', badgeClass = '') => {
-      const node = create('section', 'dd-section-card');
+    const section = (title, badgeText = '', badgeClass = '', modifier = '') => {
+      const node = create('section', 'dd-section-card' + (modifier ? ' ' + modifier : ''));
       const label = create('div', 'dd-col-label', title);
       if (badgeText) label.append(create('span', 'dd-count-badge ' + badgeClass, badgeText));
       node.append(label);
       return node;
     };
-    const appendPills = (parent, items, modifier, emptyCopy) => {
+    const appendDisclosure = (parent, renderItems) => {
+      let expanded = false;
+      const button = create('button', 'dd-inline-disclosure', 'Show more');
+      button.type = 'button';
+      button.setAttribute('aria-expanded', 'false');
+      button.addEventListener('click', () => {
+        expanded = !expanded;
+        button.textContent = expanded ? 'Show less' : 'Show more';
+        button.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+        renderItems(expanded);
+        window.openai?.notifyIntrinsicHeight?.();
+      });
+      parent.append(button);
+    };
+    const appendExpandableText = (parent, value, fallback, lineLimit, modifier = '') => {
+      const text = safeText(value, fallback);
+      const clampClass = 'dd-summary--clamp-' + lineLimit;
+      const paragraph = create('p', 'dd-summary ' + clampClass + (modifier ? ' ' + modifier : ''), text);
+      parent.append(paragraph);
+      if (text.length > lineLimit * 70) {
+        appendDisclosure(parent, (expanded) => paragraph.classList.toggle(clampClass, !expanded));
+      }
+    };
+    const appendPills = (parent, items, modifier, emptyCopy, previewCount = Infinity) => {
       const values = safeList(items);
       if (!values.length) return parent.append(create('p', 'dd-summary', emptyCopy));
       const pills = create('div', 'dd-top-skills');
-      values.forEach((item) => pills.append(create('span', 'dd-top-skill ' + modifier, item)));
       parent.append(pills);
+      const renderItems = (expanded) => {
+        pills.replaceChildren();
+        values.slice(0, expanded ? values.length : previewCount).forEach((item) => pills.append(create('span', 'dd-top-skill ' + modifier, item)));
+      };
+      renderItems(false);
+      if (values.length > previewCount) appendDisclosure(parent, renderItems);
     };
-    const appendAnalysisList = (parent, items, warning, emptyCopy) => {
+    const appendAnalysisList = (parent, items, warning, emptyCopy, previewCount = Infinity) => {
       const values = safeList(items);
       if (!values.length) return parent.append(create('div', 'dd-analysis-empty', emptyCopy));
       const rows = create('div', 'dd-list');
-      values.forEach((item) => {
-        const row = create('div', warning ? 'dd-list-item dd-list-item--warn' : 'dd-list-item');
-        row.append(create('span', 'dd-list-icon', warning ? '!' : '✓'));
-        row.append(create('span', '', item));
-        rows.append(row);
-      });
       parent.append(rows);
+      const renderItems = (expanded) => {
+        rows.replaceChildren();
+        values.slice(0, expanded ? values.length : previewCount).forEach((item) => {
+          const row = create('div', warning ? 'dd-list-item dd-list-item--warn' : 'dd-list-item');
+          row.append(create('span', 'dd-list-icon', warning ? '!' : '✓'));
+          row.append(create('span', '', item));
+          rows.append(row);
+        });
+      };
+      renderItems(false);
+      if (values.length > previewCount) appendDisclosure(parent, renderItems);
     };
 
     const renderCandidateCard = (candidate, index) => {
@@ -242,6 +295,9 @@ export const HIREFLOW_ANALYSIS_RESULTS_WIDGET_HTML = String.raw`<!DOCTYPE html>
       const score = getScore(candidate);
       const tone = scoreTone(score);
       const hasSelectedJob = Boolean(currentData?.job);
+      const yearsRaw = candidate?.yearsExperience;
+      const yearsNumeric = yearsRaw === null || yearsRaw === undefined || yearsRaw === '' ? Number.NaN : Number(yearsRaw);
+      const years = Number.isFinite(yearsNumeric) ? yearsNumeric : 0;
       const card = create('div', 'result-card result-card--' + tone + (expandedCandidateId === id ? ' result-card--open' : ''));
       card.setAttribute('role', 'button');
       card.tabIndex = 0;
@@ -291,6 +347,7 @@ export const HIREFLOW_ANALYSIS_RESULTS_WIDGET_HTML = String.raw`<!DOCTYPE html>
     const renderCandidateDetail = (candidate) => {
       const score = getScore(candidate);
       const tone = scoreTone(score);
+      const hasSelectedJob = Boolean(currentData?.job);
       const drawer = create('section', 'detail-drawer');
       drawer.id = 'candidate-detail';
       const header = create('div', 'dd-header');
@@ -300,80 +357,121 @@ export const HIREFLOW_ANALYSIS_RESULTS_WIDGET_HTML = String.raw`<!DOCTYPE html>
       info.append(create('div', 'dd-name', safeText(candidate?.name, 'Candidate')));
       info.append(create('div', 'dd-subtitle', safeText(candidate?.title, 'Candidate profile')));
       const facts = create('div', 'dd-meta-facts');
-      if (candidate?.yearsExperience != null) facts.append(create('span', 'dd-meta-item', 'Experience · ' + candidate.yearsExperience + ' years'));
-      if (safeText(candidate?.location)) facts.append(create('span', 'dd-meta-item', 'Location · ' + safeText(candidate.location)));
-      if (safeText(candidate?.seniorityLevel)) facts.append(create('span', 'dd-meta-item', 'Level · ' + safeText(candidate.seniorityLevel)));
+      facts.append(create('span', 'dd-meta-item', years + ' yrs exp'));
+      facts.append(create('span', 'dd-meta-item', safeText(candidate?.location, 'Location unavailable')));
+      facts.append(create('span', 'dd-meta-item', safeText(candidate?.seniorityLevel, 'Seniority unavailable')));
       info.append(facts);
       left.append(info);
       header.append(left);
       const middle = create('div', 'dd-header-middle');
-      const scorePanel = create('div', 'dd-score-panel dd-score-panel--' + tone);
-      const scoreNode = create('div', 'dd-score', Number.isFinite(score) ? score.toFixed(1) : '—');
-      if (Number.isFinite(score)) scoreNode.append(create('span', '', '/10'));
-      scorePanel.append(scoreNode);
-      scorePanel.append(create('div', 'dd-fit-label dd-fit--' + tone, verdictLabel(candidate)));
-      middle.append(scorePanel);
+      if (hasSelectedJob) {
+        const scorePanel = create('div', 'dd-score-panel dd-score-panel--' + tone);
+        const scoreNode = create('div', 'dd-score', Number.isFinite(score) ? score.toFixed(1) : '—');
+        if (Number.isFinite(score)) scoreNode.append(create('span', '', '/10'));
+        scorePanel.append(scoreNode);
+        scorePanel.append(create('div', 'dd-fit-label dd-fit--' + tone, verdictLabel(candidate)));
+        if (safeText(candidate?.confidenceLabel)) scorePanel.append(create('div', 'dd-confidence', candidate.confidenceLabel));
+        middle.append(scorePanel);
+      }
       header.append(middle);
+      const actions = create('div', 'dd-header-actions');
       const close = create('button', 'dd-close', '×');
       close.type = 'button';
       close.setAttribute('aria-label', 'Close candidate details');
       close.addEventListener('click', () => { expandedCandidateId = ''; saveUiState(); render(currentData); });
-      header.append(close);
+      actions.append(close);
+      header.append(actions);
       drawer.append(header);
       const body = create('div', 'dd-body');
       const first = create('div', 'dd-col');
       const summary = section('Summary');
-      summary.append(create('p', 'dd-summary', safeText(candidate?.summary, 'Summary not available.')));
+      appendExpandableText(summary, candidate?.summary, 'Summary not available.', 5);
       first.append(summary);
-      const breakdown = section('Score breakdown');
-      const breakdownRows = Array.isArray(candidate?.breakdown) ? candidate.breakdown : [];
-      if (breakdownRows.length) {
-        const box = create('div', 'dd-analysis-box dd-breakdown');
-        breakdownRows.forEach((item) => {
-          const row = create('div', 'dd-breakdown-row');
-          row.append(create('span', '', safeText(item?.label || item?.key, 'Detail')));
-          row.append(create('span', 'dd-breakdown-value', safeText(item?.value, '—')));
-          box.append(row);
+      if (hasSelectedJob) {
+        const breakdown = section('Score breakdown');
+        const breakdownRows = (Array.isArray(candidate?.breakdown) ? candidate.breakdown : []).filter((item) => Number.isFinite(Number(item?.value)));
+        if (breakdownRows.length) {
+          const box = create('div', 'dd-analysis-box dd-breakdown');
+          breakdownRows.forEach((item) => {
+            const value = Math.max(0, Math.min(100, Number(item.value)));
+            const row = create('div', 'dd-breakdown-row');
+            row.append(create('span', '', safeText(item?.label || item?.key, 'Detail')));
+            const track = create('span', 'dd-breakdown-track');
+            const fill = create('span', 'dd-breakdown-fill ' + (value >= 75 ? 'dd-breakdown-fill--strong' : value >= 50 ? 'dd-breakdown-fill--possible' : 'dd-breakdown-fill--low'));
+            fill.style.width = value + '%';
+            track.append(fill);
+            row.append(track);
+            row.append(create('span', '', value + '%'));
+            box.append(row);
+          });
+          breakdown.append(box);
+        } else breakdown.append(create('p', 'dd-summary', 'Score breakdown unavailable'));
+        first.append(breakdown);
+      }
+      if (hasSelectedJob && safeText(candidate?.recommendation)) {
+        const recommendation = section('Recommended action', '', '', 'dd-section-card--compact');
+        appendExpandableText(recommendation, candidate.recommendation, '', 5, 'dd-recommended-action');
+        first.append(recommendation);
+      }
+      const keyFacts = [
+        ['Experience', years + ' years'],
+        ['Location', safeText(candidate?.location)],
+        ['Seniority', safeText(candidate?.seniorityLevel)],
+        ['Education', safeText(candidate?.education)],
+      ].filter((item) => item[1]);
+      if (keyFacts.length) {
+        const factsSection = section('Key facts', '', '', 'dd-section-card--compact');
+        const factsGrid = create('div', 'dd-facts-grid');
+        keyFacts.forEach(([label,value]) => {
+          const fact = create('div', 'dd-fact-card');
+          fact.append(create('span', 'dd-fact-k', label));
+          fact.append(create('span', 'dd-fact-v', value));
+          factsGrid.append(fact);
         });
-        breakdown.append(box);
-      } else breakdown.append(create('p', 'dd-summary', 'Score breakdown unavailable.'));
-      first.append(breakdown);
-      const recommendation = section('Recommended action');
-      recommendation.append(create('p', 'dd-recommended-action', safeText(candidate?.recommendation, 'Recommendation not available.')));
-      first.append(recommendation);
-      const reasoning = section('AI reasoning');
-      reasoning.append(create('p', 'dd-summary', safeText(candidate?.reason, 'Reasoning not available.')));
+        factsSection.append(factsGrid);
+        first.append(factsSection);
+      }
+      const reasoning = section('AI reasoning', '', '', 'dd-section-card--compact');
+      appendExpandableText(reasoning, candidate?.reason, 'Reasoning not available.', 6);
       first.append(reasoning);
       body.append(first);
       const second = create('div', 'dd-col');
       const matchedItems = safeList(candidate?.matchedRequirements);
-      const matched = section('Matched requirements', '✓ ' + matchedItems.length, 'dd-count-badge--lime');
-      appendPills(matched, matchedItems, 'dd-top-skill--matched', 'No matched requirements were returned.');
-      second.append(matched);
       const missingItems = safeList(candidate?.missingRequirements);
-      const missing = section('Requirement gaps', missingItems.length ? missingItems.length + ' identified' : '', 'dd-count-badge--amber');
-      appendPills(missing, missingItems, 'dd-top-skill--warn', 'No explicit requirement gaps identified.');
-      second.append(missing);
-      const skills = section('All skills');
-      appendPills(skills, candidate?.skills, 'dd-top-skill--all', 'Skills not available.');
-      second.append(skills);
+      if (hasSelectedJob) {
+        const matched = section('Matched skills', '✓ ' + matchedItems.length + ' of ' + (matchedItems.length + missingItems.length) + ' required', 'dd-count-badge--lime', 'dd-section-card--compact');
+        appendPills(matched, matchedItems, 'dd-top-skill--matched', 'No matched skills were returned.', 5);
+        second.append(matched);
+        const missing = section('Skill gaps', missingItems.length ? missingItems.length + ' gaps identified' : '', 'dd-count-badge--amber', 'dd-section-card--compact');
+        appendPills(missing, missingItems, 'dd-top-skill--warn', 'No explicit skill gaps identified.', 3);
+        second.append(missing);
+      }
+      const allSkills = safeList(candidate?.skills);
+      if (allSkills.length) {
+        const skills = section('All skills', '', '', 'dd-section-card--compact');
+        appendPills(skills, allSkills, 'dd-top-skill--all', 'Skills not available.', 12);
+        second.append(skills);
+      }
       body.append(second);
       const third = create('div', 'dd-col');
       const strengths = section('Strengths');
       const strengthsBox = create('div', 'dd-analysis-box dd-analysis-box--green');
-      appendAnalysisList(strengthsBox, candidate?.strengths, false, 'No strengths were returned.');
+      appendAnalysisList(strengthsBox, candidate?.strengths, false, 'Re-analyse to generate AI strengths', 3);
       strengths.append(strengthsBox);
       third.append(strengths);
-      const considerations = section('Considerations');
+      const considerations = section('Considerations', '', '', 'dd-section-card--compact');
       const considerationsBox = create('div', 'dd-analysis-box dd-analysis-box--amber');
-      appendAnalysisList(considerationsBox, candidate?.considerations, true, 'No considerations were returned.');
+      appendAnalysisList(considerationsBox, candidate?.considerations, true, 'Run re-analysis to generate detailed AI considerations', 3);
       considerations.append(considerationsBox);
       third.append(considerations);
-      const risks = section('Risks or gaps');
-      const risksBox = create('div', 'dd-analysis-box dd-analysis-box--amber');
-      appendAnalysisList(risksBox, candidate?.risksOrGaps, true, 'No additional risks or gaps were returned.');
-      risks.append(risksBox);
-      third.append(risks);
+      const resume = section('Resume', '', '', 'dd-section-card--compact dd-section-card--resume');
+      const resumeFile = create('div', 'dd-resume-file');
+      resumeFile.append(create('div', 'dd-resume-icon', '▤'));
+      const resumeCopy = create('div', 'dd-resume-copy');
+      resumeCopy.append(create('div', 'dd-resume-filename', safeText(candidate?.filename, 'Resume unavailable')));
+      resumeFile.append(resumeCopy);
+      resume.append(resumeFile);
+      third.append(resume);
       body.append(third);
       drawer.append(body);
       return drawer;
@@ -485,7 +583,7 @@ export const HIREFLOW_ANALYSIS_RESULTS_WIDGET_HTML = String.raw`<!DOCTYPE html>
       }
       if (message.method === 'ui/notifications/tool-result') render(message.params?.structuredContent);
     }, { passive: true });
-    const bridgeReady = rpcRequest('ui/initialize', { appInfo: { name: 'hireflow-analysis-results', version: '3.0.0' }, appCapabilities: { availableDisplayModes: ['inline','fullscreen'] }, protocolVersion: '2026-01-26' }).then((result) => { hostContext = result?.hostContext || {}; rpcNotify('ui/notifications/initialized',{}); return result; });
+    const bridgeReady = rpcRequest('ui/initialize', { appInfo: { name: 'hireflow-analysis-results', version: '4.0.0' }, appCapabilities: { availableDisplayModes: ['inline','fullscreen'] }, protocolVersion: '2026-01-26' }).then((result) => { hostContext = result?.hostContext || {}; rpcNotify('ui/notifications/initialized',{}); return result; });
     const requestFullscreen = async () => {
       try {
         await bridgeReady;
