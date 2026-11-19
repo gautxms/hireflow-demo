@@ -2,6 +2,7 @@ import express from 'express'
 import cors from 'cors'
 import cookieParser from 'cookie-parser'
 import authRoutes from './routes/auth.js'
+import googleAuthRoutes from './routes/googleAuth.js'
 import adminSetupRoutes from './routes/adminSetup.js'
 import adminPasswordResetRoutes from './routes/adminPasswordReset.js'
 import adminMagicLinkRoutes from './routes/adminMagicLink.js'
@@ -185,6 +186,7 @@ app.get('/health', async (_req, res) => {
 app.use('/api', generalApiLimiterUnauth)
 
 app.use('/api/auth', authRoutes)
+app.use('/api/auth/google', googleAuthRoutes)
 app.use('/api/admin/setup', adminSetupRoutes)
 app.use('/api/admin/reset-password-temporary', adminPasswordResetRoutes)
 app.use('/api/admin/magic-link', adminMagicLinkRoutes)

@@ -378,13 +378,13 @@ router.post('/login', loginLimiter, validateBody(schemas.login), async (req, res
   try {
     logAuthDebug('[AUTH] Login attempt', { emailDomain: getEmailDomain(normalizedEmail) })
     const result = await pool.query(
-      'SELECT id, email, company, phone, password_hash, created_at, subscription_status, deleted_at, deletion_scheduled_for, email_verified FROM users WHERE email = $1',
+      'SELECT id, email, company, phone, password_hash, password_login_enabled, created_at, subscription_status, deleted_at, deletion_scheduled_for, email_verified FROM users WHERE email = $1',
       [normalizedEmail],
     )
 
     const user = result.rows[0]
 
-    if (!user) {
+    if (!user || user.password_login_enabled === false) {
       return res.status(401).json({ error: 'Invalid credentials' })
     }
 

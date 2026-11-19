@@ -50,6 +50,7 @@ test('password reset stores PBKDF2 hash and login verifier accepts only new pass
     assert.equal(verifyPassword(newPassword, userRecord.password_hash), true)
     assert.equal(verifyPassword('OldPassword!1', userRecord.password_hash), false)
     assert.equal(issuedQueries.some(({ sql }) => sql.includes('crypt(')), false)
+    assert.ok(issuedQueries.some(({ sql }) => /password_login_enabled = true/.test(sql)))
   } finally {
     pool.connect = originalConnect
   }
