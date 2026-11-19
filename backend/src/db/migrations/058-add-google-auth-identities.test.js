@@ -65,6 +65,15 @@ test('Google identities preserve legacy users, enforce uniqueness, and cascade o
     )
     await db.query('ROLLBACK TO SAVEPOINT duplicate_identity')
 
+    await db.query('SAVEPOINT duplicate_user_provider')
+    await assert.rejects(
+      db.query('INSERT INTO user_auth_identities (user_id, provider, provider_subject, provider_email) VALUES ($1, $2, $3, $4)', [
+        legacy.rows[0].id, 'google', 'another-google-sub', 'legacy@example.com',
+      ]),
+      { code: '23505' },
+    )
+    await db.query('ROLLBACK TO SAVEPOINT duplicate_user_provider')
+
     await db.query('DELETE FROM users WHERE id = $1', [legacy.rows[0].id])
     const orphan = await db.query('SELECT id FROM user_auth_identities WHERE provider_subject = $1', ['stable-google-sub'])
     assert.equal(orphan.rowCount, 0)
