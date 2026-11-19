@@ -84,7 +84,8 @@ export async function markTokenUsedAndResetPassword({ tokenId, userId, passwordH
 
     await client.query(
       `UPDATE users
-       SET password_hash = $1
+       SET password_hash = $1,
+           password_login_enabled = true
        WHERE id = $2`,
       [passwordHash, userId],
     )
