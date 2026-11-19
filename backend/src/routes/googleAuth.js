@@ -180,6 +180,8 @@ router.post('/signup', enabled, signupLimiter, protect, async (req, res) => {
       [user.id, identity.subject, identity.email],
     )
     await client.query('COMMIT')
+    client.release()
+    client = null
     await recordEvent(user, 'signup')
     return session(res, user)
   } catch (error) {
@@ -223,6 +225,8 @@ router.post('/link', enabled, loginLimiter, protect, async (req, res) => {
       [user.id, identity.subject, identity.email],
     )
     await client.query('COMMIT')
+    client.release()
+    client = null
     await recordEvent(user, 'login')
     return session(res, user)
   } catch (error) {
