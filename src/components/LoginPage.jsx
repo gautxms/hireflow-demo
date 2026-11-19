@@ -5,6 +5,8 @@ import BackButton from './BackButton'
 import API_BASE from '../config/api'
 import BrandLogo from './BrandLogo'
 import { getSafeOAuthReturnTo } from '../utils/oauthReturnTo'
+import GoogleAuthOption from './GoogleAuthOption'
+import { isGoogleAuthConfigured } from '../utils/googleAuthClient'
 
 async function parseResponsePayload(response) {
   const contentType = response.headers.get('content-type') || ''
@@ -151,6 +153,8 @@ export default function LoginPage({ onAuthSuccess, onGoToSignup, onForgotPasswor
             {loading ? 'Logging in…' : 'Log in'}
           </button>
         </form>
+
+        {isGoogleAuthConfigured() && <GoogleAuthOption mode="login" onAuthSuccess={onAuthSuccess} />}
 
         <p className="auth-switch">
           Need an account? <button className="auth-link" type="button" onClick={onGoToSignup}>Sign up</button>
