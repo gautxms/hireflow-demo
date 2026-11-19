@@ -59,6 +59,7 @@ const migrationFiles = [
   '055-allow-tiered-subscription-plans',
   '056-add-job-description-creation-requests',
   '057-add-mcp-oauth',
+  '058-add-google-auth-identities',
 ]
 
 async function ensureMigrationsTable(client) {
