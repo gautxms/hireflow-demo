@@ -91,21 +91,24 @@ test('returning Google identity issues the existing HireFlow session', async (t)
 
 test('matching email requests proof of account ownership before linking', async (t) => {
   setup(t)
+  let released = false
+  let eventAfterRelease = false
   const user = {
     id: 42, email: 'recruiter@example.com', password_hash: hashPassword('correct-password'),
     password_login_enabled: true, email_verified: true, subscription_status: 'active',
     is_admin: false, deleted_at: null,
   }
-  pool.query.mock.mockImplementation(async (sql) => (
-    sql.includes('FROM users WHERE email') ? { rows: [user] } : { rows: [] }
-  ))
+  pool.query.mock.mockImplementation(async (sql) => {
+    if (sql.includes('INSERT INTO events')) eventAfterRelease = released
+    return sql.includes('FROM users WHERE email') ? { rows: [user] } : { rows: [] }
+  })
   const queries = []
   t.mock.method(pool, 'connect', async () => ({
     async query(sql) {
       queries.push(sql)
       return sql.includes('FROM users WHERE email') ? { rows: [user] } : { rows: [] }
     },
-    release() {},
+    release() { released = true },
   }))
   await withApp(async ({ post }) => {
     const first = await post('', { credential: 'valid' })
@@ -117,11 +120,18 @@ test('matching email requests proof of account ownership before linking', async 
     assert.equal(linked.response.status, 200)
     assert.equal(linked.body.user.id, 42)
     assert.ok(queries.some((sql) => sql.includes('INSERT INTO user_auth_identities')))
+    assert.equal(eventAfterRelease, true)
   })
 })
 
 test('new Google signup requires explicit terms and creates a disabled password login', async (t) => {
   setup(t)
+  let released = false
+  let eventAfterRelease = false
+  pool.query.mock.mockImplementation(async (sql) => {
+    if (sql.includes('INSERT INTO events')) eventAfterRelease = released
+    return { rows: [] }
+  })
   const queries = []
   const user = {
     id: 43, email: 'recruiter@example.com', email_verified: true,
@@ -132,7 +142,7 @@ test('new Google signup requires explicit terms and creates a disabled password 
       queries.push({ sql, params })
       return sql.includes('INSERT INTO users') ? { rows: [user] } : { rows: [] }
     },
-    release() {},
+    release() { released = true },
   }))
   await withApp(async ({ post }) => {
     const first = await post('', { credential: 'valid' })
@@ -147,6 +157,7 @@ test('new Google signup requires explicit terms and creates a disabled password 
     assert.equal(insert.params[0], user.email)
     assert.ok(queries.some(({ sql }) => sql.includes('INSERT INTO user_auth_identities')))
     assert.ok(queries.some(({ sql }) => sql === 'COMMIT'))
+    assert.equal(eventAfterRelease, true)
   })
 })
 
