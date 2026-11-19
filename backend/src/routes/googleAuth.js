@@ -35,7 +35,7 @@ function originAllowed(req) {
 function csrfValid(req) {
   const header = req.get('x-hireflow-google-csrf')
   const cookie = req.cookies?.[CSRF_COOKIE]
-  if (!originAllowed(req) || !header || !cookie || header.length !== cookie.length || header.length > 128) return false
+  if (!originAllowed(req) || !/^[a-f0-9]{64}$/.test(header || '') || !/^[a-f0-9]{64}$/.test(cookie || '')) return false
   return crypto.timingSafeEqual(Buffer.from(header), Buffer.from(cookie))
 }
 
