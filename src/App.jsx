@@ -940,7 +940,7 @@ function MainSite({ isAuthenticated, accessResolutionStatus, accessResolutionErr
     }
 
     if (!isAuthenticated && resolvedPathname === '/signup') {
-      return <SignupPage onSignupSuccess={onSignupSuccess} onGoToLogin={() => navigate('/login')} />
+      return <SignupPage onSignupSuccess={onSignupSuccess} onAuthSuccess={onAuthSuccess} onGoToLogin={() => navigate('/login')} />
     }
 
     if (resolvedPathname === '/login') {

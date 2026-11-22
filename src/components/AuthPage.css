@@ -72,7 +72,7 @@
 }
 
 .auth-title {
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--hf-font-display, 'Syne', sans-serif);
   font-size: 34px;
   font-weight: 700;
   line-height: 1.2;
@@ -291,3 +291,15 @@
 .auth-meta {
   font-size: 13px;
 }
+
+.auth-google { margin-top: 1.25rem; font-family: var(--hf-font-ui, 'DM Sans', sans-serif); }
+.auth-divider { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem; color: var(--hf-text-secondary); font-size: 13px; }
+.auth-divider::before, .auth-divider::after { content: ''; flex: 1; border-top: 1px solid var(--hf-border-muted); }
+.auth-google__button { min-height: 40px; width: 100%; display: flex; justify-content: center; }
+.auth-google__button[hidden] { display: none; }
+.auth-google__completion { border: 1px solid var(--hf-border-muted); border-radius: 8px; background: var(--hf-surface-card); padding: 1rem; }
+.auth-google__title { margin: 0; color: var(--hf-text-primary); font: 700 19px/1.3 var(--hf-font-display, 'Syne', sans-serif); }
+.auth-google__help { margin: 0.5rem 0; color: var(--hf-text-secondary); font: 400 13px/1.5 var(--hf-font-ui, 'DM Sans', sans-serif); overflow-wrap: anywhere; }
+.auth-google__cancel { justify-self: center; padding: 0.35rem; }
+.auth-google__cancel:disabled { opacity: 0.6; cursor: not-allowed; }
+.auth-google__cancel:focus-visible, .auth-google .auth-checkbox-row input:focus-visible, .auth-google .auth-link:focus-visible { outline: 2px solid var(--hf-lime); outline-offset: 3px; }

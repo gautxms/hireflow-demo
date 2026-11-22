@@ -5,6 +5,8 @@ import BackButton from './BackButton'
 import API_BASE from '../config/api'
 import BrandLogo from './BrandLogo'
 import { Eye, EyeOff } from 'lucide-react'
+import GoogleAuthOption from './GoogleAuthOption'
+import { isGoogleAuthConfigured } from '../utils/googleAuthClient'
 
 const E164_REGEX = /^\+[1-9]\d{1,14}$/
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -54,7 +56,7 @@ function getInlineErrors({ email, company, phone, password, confirmPassword, acc
   return errors
 }
 
-export default function SignupPage({ onSignupSuccess, onGoToLogin }) {
+export default function SignupPage({ onSignupSuccess, onGoToLogin, onAuthSuccess }) {
   const [email, setEmail] = useState('')
   const [company, setCompany] = useState('')
   const [phone, setPhone] = useState('')
@@ -166,6 +168,8 @@ export default function SignupPage({ onSignupSuccess, onGoToLogin }) {
             {loading ? 'Creating account…' : 'Sign up'}
           </button>
         </form>
+
+        {isGoogleAuthConfigured() && <GoogleAuthOption mode="signup" onAuthSuccess={onAuthSuccess} />}
 
         <p className="auth-switch">
           Already have an account? <button className="auth-link" type="button" onClick={onGoToLogin}>Log in</button>
