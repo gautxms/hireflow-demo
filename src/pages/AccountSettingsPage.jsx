@@ -327,8 +327,13 @@ export default function AccountSettingsPage() {
 
       <section className="account-settings-card">
         <h2 className="type-h2 account-settings-card-title">Security</h2>
-        <p className="type-body account-settings-card-helper">Keep your account secure by rotating your password regularly.</p>
-        <form onSubmit={handlePasswordChange} className="account-settings-form">
+        {profile.google_connected && <p className="type-small account-settings-note">Google sign-in is connected to this account.</p>}
+        {profile.password_login_enabled === false ? (
+          <p className="type-body account-settings-card-helper">You sign in with Google. To add a password, sign out and use Forgot password on the login page.</p>
+        ) : (
+          <>
+          <p className="type-body account-settings-card-helper">Keep your account secure by rotating your password regularly.</p>
+          <form onSubmit={handlePasswordChange} className="account-settings-form">
           <label className="account-settings-label">
             <span>Current password</span>
             <div className="account-settings-password-row">
@@ -356,7 +361,9 @@ export default function AccountSettingsPage() {
           <button type="submit" className="type-button account-settings-button account-settings-button--fit" disabled={isChangingPassword}>
             {isChangingPassword ? 'Changing password…' : 'Change password'}
           </button>
-        </form>
+          </form>
+          </>
+        )}
 
         <div className="account-settings-actions">
           <button className="type-button account-settings-button account-settings-button--danger" onClick={handleSignOutAllSessions} disabled={isSigningOutAll}>

@@ -3,6 +3,8 @@ import { pool } from '../db/client.js'
 import { requireAuth } from '../middleware/auth.js'
 import { resolveMonthlyResumeAnalysisLimit } from '../config/resumeAnalysisQuota.js'
 import { hasScheduledCancellationAccess } from '../utils/subscriptionAccess.js'
+import { hashPassword, verifyPassword } from '../services/passwordHash.js'
+import { loginLimiter } from '../middleware/rateLimiter.js'
 
 const router = Router()
 const E164_REGEX = /^\+[1-9]\d{1,14}$/
@@ -131,6 +133,8 @@ export function formatRate(numerator, denominator) {
 export async function loadFreshAccountProfile(userId) {
   const result = await pool.query(
     `SELECT id, email, company, phone, subscription_status, subscription_plan,
+            password_login_enabled,
+            EXISTS (SELECT 1 FROM user_auth_identities i WHERE i.user_id = users.id AND i.provider = 'google') AS google_connected,
             paddle_customer_id, paddle_subscription_id, current_period_end, next_billing_date,
             created_at, deleted_at, deletion_scheduled_for,
             (
@@ -644,12 +648,12 @@ router.patch('/me', async (req, res) => {
   }
 })
 
-router.post('/change-password', async (req, res) => {
-  const oldPassword = sanitizeText(req.body?.oldPassword, 256)
-  const newPassword = sanitizeText(req.body?.newPassword, 256)
-  const confirmPassword = sanitizeText(req.body?.confirmPassword, 256)
+router.post('/change-password', loginLimiter, async (req, res) => {
+  const oldPassword = req.body?.oldPassword
+  const newPassword = req.body?.newPassword
+  const confirmPassword = req.body?.confirmPassword
 
-  if (!oldPassword || !newPassword || !confirmPassword) {
+  if ([oldPassword, newPassword, confirmPassword].some((value) => typeof value !== 'string' || !value || value.length > 256)) {
     return res.status(400).json({ error: 'oldPassword, newPassword and confirmPassword are required' })
   }
 
@@ -662,20 +666,31 @@ router.post('/change-password', async (req, res) => {
   }
 
   try {
-    const currentPassword = await pool.query('SELECT password_hash FROM users WHERE id = $1', [req.user.id])
-    const passwordHash = currentPassword.rows[0]?.password_hash
+    const currentPassword = await pool.query('SELECT password_hash, password_login_enabled FROM users WHERE id = $1', [req.user.id])
+    const account = currentPassword.rows[0]
 
-    if (!passwordHash) {
+    if (!account) {
       return res.status(404).json({ error: 'User not found' })
     }
+    if (!account.password_login_enabled) {
+      return res.status(400).json({ error: 'This account uses Google sign-in. To create a password, use Forgot password from the login page.' })
+    }
 
-    const passwordCheck = await pool.query('SELECT crypt($1, $2) = $2 AS is_valid', [oldPassword, passwordHash])
+    let isValid = verifyPassword(oldPassword, account.password_hash)
+    if (!isValid && /^\$2[aby]\$/.test(account.password_hash || '')) {
+      const legacyCheck = await pool.query('SELECT crypt($1, $2) = $2 AS is_valid', [oldPassword, account.password_hash])
+      isValid = legacyCheck.rows[0]?.is_valid === true
+    }
 
-    if (!passwordCheck.rows[0]?.is_valid) {
+    if (!isValid) {
       return res.status(400).json({ error: 'Old password is incorrect' })
     }
 
-    await pool.query('UPDATE users SET password_hash = crypt($1, gen_salt(\'bf\', 10)) WHERE id = $2', [newPassword, req.user.id])
+    const updated = await pool.query(
+      'UPDATE users SET password_hash = $1 WHERE id = $2 AND password_hash = $3 AND password_login_enabled = true',
+      [hashPassword(newPassword), req.user.id, account.password_hash],
+    )
+    if (updated.rowCount !== 1) return res.status(409).json({ error: 'Password changed elsewhere. Please try again.' })
 
     return res.json({ message: 'Password updated successfully' })
   } catch {
